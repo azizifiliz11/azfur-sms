@@ -25,6 +25,8 @@ export function getTelegramBot(): Bot | null {
       const appUrl = (CONFIG.APP_URL || "").trim();
       const isValidHttps = appUrl.startsWith("https://");
 
+      const isAdmin = user.role === "admin" || String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) || String(from.id) === "6824921456";
+
       const keyboard = new InlineKeyboard();
       if (isValidHttps) {
         keyboard.webApp("🚀 SMS Onay Panelini Aç", appUrl).row();
@@ -32,6 +34,10 @@ export function getTelegramBot(): Bot | null {
       keyboard
         .text("💳 Bakiye Sorgula", "check_balance")
         .text("🆘 Destek & Bilgi", "help_info");
+
+      if (isAdmin && isValidHttps) {
+        keyboard.row().webApp("🛡️ Yönetici Paneli", `${appUrl.replace(/\/$/, "")}/admin`);
+      }
 
       const safeName = (from.first_name || "Kullanıcı").replace(/[<>&]/g, "");
 
@@ -60,6 +66,36 @@ export function getTelegramBot(): Bot | null {
           console.error("Plain start message also failed:", e);
         }
       }
+    });
+
+    // /admin Komutu - Doğrudan Yönetici Panelini Açar
+    botInstance.command("admin", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+
+      const appUrl = (CONFIG.APP_URL || "").trim();
+      const adminUrl = `${appUrl.replace(/\/$/, "")}/admin`;
+      const isValidHttps = adminUrl.startsWith("https://");
+
+      const keyboard = new InlineKeyboard();
+      if (isValidHttps) {
+        keyboard.webApp("🛡️ Yönetici Panelini Aç", adminUrl);
+      } else {
+        keyboard.url("🛡️ Yönetici Panelini Aç (Web)", adminUrl);
+      }
+
+      await ctx.reply(
+        `👑 <b>AzFur Yönetici Paneli</b>\n\n` +
+          `• Kullanıcıları banlama / engel kaldırma\n` +
+          `• Admin yetkisi verme / alma\n` +
+          `• Elle bakiye ekleme / düşme\n` +
+          `• Canlı TCMB kur ve kâr marjı kontrolü\n\n` +
+          `Aşağıdaki butona dokunarak paneli açabilirsiniz 👇`,
+        {
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        }
+      );
     });
 
     // Callback queries

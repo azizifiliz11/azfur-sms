@@ -90,10 +90,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setLoading(true);
     try {
       const [ovRes, setRes, uRes, depRes] = await Promise.all([
-        fetch("/api/admin/overview"),
-        fetch("/api/admin/settings"),
-        fetch("/api/admin/users"),
-        fetch("/api/admin/deposits"),
+        fetch("/api/admin/overview", { cache: "no-store" }),
+        fetch("/api/admin/settings", { cache: "no-store" }),
+        fetch("/api/admin/users", { cache: "no-store" }),
+        fetch("/api/admin/deposits", { cache: "no-store" }),
       ]);
 
       const [ov, st, us, dep] = await Promise.all([
@@ -235,6 +235,11 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
 
   const handleDepositAction = async (depositId: string, status: "APPROVED" | "REJECTED") => {
     haptic.impact("medium");
+    // Anında arayüzde talebin durumunu güncelle (0 gecikme)
+    setDeposits((prev) =>
+      prev.map((d) => (d.id === depositId ? { ...d, status } : d))
+    );
+
     try {
       const res = await fetch("/api/admin/deposits", {
         method: "POST",
@@ -244,6 +249,14 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        // Eğer kullanıcı verisi döndüyse anında bakiye listesinde güncelle
+        if (data.user) {
+          setUsers((prev) =>
+            prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u))
+          );
+        }
+        setToastMsg(status === "APPROVED" ? "Bakiye onaylandı ve hesaba eklendi!" : "Talep reddedildi.");
+        setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
       }
     } catch (e) {
@@ -259,12 +272,20 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     const delta = isAdd ? amount : -amount;
     haptic.impact("heavy");
 
+    // Anında modalı kapat ve kullanıcı listesinde optimistik güncelle (0 gecikme)
+    const targetId = editingUser.telegramId;
+    const optimisticNewBalance = Math.max(0, Number((editingUser.balance + delta).toFixed(2)));
+    setUsers((prev) =>
+      prev.map((u) => (u.telegramId === targetId ? { ...u, balance: optimisticNewBalance } : u))
+    );
+    setEditingUser(null);
+
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          telegramId: editingUser.telegramId,
+          telegramId: targetId,
           delta,
           reason: "Admin manuel işlem",
         }),
@@ -273,13 +294,22 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setToastMsg(`Bakiye güncellendi: ${isAdd ? "+" : "-"}₺${amount.toFixed(2)}`);
+        if (data.user) {
+          setUsers((prev) =>
+            prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u))
+          );
+        }
+        setToastMsg(`Bakiye güncellendi: ${isAdd ? "+" : "-"}₺${amount.toFixed(2)} (Yeni: ₺${data.user?.balance?.toFixed(2) || optimisticNewBalance.toFixed(2)})`);
         setTimeout(() => setToastMsg(null), 3000);
-        setEditingUser(null);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Bakiye güncellenemedi");
         fetchAllData();
       }
     } catch (e) {
       haptic.error();
+      fetchAllData();
     }
   };
 
@@ -690,7 +720,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 <Badge color={overview?.provider?.balance > 0 ? "emerald" : "amber"}>
                   {overview?.provider?.balance > 0 ? "Bakiye Yeterli" : "Kasa 0 (Mock Aktif)"}
                 </Badge>
-                <p className="text-[10px] text-zinc-500 mt-2">API: e1006858662edcAd8d348c9f07dfe8c5</p>
+                <p className="text-[10px] text-zinc-500 mt-2">Altyapı: AzFur SMS Motoru</p>
               </div>
             </div>
           </Card>

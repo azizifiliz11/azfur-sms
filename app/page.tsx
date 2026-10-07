@@ -35,6 +35,7 @@ function HomeContent() {
     try {
       const res = await fetch("/api/user/me", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telegramId: tgUser.id,
@@ -52,6 +53,41 @@ function HomeContent() {
     }
   }, [tgUser]);
 
+  // Bakiye ve kullanıcı verilerini periyodik olarak canlı senkronize et (0 gecikme)
+  useEffect(() => {
+    if (!tgUser) return;
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetch(`/api/user/me?telegramId=${tgUser.id}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.success && data.user) {
+              setCurrentUser((prev: any) => {
+                if (!prev || prev.balance !== data.user.balance || prev.spent !== data.user.spent) {
+                  return { ...prev, ...data.user };
+                }
+                return prev;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }, 3000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        initUser();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [tgUser, initUser]);
+
   // 2. Canlı Katalog ve Fiyatları Getir (Kesintisiz & Yarış Durumu Korumalı)
   const fetchCatalog = useCallback(async (countryId: number = 62) => {
     activeCountryIdRef.current = countryId;
@@ -64,7 +100,7 @@ function HomeContent() {
     }
 
     try {
-      const res = await fetch(`/api/sms/catalog?country=${countryId}`);
+      const res = await fetch(`/api/sms/catalog?country=${countryId}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success && activeCountryIdRef.current === countryId) {
         if (data.countries && data.countries.length > 0) {
@@ -97,7 +133,7 @@ function HomeContent() {
   const fetchActiveOrders = useCallback(async () => {
     if (!tgUser) return;
     try {
-      const res = await fetch(`/api/sms/active?telegramId=${tgUser.id}`);
+      const res = await fetch(`/api/sms/active?telegramId=${tgUser.id}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         setActiveOrders(data.orders || []);

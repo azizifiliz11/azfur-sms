@@ -27,6 +27,8 @@ export function Header({
   onToggleAdminView,
   adminViewActive = false,
 }: HeaderProps) {
+  const [refreshing, setRefreshing] = React.useState(false);
+
   const handleDepositClick = () => {
     haptic.impact("medium");
     onOpenDeposit();
@@ -34,7 +36,9 @@ export function Header({
 
   const handleRefreshClick = () => {
     haptic.impact("light");
+    setRefreshing(true);
     onRefreshBalance();
+    setTimeout(() => setRefreshing(false), 800);
   };
 
   const initials = user?.firstName ? user.firstName.slice(0, 2).toUpperCase() : "US";
@@ -78,7 +82,11 @@ export function Header({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-white/10 shadow-sm cursor-pointer hover:border-emerald-500/40 active:scale-95 transition-all"
             title="Bakiyeyi Yenile"
           >
-            <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+            {refreshing ? (
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+            ) : (
+              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+            )}
             <span className="font-mono font-bold text-sm text-white">
               ₺{user?.balance !== undefined ? user.balance.toFixed(2) : "0.00"}
             </span>

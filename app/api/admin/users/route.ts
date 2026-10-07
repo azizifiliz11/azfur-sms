@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const users = db.getAllUsers();
-    return NextResponse.json({ success: true, users });
+    return NextResponse.json(
+      { success: true, users },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -69,12 +81,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
       }
 
-      return NextResponse.json({
-        success: true,
-        message: `Bakiye güncellendi (${numDelta > 0 ? "+" : ""}${numDelta} ₺). Yeni bakiye: ${updatedUser.balance.toFixed(2)} ₺`,
-        user: updatedUser,
-        reason,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          message: `Bakiye güncellendi (${numDelta > 0 ? "+" : ""}${numDelta} ₺). Yeni bakiye: ${updatedUser.balance.toFixed(2)} ₺`,
+          user: updatedUser,
+          reason,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      );
     }
 
     return NextResponse.json({ success: false, error: "Geçersiz işlem" }, { status: 400 });

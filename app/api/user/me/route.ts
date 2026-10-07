@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -20,13 +23,22 @@ export async function POST(req: NextRequest) {
     const activeOrders = db.getActiveOrders(telegramId);
     const settings = db.getSettings();
 
-    return NextResponse.json({
-      success: true,
-      user,
-      activeOrdersCount: activeOrders.length,
-      currency: settings.currencySymbol,
-      isAdmin: user.role === "admin" || String(telegramId) === String(CONFIG.ADMIN_TELEGRAM_ID),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        user,
+        activeOrdersCount: activeOrders.length,
+        currency: settings.currencySymbol,
+        isAdmin: user.role === "admin" || String(telegramId) === String(CONFIG.ADMIN_TELEGRAM_ID),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -46,7 +58,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json(
+      { success: true, user },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

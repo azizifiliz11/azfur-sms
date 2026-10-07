@@ -97,9 +97,21 @@ export function getTelegramBot(): Bot | null {
       const user = db.getUser(from.id);
       const balance = user ? user.balance.toFixed(2) : "0.00";
       await ctx.answerCallbackQuery();
-      await ctx.reply(`💰 <b>Güncel Bakiyeniz:</b> <code>${balance} ₺</code>\n\nBakiye yüklemek için Mini App panelini kullanabilirsiniz.`, {
+      await ctx.reply(`💰 <b>Güncel Bakiyeniz:</b> <code>${balance} ₺</code>\n\nBakiye yüklemek ve numara kiralamak için Mini App panelini kullanabilirsiniz.`, {
         parse_mode: "HTML",
       });
+    });
+
+    botInstance.callbackQuery("help_info", async (ctx) => {
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        `🆘 <b>AzFur SMS Destek & Bilgilendirme</b>\n\n` +
+          `• <b>Hızlı Doğrulama:</b> SMS onay kodları ortalama 5-30 saniye içinde bot ekranınıza ve panelinize iletilir.\n` +
+          `• <b>Ücretsiz İptal & İade:</b> SMS kodu gelmeyen tüm kiralamaları süre bitmeden iptal edebilir, bakiyenizi anında iade alabilirsiniz.\n` +
+          `• <b>Bakiye Yükleme:</b> CryptoBot veya Havale / EFT ile Mini App içerisinden güvenle yükleme yapabilirsiniz.\n\n` +
+          `⚡ Kesintisiz onay için Mini App butonunu kullanabilirsiniz.`,
+        { parse_mode: "HTML" }
+      );
     });
 
     // /bakiye komutu

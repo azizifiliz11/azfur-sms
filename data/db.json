@@ -11,7 +11,7 @@
     "serviceCustomMargins": {},
     "useTcmbAutoRate": true,
     "lastTcmbRate": 49.1976,
-    "lastTcmbFetchTime": "2026-10-07T18:19:43.138Z",
+    "lastTcmbFetchTime": "2026-10-07T18:30:26.767Z",
     "bankInfo": {
       "bankName": "Ziraat Bankası",
       "accountHolder": "AzFur SMS",
@@ -20,6 +20,17 @@
     }
   },
   "users": {
+    "100001": {
+      "telegramId": 100001,
+      "username": "test_kullanici",
+      "firstName": "Demo Kullanıcı",
+      "balance": 0,
+      "spent": 0,
+      "role": "user",
+      "isBanned": false,
+      "createdAt": "2026-10-07T18:30:26.612Z",
+      "lastActiveAt": "2026-10-07T18:30:26.612Z"
+    },
     "6824921456": {
       "telegramId": 6824921456,
       "username": "admin",

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTelegramBot } from "@/lib/telegram-bot";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const bot = getTelegramBot();
     if (!bot) {
       console.error("Bot token not configured");

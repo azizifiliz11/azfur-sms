@@ -134,7 +134,37 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
       }
-      if (us.success) setUsers(us.users);
+      if (us.success) {
+        let serverUsers = us.users || [];
+        try {
+          const cachedRaw = localStorage.getItem("azfur_admin_users");
+          const cachedUsers: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
+
+          // Eğer server soğuk başlayıp sadece admin döndüyse ama tarayıcıda kullanıcılar varsa:
+          if (serverUsers.length <= 1 && cachedUsers.length > 1) {
+            // Sunucuya kullanıcıları geri yükle (sync)
+            fetch("/api/admin/users", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "sync_users", clientUsers: cachedUsers }),
+            })
+              .then((r) => r.json())
+              .then((synced) => {
+                if (synced.success && synced.users) {
+                  setUsers(synced.users);
+                  try {
+                    localStorage.setItem("azfur_admin_users", JSON.stringify(synced.users));
+                  } catch {}
+                }
+              })
+              .catch(() => {});
+            serverUsers = cachedUsers;
+          } else if (serverUsers.length > 0) {
+            localStorage.setItem("azfur_admin_users", JSON.stringify(serverUsers));
+          }
+        } catch {}
+        setUsers(serverUsers);
+      }
       if (dep.success) setDeposits(dep.deposits);
     } catch (e) {
       console.error(e);
@@ -289,9 +319,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     // Anında modalı kapat ve kullanıcı listesinde optimistik güncelle (0 gecikme)
     const targetId = editingUser.telegramId;
     const optimisticNewBalance = Math.max(0, Number((editingUser.balance + delta).toFixed(2)));
-    setUsers((prev) =>
-      prev.map((u) => (u.telegramId === targetId ? { ...u, balance: optimisticNewBalance } : u))
-    );
+    setUsers((prev) => {
+      const updated = prev.map((u) => (u.telegramId === targetId ? { ...u, balance: optimisticNewBalance } : u));
+      try {
+        localStorage.setItem("azfur_admin_users", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     setEditingUser(null);
 
     try {
@@ -302,6 +336,15 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           telegramId: targetId,
           delta,
           reason: "Admin manuel işlem",
+          userData: {
+            telegramId: editingUser.telegramId,
+            username: editingUser.username,
+            firstName: editingUser.firstName,
+            lastName: editingUser.lastName,
+            balance: editingUser.balance,
+            role: editingUser.role,
+            isBanned: editingUser.isBanned,
+          },
         }),
       });
 
@@ -309,9 +352,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       if (data.success) {
         haptic.success();
         if (data.user) {
-          setUsers((prev) =>
-            prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u))
-          );
+          setUsers((prev) => {
+            const next = prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u));
+            try {
+              localStorage.setItem("azfur_admin_users", JSON.stringify(next));
+            } catch {}
+            return next;
+          });
         }
         setToastMsg(`Bakiye güncellendi: ${isAdd ? "+" : "-"}₺${amount.toFixed(2)} (Yeni: ₺${data.user?.balance?.toFixed(2) || optimisticNewBalance.toFixed(2)})`);
         setTimeout(() => setToastMsg(null), 3000);
@@ -506,11 +553,19 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           action: "toggle_ban",
           telegramId: user.telegramId,
           isBanned: nextBanStatus,
+          userData: user,
         }),
       });
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        setUsers((prev) => {
+          const next = prev.map((u) => (u.telegramId === user.telegramId ? { ...u, isBanned: nextBanStatus } : u));
+          try {
+            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
         setToastMsg(data.message);
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
@@ -549,11 +604,19 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           action: "toggle_role",
           telegramId: user.telegramId,
           role: nextRole,
+          userData: user,
         }),
       });
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        setUsers((prev) => {
+          const next = prev.map((u) => (u.telegramId === user.telegramId ? { ...u, role: nextRole } : u));
+          try {
+            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
         setToastMsg(data.message);
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
@@ -593,6 +656,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        setUsers((prev) => {
+          const next = prev.filter((u) => u.telegramId !== user.telegramId);
+          try {
+            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
         setToastMsg("Kullanıcı başarıyla silindi");
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();

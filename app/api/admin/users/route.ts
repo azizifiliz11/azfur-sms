@@ -6,6 +6,7 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
+    await db.syncFromCloud();
     const users = db.getAllUsers();
     return NextResponse.json(
       { success: true, users },
@@ -24,8 +25,21 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const body = await req.json();
-    const { action, telegramId } = body;
+    const { action, telegramId, userData } = body;
+
+    // 0. İstemci önbelleğinden kullanıcıları eşitleme (Multi-container sync)
+    if (action === "sync_users") {
+      const { clientUsers } = body;
+      if (Array.isArray(clientUsers)) {
+        db.mergeUsers(clientUsers);
+      }
+      return NextResponse.json({
+        success: true,
+        users: db.getAllUsers(),
+      });
+    }
 
     if (!telegramId) {
       return NextResponse.json({ success: false, error: "Telegram ID gereklidir" }, { status: 400 });
@@ -33,20 +47,14 @@ export async function POST(req: NextRequest) {
 
     // 1. Kullanıcı Silme
     if (action === "delete_user") {
-      const deleted = db.deleteUser(telegramId);
-      if (!deleted) {
-        return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
-      }
+      db.deleteUser(telegramId);
       return NextResponse.json({ success: true, message: "Kullanıcı başarıyla silindi" });
     }
 
     // 2. Ban / Engel Durumu Değiştirme
     if (action === "toggle_ban") {
       const { isBanned } = body;
-      const updated = db.toggleUserBan(telegramId, isBanned);
-      if (!updated) {
-        return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
-      }
+      const updated = db.toggleUserBan(telegramId, isBanned, userData);
       return NextResponse.json({
         success: true,
         message: isBanned ? "Kullanıcı başarıyla engellendi (banlandı)" : "Kullanıcının engeli kaldırıldı",
@@ -57,10 +65,7 @@ export async function POST(req: NextRequest) {
     // 3. Admin Rolü Verme / Kaldırma
     if (action === "toggle_role") {
       const { role } = body;
-      const updated = db.updateUserRole(telegramId, role === "admin" ? "admin" : "user");
-      if (!updated) {
-        return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
-      }
+      const updated = db.updateUserRole(telegramId, role === "admin" ? "admin" : "user", userData);
       return NextResponse.json({
         success: true,
         message: role === "admin" ? "Kullanıcıya admin yetkisi verildi" : "Admin yetkisi kaldırıldı",
@@ -76,10 +81,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Geçersiz tutar" }, { status: 400 });
       }
 
-      const updatedUser = db.updateUserBalance(telegramId, numDelta);
-      if (!updatedUser) {
-        return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
-      }
+      const updatedUser = db.updateUserBalance(telegramId, numDelta, userData);
 
       return NextResponse.json(
         {

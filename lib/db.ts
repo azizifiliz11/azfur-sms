@@ -42,6 +42,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   },
 };
 
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const KV_KEY = "azfur_sms_db_v1";
+
 function ensureDbDirectory() {
   const dir = path.dirname(DB_PATH);
   if (!fs.existsSync(dir)) {
@@ -50,6 +54,23 @@ function ensureDbDirectory() {
     } catch (e) {
       // ignore
     }
+  }
+}
+
+async function saveToCloudKv(data: DatabaseSchema) {
+  if (!KV_URL || !KV_TOKEN) return;
+  try {
+    const raw = JSON.stringify(data);
+    await fetch(`${KV_URL}/set/${KV_KEY}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${KV_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([raw]),
+    });
+  } catch (err) {
+    console.error("[Cloud KV Save Error]:", err);
   }
 }
 
@@ -123,9 +144,40 @@ function saveDb(data: DatabaseSchema) {
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
+  if (KV_URL && KV_TOKEN) {
+    saveToCloudKv(data).catch(() => {});
+  }
 }
 
 export const db = {
+  async syncFromCloud(): Promise<void> {
+    if (!KV_URL || !KV_TOKEN) return;
+    try {
+      const res = await fetch(`${KV_URL}/get/${KV_KEY}`, {
+        headers: { Authorization: `Bearer ${KV_TOKEN}` },
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (json && json.result) {
+        const cloudData: DatabaseSchema =
+          typeof json.result === "string" ? JSON.parse(json.result) : json.result;
+        if (cloudData && (cloudData.users || cloudData.settings)) {
+          const localData = loadDb();
+          const merged: DatabaseSchema = {
+            settings: { ...cloudData.settings, ...localData.settings },
+            users: { ...cloudData.users, ...localData.users },
+            activations: { ...cloudData.activations, ...localData.activations },
+            deposits: Array.isArray(cloudData.deposits) ? cloudData.deposits : localData.deposits,
+          };
+          ensureDbDirectory();
+          fs.writeFileSync(DB_PATH, JSON.stringify(merged, null, 2), "utf8");
+        }
+      }
+    } catch (err) {
+      console.error("[Cloud KV Sync Error]:", err);
+    }
+  },
+
   getSettings(): SystemSettings {
     const data = loadDb();
     return data.settings;
@@ -140,38 +192,57 @@ export const db = {
 
   getUser(telegramId: number | string): User | null {
     const data = loadDb();
-    return data.users[String(telegramId)] || null;
+    const cleanId = String(telegramId).trim();
+    if (data.users[cleanId]) return data.users[cleanId];
+    return (
+      Object.values(data.users).find(
+        (u) => String(u.telegramId).trim() === cleanId
+      ) || null
+    );
   },
 
   getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): User {
     const data = loadDb();
-    const key = String(telegramId);
-    const isAdmin = String(telegramId) === String(data.settings.adminTelegramId) || String(telegramId) === "6824921456";
+    const cleanId = String(telegramId).trim();
+    const isAdmin =
+      cleanId === String(data.settings.adminTelegramId).trim() ||
+      cleanId === "6824921456";
 
-    if (!data.users[key]) {
-      data.users[key] = {
-        telegramId: Number(telegramId),
-        username: defaults?.username || `user_${telegramId}`,
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    if (!foundKey || !data.users[foundKey]) {
+      const newUser: User = {
+        telegramId: Number(cleanId),
+        username: defaults?.username || `user_${cleanId}`,
         firstName: defaults?.firstName || `Kullanıcı`,
         lastName: defaults?.lastName,
-        balance: isAdmin ? 500.0 : 0.0, // Yeni kullanıcılar 0.00 TL bakiye ile başlar
-        spent: 0,
-        role: isAdmin ? "admin" : "user",
-        isBanned: false,
-        createdAt: new Date().toISOString(),
+        balance: isAdmin ? 500.0 : (defaults?.balance ?? 0.0),
+        spent: defaults?.spent || 0,
+        role: isAdmin ? "admin" : (defaults?.role || "user"),
+        isBanned: defaults?.isBanned || false,
+        createdAt: defaults?.createdAt || new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
       };
+      data.users[cleanId] = newUser;
       saveDb(data);
+      return newUser;
     } else {
-      data.users[key].lastActiveAt = new Date().toISOString();
-      if (defaults?.username) data.users[key].username = defaults.username;
-      if (defaults?.firstName) data.users[key].firstName = defaults.firstName;
-      if (isAdmin && data.users[key].role !== "admin") {
-        data.users[key].role = "admin";
+      const user = data.users[foundKey];
+      user.lastActiveAt = new Date().toISOString();
+      if (defaults?.username) user.username = defaults.username;
+      if (defaults?.firstName) user.firstName = defaults.firstName;
+      if (defaults?.lastName) user.lastName = defaults.lastName;
+      if (defaults?.balance !== undefined) user.balance = defaults.balance;
+      if (isAdmin && user.role !== "admin") {
+        user.role = "admin";
       }
       saveDb(data);
+      return user;
     }
-    return data.users[key];
   },
 
   resetStats(): { activationsReset: number; depositsReset: number } {
@@ -187,46 +258,145 @@ export const db = {
     return { activationsReset: actCount, depositsReset: depCount };
   },
 
-  updateUserBalance(telegramId: number | string, delta: number): User | null {
+  updateUserBalance(
+    telegramId: number | string,
+    delta: number,
+    userData?: Partial<User>
+  ): User {
     const data = loadDb();
-    const key = String(telegramId);
-    if (!data.users[key]) return null;
+    const cleanId = String(telegramId).trim();
 
-    data.users[key].balance = Math.max(0, Number((data.users[key].balance + delta).toFixed(2)));
-    if (delta < 0) {
-      data.users[key].spent = Number(((data.users[key].spent || 0) + Math.abs(delta)).toFixed(2));
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    let user = foundKey ? data.users[foundKey] : null;
+
+    if (!user) {
+      // Container'da henüz yoksa, istemciden gelen kullanıcı bilgisiyle oluştur (asla 404 dönme!)
+      const initialBal =
+        userData?.balance !== undefined && !isNaN(Number(userData.balance))
+          ? Number(userData.balance)
+          : 0;
+
+      const isAdmin =
+        cleanId === String(data.settings.adminTelegramId).trim() ||
+        cleanId === "6824921456";
+
+      user = {
+        telegramId: Number(cleanId),
+        username: userData?.username || `user_${cleanId}`,
+        firstName: userData?.firstName || `Kullanıcı`,
+        lastName: userData?.lastName,
+        balance: initialBal,
+        spent: userData?.spent || 0,
+        role: (userData?.role as "admin" | "user") || (isAdmin ? "admin" : "user"),
+        isBanned: userData?.isBanned || false,
+        createdAt: userData?.createdAt || new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
+      data.users[cleanId] = user;
     }
+
+    user.balance = Math.max(0, Number((user.balance + delta).toFixed(2)));
+    if (delta < 0) {
+      user.spent = Number(((user.spent || 0) + Math.abs(delta)).toFixed(2));
+    }
+    user.lastActiveAt = new Date().toISOString();
     saveDb(data);
-    return data.users[key];
+    return user;
   },
 
-  updateUserRole(telegramId: number | string, role: "admin" | "user"): User | null {
+  updateUserRole(
+    telegramId: number | string,
+    role: "admin" | "user",
+    userData?: Partial<User>
+  ): User {
     const data = loadDb();
-    const key = String(telegramId);
-    if (!data.users[key]) return null;
-    data.users[key].role = role;
-    saveDb(data);
-    return data.users[key];
+    const cleanId = String(telegramId).trim();
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    let user = foundKey ? data.users[foundKey] : null;
+    if (!user) {
+      user = this.getOrCreateUser(cleanId, { ...userData, role });
+    } else {
+      user.role = role;
+      saveDb(data);
+    }
+    return user;
   },
 
-  toggleUserBan(telegramId: number | string, isBanned: boolean): User | null {
+  toggleUserBan(
+    telegramId: number | string,
+    isBanned: boolean,
+    userData?: Partial<User>
+  ): User {
     const data = loadDb();
-    const key = String(telegramId);
-    if (!data.users[key]) return null;
-    data.users[key].isBanned = isBanned;
-    saveDb(data);
-    return data.users[key];
+    const cleanId = String(telegramId).trim();
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    let user = foundKey ? data.users[foundKey] : null;
+    if (!user) {
+      user = this.getOrCreateUser(cleanId, { ...userData, isBanned });
+    } else {
+      user.isBanned = isBanned;
+      saveDb(data);
+    }
+    return user;
   },
 
   deleteUser(telegramId: number | string): boolean {
     const data = loadDb();
-    const key = String(telegramId);
-    if (data.users[key]) {
-      delete data.users[key];
+    const cleanId = String(telegramId).trim();
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+    if (foundKey) {
+      delete data.users[foundKey];
       saveDb(data);
-      return true;
     }
-    return false;
+    return true;
+  },
+
+  mergeUsers(incomingUsers: User[]): void {
+    const data = loadDb();
+    let changed = false;
+    for (const u of incomingUsers) {
+      if (!u || !u.telegramId) continue;
+      const key = String(u.telegramId).trim();
+      if (!data.users[key]) {
+        data.users[key] = {
+          ...u,
+          telegramId: Number(u.telegramId),
+        };
+        changed = true;
+      } else {
+        const existing = data.users[key];
+        if (u.username && existing.username !== u.username) {
+          existing.username = u.username;
+          changed = true;
+        }
+        if (u.firstName && existing.firstName !== u.firstName) {
+          existing.firstName = u.firstName;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      saveDb(data);
+    }
   },
 
   getAllUsers(): User[] {
@@ -293,9 +463,21 @@ export const db = {
     if (!dep) return null;
     dep.status = status;
     if (status === "APPROVED") {
-      const user = data.users[String(dep.telegramId)];
-      if (user) {
-        user.balance = Number((user.balance + dep.amount).toFixed(2));
+      const cleanId = String(dep.telegramId).trim();
+      let foundKey = Object.keys(data.users).find(
+        (k) =>
+          String(k).trim() === cleanId ||
+          String(data.users[k]?.telegramId).trim() === cleanId
+      );
+      if (foundKey && data.users[foundKey]) {
+        data.users[foundKey].balance = Number(
+          (data.users[foundKey].balance + dep.amount).toFixed(2)
+        );
+      } else {
+        this.getOrCreateUser(cleanId, {
+          username: dep.username,
+          balance: dep.amount,
+        });
       }
     }
     saveDb(data);

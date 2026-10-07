@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const body = await req.json();
     const { telegramId, username, firstName, lastName } = body;
 
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const { searchParams } = new URL(req.url);
     const telegramId = searchParams.get("telegramId");
 
@@ -53,9 +55,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Telegram ID gerekli" }, { status: 400 });
     }
 
-    const user = db.getUser(telegramId);
+    let user = db.getUser(telegramId);
     if (!user) {
-      return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
+      user = db.getOrCreateUser(telegramId);
     }
 
     return NextResponse.json(

@@ -6,6 +6,7 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
+    await db.syncFromCloud();
     const deposits = db.getDeposits();
     return NextResponse.json(
       { success: true, deposits },
@@ -24,6 +25,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const { depositId, status } = await req.json();
 
     if (!depositId || !status || (status !== "APPROVED" && status !== "REJECTED")) {

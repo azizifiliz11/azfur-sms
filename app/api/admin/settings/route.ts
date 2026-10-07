@@ -5,6 +5,7 @@ import { tcmb } from "@/lib/tcmb";
 
 export async function GET() {
   try {
+    await db.syncFromCloud();
     const settings = db.getSettings();
     const [allCountries, allServices, tcmbRateInfo] = await Promise.all([
       heroSms.getCountries(),
@@ -26,6 +27,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const body = await req.json();
 
     // Özel işlem: TCMB canlı kurunu anında yeniden çek

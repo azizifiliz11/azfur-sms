@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
+    await db.syncFromCloud();
     const [providerBalance, users, activations, settings] = await Promise.all([
       heroSms.getBalance(),
       Promise.resolve(db.getAllUsers()),
@@ -115,6 +116,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    await db.syncFromCloud();
     const body = await req.json();
     if (body.action === "reset_stats") {
       const res = db.resetStats();

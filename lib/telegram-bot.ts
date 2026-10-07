@@ -94,7 +94,12 @@ export function getTelegramBot(): Bot | null {
     botInstance.callbackQuery("check_balance", async (ctx) => {
       const from = ctx.from;
       if (!from) return;
-      const user = db.getUser(from.id);
+      await db.syncFromCloud();
+      const user = db.getOrCreateUser(from.id, {
+        username: from.username,
+        firstName: from.first_name,
+        lastName: from.last_name,
+      });
       const balance = user ? user.balance.toFixed(2) : "0.00";
       await ctx.answerCallbackQuery();
       await ctx.reply(`💰 <b>Güncel Bakiyeniz:</b> <code>${balance} ₺</code>\n\nBakiye yüklemek ve numara kiralamak için Mini App panelini kullanabilirsiniz.`, {
@@ -118,7 +123,12 @@ export function getTelegramBot(): Bot | null {
     botInstance.command("bakiye", async (ctx) => {
       const from = ctx.from;
       if (!from) return;
-      const user = db.getUser(from.id);
+      await db.syncFromCloud();
+      const user = db.getOrCreateUser(from.id, {
+        username: from.username,
+        firstName: from.first_name,
+        lastName: from.last_name,
+      });
       const balance = user ? user.balance.toFixed(2) : "0.00";
       await ctx.reply(`💰 <b>Mevcut Bakiyeniz:</b> <code>${balance} ₺</code>`, { parse_mode: "HTML" });
     });

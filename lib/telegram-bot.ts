@@ -22,25 +22,44 @@ export function getTelegramBot(): Bot | null {
         lastName: from.last_name,
       });
 
-      const appUrl = CONFIG.APP_URL;
+      const appUrl = (CONFIG.APP_URL || "").trim();
+      const isValidHttps = appUrl.startsWith("https://");
 
-      const keyboard = new InlineKeyboard()
-        .webApp("🚀 SMS Onay Panelini Aç", appUrl)
-        .row()
+      const keyboard = new InlineKeyboard();
+      if (isValidHttps) {
+        keyboard.webApp("🚀 SMS Onay Panelini Aç", appUrl).row();
+      }
+      keyboard
         .text("💳 Bakiye Sorgula", "check_balance")
         .text("🆘 Destek & Bilgi", "help_info");
 
-      await ctx.reply(
-        `👋 *Merhaba ${from.first_name}! AzFur Onay Botuna Hoş Geldiniz.*\n\n` +
-          `⚡ WhatsApp, Telegram, OpenAI/ChatGPT, Google, Instagram ve yüzlerce servis için anında tek kullanımlık sanal SMS onay numaraları kiralayabilirsiniz.\n\n` +
-          `💰 *Mevcut Bakiyeniz:* \`${user.balance.toFixed(2)} ₺\`\n` +
-          `📱 *Telegram ID:* \`${from.id}\`\n\n` +
-          `Aşağıdaki butona dokunarak doğrudan *Telegram Mini App* panelini açabilirsiniz 👇`,
-        {
-          parse_mode: "Markdown",
+      const safeName = (from.first_name || "Kullanıcı").replace(/[<>&]/g, "");
+
+      const messageText =
+        `👋 <b>Merhaba ${safeName}! AzFur Onay Botuna Hoş Geldiniz.</b>\n\n` +
+        `⚡ WhatsApp, Telegram, OpenAI/ChatGPT, Google, Instagram ve yüzlerce servis için anında tek kullanımlık sanal SMS onay numaraları kiralayabilirsiniz.\n\n` +
+        `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
+        `📱 <b>Telegram ID:</b> <code>${from.id}</code>\n\n` +
+        (isValidHttps
+          ? `Aşağıdaki butona dokunarak doğrudan <b>Telegram Mini App</b> panelini açabilirsiniz 👇`
+          : `⚡ SMS onay işlemlerinizi menüdeki butonları kullanarak yönetebilirsiniz.`);
+
+      try {
+        await ctx.reply(messageText, {
+          parse_mode: "HTML",
           reply_markup: keyboard,
+        });
+      } catch (err: any) {
+        console.error("Failed to send HTML start message, retrying plain text:", err);
+        try {
+          await ctx.reply(
+            `Merhaba ${safeName}! AzFur Botuna hoş geldiniz.\nBakiyeniz: ${user.balance.toFixed(2)} ₺\nID: ${from.id}`,
+            { reply_markup: keyboard }
+          );
+        } catch (e) {
+          console.error("Plain start message also failed:", e);
         }
-      );
+      }
     });
 
     // Callback queries
@@ -50,23 +69,9 @@ export function getTelegramBot(): Bot | null {
       const user = db.getUser(from.id);
       const balance = user ? user.balance.toFixed(2) : "0.00";
       await ctx.answerCallbackQuery();
-      await ctx.reply(`💰 *Güncel Bakiyeniz:* \`${balance} ₺\`\n\nBakiye yüklemek için Mini App panelini açıp "➕ Bakiye Yükle" bölümünü kullanabilirsiniz.`, {
-        parse_mode: "Markdown",
+      await ctx.reply(`💰 <b>Güncel Bakiyeniz:</b> <code>${balance} ₺</code>\n\nBakiye yüklemek için Mini App panelini kullanabilirsiniz.`, {
+        parse_mode: "HTML",
       });
-    });
-
-    botInstance.callbackQuery("help_info", async (ctx) => {
-      await ctx.answerCallbackQuery();
-      await ctx.reply(
-        `ℹ️ *AzFur Destek ve Bilgilendirme*\n\n` +
-          `• Numaralarımız tek kullanımlıktır ve 15 dakika geçerlidir.\n` +
-          `• SMS gelmezse "İptal Et & İade Al" butonuna basarak bakiyenizi anında kuruşu kuruşuna geri alabilirsiniz.\n` +
-          `• SMS kodu düştüğünde hem Mini App ekranında hem de bu sohbette anlık bildirim alırsınız.\n\n` +
-          `Teknik destek için yöneticimizle iletişime geçebilirsiniz.`,
-        {
-          parse_mode: "Markdown",
-        }
-      );
     });
 
     // /bakiye komutu
@@ -75,7 +80,7 @@ export function getTelegramBot(): Bot | null {
       if (!from) return;
       const user = db.getUser(from.id);
       const balance = user ? user.balance.toFixed(2) : "0.00";
-      await ctx.reply(`💰 *Mevcut Bakiyeniz:* \`${balance} ₺\``, { parse_mode: "Markdown" });
+      await ctx.reply(`💰 <b>Mevcut Bakiyeniz:</b> <code>${balance} ₺</code>`, { parse_mode: "HTML" });
     });
   }
 

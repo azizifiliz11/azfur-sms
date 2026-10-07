@@ -73,6 +73,13 @@ export interface BankInfo {
   descriptionNote?: string;
 }
 
+export interface CryptoSettings {
+  usdtTrc20Address?: string; // USDT (TRC-20) cüzdan adresi
+  trxAddress?: string; // TRX cüzdan adresi
+  cryptoBotToken?: string; // Telegram @CryptoBot API token
+  autoVerifyEnabled?: boolean; // TronScan ile anında otomatik doğrulama
+}
+
 export interface SystemSettings {
   globalMarginPercent: number; // e.g. 35 -> %35
   globalFixedFee: number; // e.g. 5.0 -> 5 TL
@@ -87,6 +94,7 @@ export interface SystemSettings {
   hiddenCountries: number[];
   serviceCustomMargins: Record<string, { marginPercent?: number; fixedFee?: number }>;
   bankInfo?: BankInfo;
+  cryptoSettings?: CryptoSettings;
 }
 
 export interface DepositRequest {
@@ -94,8 +102,9 @@ export interface DepositRequest {
   telegramId: number;
   username: string;
   amount: number;
-  method: 'CryptoBot' | 'Havale/EFT';
+  method: 'CryptoBot' | 'Havale/EFT' | 'USDT_TRC20' | 'TRX';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   referenceCode: string;
+  txid?: string;
   createdAt: string;
 }

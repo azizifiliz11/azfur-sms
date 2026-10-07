@@ -29,10 +29,16 @@ const DEFAULT_SETTINGS: SystemSettings = {
   hiddenCountries: [],
   serviceCustomMargins: {},
   bankInfo: {
-    bankName: "Garanti BBVA / Enpara",
-    accountHolder: "AzFur Teknoloji A.Ş.",
-    iban: "TR56 0006 2000 0001 2983 4812 01",
+    bankName: "Ziraat Bankası",
+    accountHolder: "AzFur SMS",
+    iban: "TR00 0000 0000 0000 0000 0000 00",
     descriptionNote: "Açıklama alanına Telegram ID'nizi yazmayı unutmayınız.",
+  },
+  cryptoSettings: {
+    usdtTrc20Address: "",
+    trxAddress: "",
+    cryptoBotToken: "",
+    autoVerifyEnabled: true,
   },
 };
 
@@ -91,7 +97,11 @@ function loadDb(): DatabaseSchema {
     if (data.settings.useTcmbAutoRate === undefined) data.settings.useTcmbAutoRate = true;
     if (!data.settings.lastTcmbRate) data.settings.lastTcmbRate = 49.20;
     if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
+    if (!data.settings.cryptoSettings) data.settings.cryptoSettings = DEFAULT_SETTINGS.cryptoSettings;
     if (!data.users) data.users = {};
+    if (data.users["100001"]) {
+      delete data.users["100001"];
+    }
     if (!data.activations) data.activations = {};
     if (!data.deposits) data.deposits = [];
     return data;
@@ -290,5 +300,13 @@ export const db = {
     }
     saveDb(data);
     return dep;
+  },
+
+  hasUsedTxid(txid: string): boolean {
+    const data = loadDb();
+    const clean = txid.trim().toLowerCase();
+    return (data.deposits || []).some(
+      (d) => d.txid && d.txid.trim().toLowerCase() === clean && d.status === "APPROVED"
+    );
   },
 };

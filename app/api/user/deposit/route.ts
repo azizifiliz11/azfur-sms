@@ -2,18 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { DepositRequest } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const settings = db.getSettings();
-    return NextResponse.json({
-      success: true,
-      bankInfo: settings.bankInfo || {
-        bankName: "Ziraat Bankası",
-        accountHolder: "AzFur SMS",
-        iban: "TR00 0000 0000 0000 0000 0000 00",
-        descriptionNote: "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.",
+    return NextResponse.json(
+      {
+        success: true,
+        bankInfo: settings.bankInfo || {
+          bankName: "Ziraat Bankası",
+          accountHolder: "AzFur SMS",
+          iban: "TR00 0000 0000 0000 0000 0000 00",
+          descriptionNote: "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.",
+        },
+        cryptoSettings: settings.cryptoSettings || {
+          usdtTrc20Address: "",
+          trxAddress: "",
+          cryptoBotToken: "",
+          autoVerifyEnabled: true,
+        },
+        exchangeRate: settings.exchangeRateToTry || 49.2,
       },
-    });
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -21,7 +38,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { telegramId, amount, method, referenceCode } = await req.json();
+    const { telegramId, amount, method, referenceCode, txid } = await req.json();
 
     if (!telegramId || !amount || !method) {
       return NextResponse.json({ success: false, error: "Eksik parametreler" }, { status: 400 });
@@ -41,6 +58,7 @@ export async function POST(req: NextRequest) {
       method: method,
       status: "PENDING",
       referenceCode: referenceCode || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+      txid: txid || undefined,
       createdAt: new Date().toISOString(),
     };
 

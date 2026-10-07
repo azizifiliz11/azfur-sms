@@ -44,15 +44,10 @@ export function useTelegram() {
         }
       }
 
-      // Tarayıcıdan açıldığında test kullanıcısı oluştur
+      // Tarayıcıdan açıldığında demo kullanıcı oluşturma (yalnızca gerçek Telegram oturumları)
       if (!window.Telegram?.WebApp?.initDataUnsafe?.user) {
-        const savedId = localStorage.getItem("demo_tg_id") || "100001";
-        const savedName = localStorage.getItem("demo_tg_name") || "Demo Kullanıcı";
-        setTgUser({
-          id: parseInt(savedId, 10),
-          first_name: savedName,
-          username: "test_kullanici",
-        });
+        setTgUser(null);
+        setIsTelegram(false);
       }
 
       setIsReady(true);

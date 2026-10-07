@@ -174,6 +174,28 @@ function HomeContent() {
     }
   };
 
+  if (isReady && !tgUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#090a0f] text-center">
+        <div className="w-16 h-16 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4 shadow-xl">
+          <Zap className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-bold text-white mb-2">AzFur SMS Onay Platformu</h1>
+        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+          Bu uygulama bir <b>Telegram Mini App (TMA)</b> servisidir. Güvenliğiniz ve işlemlerinizin anında gerçekleşmesi için lütfen Telegram botumuz üzerinden başlatınız.
+        </p>
+        <div className="space-y-3 w-full max-w-xs">
+          <a
+            href="/admin"
+            className="w-full py-3 px-4 rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-200 text-xs font-semibold transition-all block text-center"
+          >
+            🛡️ Yönetici Paneline Git
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   if (!isReady || (loading && !currentUser)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#090a0f]">
@@ -215,7 +237,7 @@ function HomeContent() {
               <ActiveNumbers
                 orders={activeOrders}
                 onOrderUpdated={handleRefreshAll}
-                telegramId={tgUser?.id || 100001}
+                telegramId={tgUser?.id || currentUser?.telegramId || 0}
               />
             )}
 
@@ -228,7 +250,7 @@ function HomeContent() {
               onSelectCountry={handleSelectCountry}
               onOrderSuccess={handleOrderSuccess}
               userBalance={currentUser?.balance || 0}
-              telegramId={tgUser?.id || 100001}
+              telegramId={tgUser?.id || currentUser?.telegramId || 0}
               onOpenDeposit={() => setDepositModalOpen(true)}
               isCatalogLoading={catalogLoading}
             />
@@ -251,7 +273,7 @@ function HomeContent() {
       <DepositModal
         isOpen={depositModalOpen}
         onClose={() => setDepositModalOpen(false)}
-        telegramId={tgUser?.id || 100001}
+        telegramId={tgUser?.id || currentUser?.telegramId || 0}
         onSuccess={() => initUser()}
       />
     </div>

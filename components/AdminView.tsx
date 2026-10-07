@@ -28,6 +28,7 @@ import {
   Send,
   Megaphone,
   RotateCcw,
+  Coins,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -62,6 +63,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [iban, setIban] = useState<string>("TR00 0000 0000 0000 0000 0000 00");
   const [descriptionNote, setDescriptionNote] = useState<string>("Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.");
   const [savingBank, setSavingBank] = useState<boolean>(false);
+
+  // Crypto wallet states
+  const [usdtTrc20Address, setUsdtTrc20Address] = useState<string>("");
+  const [trxAddress, setTrxAddress] = useState<string>("");
+  const [cryptoBotToken, setCryptoBotToken] = useState<string>("");
+  const [autoVerifyEnabled, setAutoVerifyEnabled] = useState<boolean>(true);
+  const [savingCrypto, setSavingCrypto] = useState<boolean>(false);
 
   // Broadcast states
   const [broadcastTarget, setBroadcastTarget] = useState<"all" | "user">("all");
@@ -118,6 +126,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           setAccountHolder(st.settings.bankInfo.accountHolder || "");
           setIban(st.settings.bankInfo.iban || "");
           setDescriptionNote(st.settings.bankInfo.descriptionNote || "");
+        }
+        if (st.settings?.cryptoSettings) {
+          setUsdtTrc20Address(st.settings.cryptoSettings.usdtTrc20Address || "");
+          setTrxAddress(st.settings.cryptoSettings.trxAddress || "");
+          setCryptoBotToken(st.settings.cryptoSettings.cryptoBotToken || "");
+          setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
       }
       if (us.success) setUsers(us.users);
@@ -381,6 +395,41 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       alert("Hata oluştu");
     } finally {
       setSavingBank(false);
+    }
+  };
+
+  // Kripto Cüzdan Ayarlarını Kaydet
+  const handleSaveCryptoSettings = async () => {
+    setSavingCrypto(true);
+    haptic.impact("medium");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cryptoSettings: {
+            usdtTrc20Address,
+            trxAddress,
+            cryptoBotToken,
+            autoVerifyEnabled,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("Kripto cüzdan ayarları başarıyla kaydedildi!");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSavingCrypto(false);
     }
   };
 
@@ -657,7 +706,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Banka / IBAN
+          Banka & Kripto
         </button>
         <button
           onClick={() => {
@@ -1107,6 +1156,88 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 </>
               ) : (
                 <span>Banka ve IBAN Bilgilerini Kaydet</span>
+              )}
+            </button>
+          </Card>
+
+          {/* Otomatik Kripto (TRX & USDT) Cüzdan Ayarları */}
+          <Card className="p-4 space-y-4 border-emerald-500/30">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Otomatik Kripto (TRX & USDT) Ödeme Ayarları</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Kullanıcılar bu adrese transfer yapıp TXID yapıştırdığında TronScan ile anında otomatik bakiye eklenir
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">USDT (TRC-20) Cüzdan Adresi</label>
+                <input
+                  type="text"
+                  value={usdtTrc20Address}
+                  onChange={(e) => setUsdtTrc20Address(e.target.value)}
+                  placeholder="Örn: T9yD14Nj9j7xAB4dbGeiX9h8unkKHXUnC"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">TRX (Tron) Cüzdan Adresi</label>
+                <input
+                  type="text"
+                  value={trxAddress}
+                  onChange={(e) => setTrxAddress(e.target.value)}
+                  placeholder="Örn: T9yD14Nj9j7xAB4dbGeiX9h8unkKHXUnC"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-white/5">
+                <div>
+                  <span className="text-xs font-semibold text-white block">TronScan Canlı Otomatik Onay</span>
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    Kullanıcı işlem kodunu girdiğinde sistem Tron ağında transferi doğrular ve bakiyeyi anında yükler.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={autoVerifyEnabled}
+                  onChange={(e) => setAutoVerifyEnabled(e.target.checked)}
+                  className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">CryptoBot API Token (Opsiyonel @CryptoBot)</label>
+                <input
+                  type="password"
+                  value={cryptoBotToken}
+                  onChange={(e) => setCryptoBotToken(e.target.value)}
+                  placeholder="Örn: 12345:AA..."
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveCryptoSettings}
+              disabled={savingCrypto}
+              className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {savingCrypto ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <span>Kripto Cüzdan Ayarlarını Kaydet</span>
               )}
             </button>
           </Card>

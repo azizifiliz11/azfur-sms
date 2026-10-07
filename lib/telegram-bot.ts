@@ -22,21 +22,20 @@ export function getTelegramBot(): Bot | null {
         lastName: from.last_name,
       });
 
-      const appUrl = (CONFIG.APP_URL || "").trim();
-      const isValidHttps = appUrl.startsWith("https://");
+      const rawUrl = (CONFIG.APP_URL || "").trim();
+      const appUrl = rawUrl.startsWith("https://") ? rawUrl.replace(/\/$/, "") : "https://azfur-sms.vercel.app";
+      const adminUrl = `${appUrl}/admin`;
 
       const isAdmin = user.role === "admin" || String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) || String(from.id) === "6824921456";
 
-      const keyboard = new InlineKeyboard();
-      if (isValidHttps) {
-        keyboard.webApp("🚀 SMS Onay Panelini Aç", appUrl).row();
-      }
-      keyboard
+      const keyboard = new InlineKeyboard()
+        .webApp("🚀 SMS Onay Panelini Aç", appUrl)
+        .row()
         .text("💳 Bakiye Sorgula", "check_balance")
         .text("🆘 Destek & Bilgi", "help_info");
 
-      if (isAdmin && isValidHttps) {
-        keyboard.row().webApp("🛡️ Yönetici Paneli", `${appUrl.replace(/\/$/, "")}/admin`);
+      if (isAdmin) {
+        keyboard.row().webApp("🛡️ Yönetici Paneli", adminUrl);
       }
 
       const safeName = (from.first_name || "Kullanıcı").replace(/[<>&]/g, "");
@@ -46,9 +45,7 @@ export function getTelegramBot(): Bot | null {
         `⚡ WhatsApp, Telegram, OpenAI/ChatGPT, Google, Instagram ve yüzlerce servis için anında tek kullanımlık sanal SMS onay numaraları kiralayabilirsiniz.\n\n` +
         `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
         `📱 <b>Telegram ID:</b> <code>${from.id}</code>\n\n` +
-        (isValidHttps
-          ? `Aşağıdaki butona dokunarak doğrudan <b>Telegram Mini App</b> panelini açabilirsiniz 👇`
-          : `⚡ SMS onay işlemlerinizi menüdeki butonları kullanarak yönetebilirsiniz.`);
+        `Aşağıdaki butonlara dokunarak doğrudan <b>Telegram Mini App</b> panelini veya yönetici ekranını açabilirsiniz 👇`;
 
       try {
         await ctx.reply(messageText, {
@@ -73,16 +70,11 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      const appUrl = (CONFIG.APP_URL || "").trim();
-      const adminUrl = `${appUrl.replace(/\/$/, "")}/admin`;
-      const isValidHttps = adminUrl.startsWith("https://");
+      const rawUrl = (CONFIG.APP_URL || "").trim();
+      const appUrl = rawUrl.startsWith("https://") ? rawUrl.replace(/\/$/, "") : "https://azfur-sms.vercel.app";
+      const adminUrl = `${appUrl}/admin`;
 
-      const keyboard = new InlineKeyboard();
-      if (isValidHttps) {
-        keyboard.webApp("🛡️ Yönetici Panelini Aç", adminUrl);
-      } else {
-        keyboard.url("🛡️ Yönetici Panelini Aç (Web)", adminUrl);
-      }
+      const keyboard = new InlineKeyboard().webApp("🛡️ Yönetici Panelini Aç", adminUrl);
 
       await ctx.reply(
         `👑 <b>AzFur Yönetici Paneli</b>\n\n` +

@@ -243,7 +243,11 @@ export function RentPanel({
 
                 <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04]">
                   <span className="text-[10px] text-zinc-400 font-mono">
-                    {item.stock > 0 ? `${(item.stock / 1000).toFixed(0)}K stok` : "Tükendi"}
+                    {item.stock <= 0
+                      ? "Tükendi"
+                      : item.stock < 1000
+                      ? `${item.stock} adet`
+                      : `${item.stock.toLocaleString("tr-TR")} adet`}
                   </span>
                   <span className="text-xs font-mono font-bold text-emerald-400">
                     ₺{item.calculatedPriceTry.toFixed(2)}

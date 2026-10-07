@@ -11,116 +11,26 @@
     "serviceCustomMargins": {},
     "useTcmbAutoRate": true,
     "lastTcmbRate": 49.1976,
-    "lastTcmbFetchTime": "2026-10-07T17:00:58.135Z"
+    "lastTcmbFetchTime": "2026-10-07T18:19:43.138Z",
+    "bankInfo": {
+      "bankName": "Ziraat Bankası",
+      "accountHolder": "AzFur SMS",
+      "iban": "TR00 0000 0000 0000 0000 0000 00",
+      "descriptionNote": "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız."
+    }
   },
   "users": {
-    "100001": {
-      "telegramId": 100001,
-      "username": "test_kullanici",
-      "firstName": "Demo Kullanıcı",
-      "balance": 250,
-      "spent": 79.6,
-      "role": "user",
-      "createdAt": "2026-10-07T16:07:43.215Z",
-      "lastActiveAt": "2026-10-07T17:00:49.696Z"
-    },
     "6824921456": {
       "telegramId": 6824921456,
-      "username": "admin_tester",
-      "firstName": "Admin Test",
-      "balance": 920.4,
-      "spent": 93.3,
+      "username": "admin",
+      "firstName": "Yönetici",
+      "balance": 500,
+      "spent": 0,
       "role": "admin",
       "createdAt": "2026-10-07T16:07:43.215Z",
-      "lastActiveAt": "2026-10-07T16:13:49.703Z"
+      "lastActiveAt": "2026-10-07T17:00:00.000Z"
     }
   },
-  "activations": {
-    "mock_1791389614128_888": {
-      "id": "mock_1791389614128_888",
-      "telegramId": 6824921456,
-      "serviceCode": "wa",
-      "serviceName": "Whatsapp",
-      "countryId": 62,
-      "countryName": "Turkey",
-      "countryFlag": "🇹🇷",
-      "phoneNumber": "+905379463636",
-      "originalCost": 1.44,
-      "chargedPrice": 79.6,
-      "status": "RECEIVED",
-      "smsCode": "974-321",
-      "smsText": null,
-      "createdAt": 1791389614128,
-      "expiresAt": 1791390514128,
-      "notifiedBot": true
-    },
-    "mock_1791389629912_611": {
-      "id": "mock_1791389629912_611",
-      "telegramId": 6824921456,
-      "serviceCode": "tg",
-      "serviceName": "Telegram",
-      "countryId": 12,
-      "countryName": "Country 12",
-      "countryFlag": "🌐",
-      "phoneNumber": "+120240393225",
-      "originalCost": 0.15,
-      "chargedPrice": 13.7,
-      "status": "CANCELLED",
-      "smsCode": null,
-      "smsText": null,
-      "createdAt": 1791389629913,
-      "expiresAt": 1791390529913,
-      "notifiedBot": false
-    },
-    "mock_1791390086374_85": {
-      "id": "mock_1791390086374_85",
-      "telegramId": 100001,
-      "serviceCode": "wa",
-      "serviceName": "Whatsapp",
-      "countryId": 62,
-      "countryName": "Turkey",
-      "countryFlag": "🇹🇷",
-      "phoneNumber": "+905315349844",
-      "originalCost": 1.44,
-      "chargedPrice": 79.6,
-      "status": "CANCELLED",
-      "smsCode": null,
-      "smsText": null,
-      "createdAt": 1791390086375,
-      "expiresAt": 1791390986375,
-      "notifiedBot": false
-    }
-  },
-  "deposits": [
-    {
-      "id": "dep_1791390078942_710",
-      "telegramId": 100001,
-      "username": "test_kullanici",
-      "amount": 100,
-      "method": "CryptoBot",
-      "status": "REJECTED",
-      "referenceCode": "DEP-382159",
-      "createdAt": "2026-10-07T16:21:18.942Z"
-    },
-    {
-      "id": "dep_1791389630110_252",
-      "telegramId": 6824921456,
-      "username": "admin_tester",
-      "amount": 250,
-      "method": "CryptoBot",
-      "status": "APPROVED",
-      "referenceCode": "REF-239783",
-      "createdAt": "2026-10-07T16:13:50.110Z"
-    },
-    {
-      "id": "dep-101",
-      "telegramId": 100001,
-      "username": "test_kullanici",
-      "amount": 100,
-      "method": "CryptoBot",
-      "status": "APPROVED",
-      "referenceCode": "CRYPTO-98421",
-      "createdAt": "2026-10-07T15:07:43.215Z"
-    }
-  ]
+  "activations": {},
+  "deposits": []
 }

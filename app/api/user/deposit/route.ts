@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { DepositRequest } from "@/lib/types";
 
+export async function GET() {
+  try {
+    const settings = db.getSettings();
+    return NextResponse.json({
+      success: true,
+      bankInfo: settings.bankInfo || {
+        bankName: "Ziraat Bankası",
+        accountHolder: "AzFur SMS",
+        iban: "TR00 0000 0000 0000 0000 0000 00",
+        descriptionNote: "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.",
+      },
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { telegramId, amount, method, referenceCode } = await req.json();

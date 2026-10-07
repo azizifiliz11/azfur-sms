@@ -66,6 +66,13 @@ export interface ActivationOrder {
   notifiedBot: boolean;
 }
 
+export interface BankInfo {
+  bankName: string;
+  accountHolder: string;
+  iban: string;
+  descriptionNote?: string;
+}
+
 export interface SystemSettings {
   globalMarginPercent: number; // e.g. 35 -> %35
   globalFixedFee: number; // e.g. 5.0 -> 5 TL
@@ -79,6 +86,7 @@ export interface SystemSettings {
   hiddenServices: string[];
   hiddenCountries: number[];
   serviceCustomMargins: Record<string, { marginPercent?: number; fixedFee?: number }>;
+  bankInfo?: BankInfo;
 }
 
 export interface DepositRequest {
@@ -86,7 +94,7 @@ export interface DepositRequest {
   telegramId: number;
   username: string;
   amount: number;
-  method: 'CryptoBot' | 'Havale/EFT' | 'Kredi Kartı';
+  method: 'CryptoBot' | 'Havale/EFT';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   referenceCode: string;
   createdAt: string;

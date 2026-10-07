@@ -155,3 +155,39 @@ export async function sendTelegramSmsNotification(
     return false;
   }
 }
+
+/**
+ * Admin Panelinden doğrudan veya toplu duyuru mesajı gönderme fonksiyonu
+ */
+export async function sendTelegramDirectMessage(
+  telegramId: number | string,
+  text: string,
+  parseMode: "HTML" | "Markdown" = "HTML"
+): Promise<{ ok: boolean; error?: string }> {
+  if (!CONFIG.TELEGRAM_BOT_TOKEN) {
+    return { ok: false, error: "Bot token tanımlı değil" };
+  }
+
+  try {
+    const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text: text,
+        parse_mode: parseMode,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.ok) {
+      return { ok: true };
+    } else {
+      return { ok: false, error: data.description || "Gönderilemedi" };
+    }
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Bağlantı hatası" };
+  }
+}
+

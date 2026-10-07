@@ -25,6 +25,9 @@ import {
   Search,
   Landmark,
   Loader2,
+  Send,
+  Megaphone,
+  RotateCcw,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -38,7 +41,7 @@ interface AdminViewProps {
 }
 
 export function AdminView({ onBackToApp }: AdminViewProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "users" | "deposits">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast">("overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -52,6 +55,22 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [fixedFee, setFixedFee] = useState<number>(5.0);
   const [rateToTry, setRateToTry] = useState<number>(49.2);
   const [mockMode, setMockMode] = useState<boolean>(false);
+
+  // Bank & IBAN states
+  const [bankName, setBankName] = useState<string>("Ziraat Bankası");
+  const [accountHolder, setAccountHolder] = useState<string>("AzFur SMS");
+  const [iban, setIban] = useState<string>("TR00 0000 0000 0000 0000 0000 00");
+  const [descriptionNote, setDescriptionNote] = useState<string>("Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.");
+  const [savingBank, setSavingBank] = useState<boolean>(false);
+
+  // Broadcast states
+  const [broadcastTarget, setBroadcastTarget] = useState<"all" | "user">("all");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [broadcastMessage, setBroadcastMessage] = useState<string>("");
+  const [sendingBroadcast, setSendingBroadcast] = useState<boolean>(false);
+
+  // Reset stats state
+  const [resettingStats, setResettingStats] = useState<boolean>(false);
 
   // TCMB automatic rate states
   const [useTcmbAutoRate, setUseTcmbAutoRate] = useState<boolean>(true);
@@ -94,6 +113,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         setUseTcmbAutoRate(st.settings.useTcmbAutoRate ?? true);
         setLastTcmbRate(st.tcmbRateInfo?.rate || st.settings.lastTcmbRate || 49.2);
         setLastTcmbFetchTime(st.settings.lastTcmbFetchTime || st.tcmbRateInfo?.timestamp || "");
+        if (st.settings?.bankInfo) {
+          setBankName(st.settings.bankInfo.bankName || "");
+          setAccountHolder(st.settings.bankInfo.accountHolder || "");
+          setIban(st.settings.bankInfo.iban || "");
+          setDescriptionNote(st.settings.bankInfo.descriptionNote || "");
+        }
       }
       if (us.success) setUsers(us.users);
       if (dep.success) setDeposits(dep.deposits);
@@ -255,6 +280,127 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       }
     } catch (e) {
       haptic.error();
+    }
+  };
+
+  // İstatistikleri Sıfırla
+  const handleResetStats = async () => {
+    if (
+      !confirm(
+        "⚠️ DİKKAT: Tüm sipariş geçmişi, toplam ciro ve harcama istatistikleri sıfırlanacaktır!\n\nBu işlem geri alınamaz. Sıfırlamak istediğinize emin misiniz?"
+      )
+    ) {
+      return;
+    }
+
+    setResettingStats(true);
+    haptic.impact("heavy");
+    try {
+      const res = await fetch("/api/admin/overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_stats" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("İstatistikler ve sipariş geçmişi başarıyla sıfırlandı!");
+        setTimeout(() => setToastMsg(null), 3500);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Sıfırlama başarısız oldu");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setResettingStats(false);
+    }
+  };
+
+  // Banka ve IBAN Kaydet
+  const handleSaveBankInfo = async () => {
+    setSavingBank(true);
+    haptic.impact("medium");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bankInfo: {
+            bankName,
+            accountHolder,
+            iban,
+            descriptionNote,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("Banka ve IBAN bilgileri başarıyla kaydedildi!");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSavingBank(false);
+    }
+  };
+
+  // Duyuru / Mesaj Gönder
+  const handleSendBroadcast = async () => {
+    if (!broadcastMessage.trim()) {
+      alert("Lütfen gönderilecek mesajı yazınız.");
+      return;
+    }
+    if (broadcastTarget === "user" && !selectedUserId) {
+      alert("Lütfen mesaj gönderilecek kullanıcıyı seçiniz.");
+      return;
+    }
+
+    const targetDesc =
+      broadcastTarget === "all"
+        ? `tüm ${users.length} kayıtlı kullanıcıya toplu duyuru olarak`
+        : `${selectedUserId} ID'li kullanıcıya özel mesaj olarak`;
+
+    if (!confirm(`Mesaj ${targetDesc} gönderilecektir. Devam etmek istiyor musunuz?`)) {
+      return;
+    }
+
+    setSendingBroadcast(true);
+    haptic.impact("heavy");
+    try {
+      const res = await fetch("/api/admin/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: broadcastTarget,
+          telegramId: selectedUserId,
+          message: broadcastMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg(data.message);
+        setTimeout(() => setToastMsg(null), 4000);
+        setBroadcastMessage("");
+      } else {
+        haptic.error();
+        alert(data.error || "Gönderim başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSendingBroadcast(false);
     }
   };
 
@@ -443,13 +589,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-4 gap-1.5 bg-zinc-900/70 p-1 rounded-2xl border border-white/5 text-xs font-semibold">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
         <button
           onClick={() => {
             haptic.selection();
             setActiveTab("overview");
           }}
-          className={`py-2 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
             activeTab === "overview"
               ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
               : "text-zinc-400 hover:text-zinc-200"
@@ -462,39 +608,65 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             haptic.selection();
             setActiveTab("pricing");
           }}
-          className={`py-2 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
             activeTab === "pricing"
               ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Kâr Motoru
+          Fiyat / Kâr
+        </button>
+        <button
+          onClick={() => {
+            haptic.selection();
+            setActiveTab("bank");
+          }}
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
+            activeTab === "bank"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Banka / IBAN
         </button>
         <button
           onClick={() => {
             haptic.selection();
             setActiveTab("users");
           }}
-          className={`py-2 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
             activeTab === "users"
               ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Kullanıcılar ({users.length})
+          Kullanıcı ({users.length})
         </button>
         <button
           onClick={() => {
             haptic.selection();
             setActiveTab("deposits");
           }}
-          className={`py-2 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
             activeTab === "deposits"
               ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
           Talepler ({deposits.filter((d) => d.status === "PENDING").length})
+        </button>
+        <button
+          onClick={() => {
+            haptic.selection();
+            setActiveTab("broadcast");
+          }}
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
+            activeTab === "broadcast"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Duyuru & Mesaj
         </button>
       </div>
 
@@ -550,6 +722,37 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             {`Sistem alış maliyetleri üzerine %${marginPercent} marj ve ₺${fixedFee} sabit servis bedeli ekleyerek fiyatları otomatik belirler.`}
           </Callout>
 
+          {/* İstatistikleri Sıfırla Kartı */}
+          <Card className="p-3.5 bg-rose-950/20 border-rose-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400">
+                <RotateCcw className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">İstatistikleri Sıfırla</h4>
+                <p className="text-[11px] text-zinc-400">Ciro, sipariş geçmişi ve harcama sayaçlarını temizler</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleResetStats}
+              disabled={resettingStats}
+              className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {resettingStats ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Sıfırlanıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>İstatistikleri Sıfırla</span>
+                </>
+              )}
+            </button>
+          </Card>
+
           {/* Area Chart: 7 Günlük Gelir Grafiği */}
           <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -562,7 +765,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               <TrendingUp className="w-4 h-4 text-emerald-400" />
             </div>
 
-            <AreaChart data={overview?.chartDaily || []} />
+            <AreaChart data={overview?.revenueTrend || overview?.chartDaily || []} />
           </Card>
 
           {/* Donut Chart: En Çok Satan Servisler */}
@@ -779,6 +982,107 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         </div>
       )}
 
+      {/* TAB: BANK & IBAN MANAGEMENT */}
+      {activeTab === "bank" && (
+        <div className="space-y-4">
+          <Card className="p-4 space-y-4 border-blue-500/30">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Havale / EFT Banka Bilgileri</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Kullanıcılar bakiye yükleme ekranında bu bilgileri görür ve IBAN&apos;ı kopyalayabilir
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">Banka Adı</label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Örn: Ziraat Bankası, Garanti BBVA"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">Alıcı / Hesap Sahibi</label>
+                <input
+                  type="text"
+                  value={accountHolder}
+                  onChange={(e) => setAccountHolder(e.target.value)}
+                  placeholder="Örn: AzFur SMS / Ad Soyad"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">IBAN Numarası</label>
+                <input
+                  type="text"
+                  value={iban}
+                  onChange={(e) => setIban(e.target.value)}
+                  placeholder="Örn: TR00 0000 0000 0000 0000 0000 00"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">Açıklama / Havale Notu</label>
+                <input
+                  type="text"
+                  value={descriptionNote}
+                  onChange={(e) => setDescriptionNote(e.target.value)}
+                  placeholder="Örn: Açıklama alanına Telegram ID'nizi yazmayı unutmayınız."
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Canlı Önizleme Kartı */}
+            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 space-y-2 text-xs">
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
+                Kullanıcı Ekranında Nasıl Görünür?
+              </span>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Banka:</span>
+                <span className="font-semibold text-white">{bankName || "Banka belirtilmedi"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Alıcı:</span>
+                <span className="font-semibold text-white">{accountHolder || "Alıcı belirtilmedi"}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900 border border-white/10 font-mono text-emerald-400 text-[11px] font-bold">
+                {iban || "TR..."}
+              </div>
+              <p className="text-[11px] text-amber-400">💡 {descriptionNote}</p>
+            </div>
+
+            <button
+              onClick={handleSaveBankInfo}
+              disabled={savingBank}
+              className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {savingBank ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <span>Banka ve IBAN Bilgilerini Kaydet</span>
+              )}
+            </button>
+          </Card>
+        </div>
+      )}
+
       {/* TAB 3: USERS & FULL MANAGEMENT (BAN, ROLE, DELETE, BALANCE) */}
       {activeTab === "users" && (
         <div className="space-y-3">
@@ -991,6 +1295,159 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: BROADCAST & MESSAGING */}
+      {activeTab === "broadcast" && (
+        <div className="space-y-4">
+          <Card className="p-4 space-y-4 border-purple-500/30">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Telegram Duyuru ve Mesaj Gönder</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Kullanıcılara bot üzerinden doğrudan mesaj veya genel duyuru iletin
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Hedef Seçimi */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">Mesaj Hedefi</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.selection();
+                    setBroadcastTarget("all");
+                  }}
+                  className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                    broadcastTarget === "all"
+                      ? "bg-purple-500/20 border-purple-500 text-purple-300 shadow-sm"
+                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Tüm Kullanıcılar ({users.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.selection();
+                    setBroadcastTarget("user");
+                  }}
+                  className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                    broadcastTarget === "user"
+                      ? "bg-purple-500/20 border-purple-500 text-purple-300 shadow-sm"
+                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Belirli Bir Kullanıcı</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Belirli Kullanıcı Seçimi */}
+            {broadcastTarget === "user" && (
+              <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900 border border-white/5">
+                <label className="text-xs font-semibold text-zinc-300">Hedef Kullanıcı Seçin</label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full bg-[#181a24] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">-- Kullanıcı Seçiniz --</option>
+                  {users.map((u) => (
+                    <option key={u.telegramId} value={u.telegramId}>
+                      {u.firstName || "İsimsiz"} (@{u.username || "yok"}) - ID: {u.telegramId} (Bakiye: ₺{u.balance})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Veya Telegram ID giriniz"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full mt-2 bg-[#181a24] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            )}
+
+            {/* Hızlı Şablonlar */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-zinc-400 font-medium">Hızlı Şablonlar:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: "📢 Sistem Duyurusu",
+                    text: "📢 <b>SİSTEM DUYURUSU</b>\n\nDeğerli kullanıcılarımız, sistemimize yeni ülke ve servis numaraları eklenmiştir. Hemen dilediğiniz servisi kiralayabilirsiniz!",
+                  },
+                  {
+                    label: "🎁 Bakiye Kampanyası",
+                    text: "🎁 <b>ÖZEL KAMPANYA!</b>\n\nBugüne özel bakiye yüklemelerinizde avantajlı fırsatlar sizleri bekliyor. Fırsatı kaçırmayın!",
+                  },
+                  {
+                    label: "⚡ Bilgilendirme",
+                    text: "⚡ <b>BİLGİLENDİRME</b>\n\nNumara kiralama ve SMS onay işlemleriniz kesintisiz devam etmektedir. İyi kullanımlar dileriz!",
+                  },
+                ].map((tpl) => (
+                  <button
+                    key={tpl.label}
+                    type="button"
+                    onClick={() => setBroadcastMessage(tpl.text)}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-[11px] text-zinc-300 transition-colors"
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mesaj Metni */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-300">Mesaj Metni (HTML Destekli)</label>
+              <textarea
+                rows={5}
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                placeholder="Göndermek istediğiniz mesajı buraya yazınız... (Örn: <b>Kalın</b>, <i>İtalik</i>, <code>Kod</code> vb.)"
+                className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-sans"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Telegram HTML etiketleri kullanılabilir: &lt;b&gt;kalın&lt;/b&gt;, &lt;i&gt;italik&lt;/i&gt;, &lt;code&gt;kod&lt;/code&gt;
+              </p>
+            </div>
+
+            {/* Gönder Butonu */}
+            <button
+              onClick={handleSendBroadcast}
+              disabled={sendingBroadcast || !broadcastMessage.trim()}
+              className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/25 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {sendingBroadcast ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Mesaj Gönderiliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>
+                    {broadcastTarget === "all"
+                      ? `Tüm Kullanıcılara Gönder (${users.length} Kişi)`
+                      : "Kullanıcıya Gönder"}
+                  </span>
+                </>
+              )}
+            </button>
+          </Card>
         </div>
       )}
 

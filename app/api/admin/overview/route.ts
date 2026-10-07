@@ -24,7 +24,7 @@ export async function GET() {
       if (order.status === "COMPLETED" || order.status === "RECEIVED") {
         successfulCount++;
         totalRevenue += order.chargedPrice;
-        totalOriginalCost += order.originalCost * (settings.exchangeRateToTry || 36.5);
+        totalOriginalCost += order.originalCost * (settings.exchangeRateToTry || 49.2);
       } else if (order.status === "CANCELLED" || order.status === "TIMEOUT") {
         cancelledCount++;
       } else {
@@ -46,36 +46,41 @@ export async function GET() {
 
     const totalProfit = Math.max(0, totalRevenue - totalOriginalCost);
     const totalFinished = successfulCount + cancelledCount;
-    const successRate = totalFinished > 0 ? Math.round((successfulCount / totalFinished) * 100) : 94;
+    const successRate = totalFinished > 0 ? Math.round((successfulCount / totalFinished) * 100) : 0;
 
-    // Donut chart verileri
-    const topServices = Object.values(serviceCounts)
+    // Gerçek en çok kullanılan servisler (sahte mock veri yok)
+    const chartServices = Object.values(serviceCounts)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Eğer henüz sipariş az ise görsel güzellik için örnek dağılım sun
-    const chartServices =
-      topServices.length > 0
-        ? topServices
-        : [
-            { name: "WhatsApp", count: 42, revenue: 520 },
-            { name: "Telegram", count: 35, revenue: 480 },
-            { name: "OpenAI", count: 28, revenue: 310 },
-            { name: "Google", count: 19, revenue: 210 },
-            { name: "Instagram", count: 14, revenue: 160 },
-          ];
+    // Son 7 Günlük Gerçek Trend
+    const now = new Date();
+    const days = ["Pzr", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+    const revenueTrend = [];
 
-    // Günlük Trend (Son 7 Gün AreaChart verisi)
-    const days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
-    const revenueTrend = days.map((day, i) => {
-      const baseRev = Math.round(180 + i * 45 + Math.random() * 60);
-      const baseProfit = Math.round(baseRev * 0.42);
-      return {
-        date: day,
-        Ciro: baseRev,
-        NetKar: baseProfit,
-      };
-    });
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+      const dayName = days[d.getDay()];
+
+      let dayRev = 0;
+      let dayCost = 0;
+
+      activations.forEach((o) => {
+        if (o.createdAt >= dayStart && o.createdAt < dayEnd && (o.status === "COMPLETED" || o.status === "RECEIVED")) {
+          dayRev += o.chargedPrice;
+          dayCost += o.originalCost * (settings.exchangeRateToTry || 49.2);
+        }
+      });
+
+      revenueTrend.push({
+        date: dayName,
+        Ciro: Number(dayRev.toFixed(2)),
+        NetKar: Number(Math.max(0, dayRev - dayCost).toFixed(2)),
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -101,6 +106,23 @@ export async function GET() {
     });
   } catch (err: any) {
     console.error("Admin overview error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    if (body.action === "reset_stats") {
+      const res = db.resetStats();
+      return NextResponse.json({
+        success: true,
+        message: "Tüm sipariş ve ciro istatistikleri başarıyla sıfırlandı.",
+        data: res,
+      });
+    }
+    return NextResponse.json({ success: false, error: "Geçersiz işlem" }, { status: 400 });
+  } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

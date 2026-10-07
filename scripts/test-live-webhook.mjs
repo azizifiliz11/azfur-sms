@@ -6,7 +6,7 @@ async function test() {
       date: Math.floor(Date.now() / 1000),
       chat: { id: 6824921456, type: "private" },
       from: { id: 6824921456, is_bot: false, first_name: "Admin", username: "admin" },
-      text: "/start",
+      text: "/admin",
     },
   };
 

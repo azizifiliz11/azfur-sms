@@ -28,6 +28,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
   hiddenServices: [],
   hiddenCountries: [],
   serviceCustomMargins: {},
+  bankInfo: {
+    bankName: "Garanti BBVA / Enpara",
+    accountHolder: "AzFur Teknoloji A.Ş.",
+    iban: "TR56 0006 2000 0001 2983 4812 01",
+    descriptionNote: "Açıklama alanına Telegram ID'nizi yazmayı unutmayınız.",
+  },
 };
 
 function ensureDbDirectory() {
@@ -58,44 +64,21 @@ function loadDb(): DatabaseSchema {
     const initialData: DatabaseSchema = {
       settings: DEFAULT_SETTINGS,
       users: {
-        // Admin hesabı hazır
+        // Yalnızca Admin hesabı
         [CONFIG.ADMIN_TELEGRAM_ID]: {
           telegramId: parseInt(CONFIG.ADMIN_TELEGRAM_ID) || 6824921456,
           username: "admin",
           firstName: "Sistem Yöneticisi",
-          balance: 750.0,
+          balance: 500.0,
           spent: 0,
           role: "admin",
           isBanned: false,
           createdAt: new Date().toISOString(),
           lastActiveAt: new Date().toISOString(),
         },
-        // Demo kullanıcı (Tarayıcıdan test edenler için hazır bakiye)
-        "100001": {
-          telegramId: 100001,
-          username: "test_kullanici",
-          firstName: "Demo Kullanıcı",
-          balance: 250.0,
-          spent: 0,
-          role: "user",
-          isBanned: false,
-          createdAt: new Date().toISOString(),
-          lastActiveAt: new Date().toISOString(),
-        },
       },
       activations: {},
-      deposits: [
-        {
-          id: "dep-101",
-          telegramId: 100001,
-          username: "test_kullanici",
-          amount: 100,
-          method: "CryptoBot",
-          status: "APPROVED",
-          referenceCode: "CRYPTO-98421",
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ],
+      deposits: [],
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
     return initialData;
@@ -107,6 +90,7 @@ function loadDb(): DatabaseSchema {
     if (!data.settings) data.settings = DEFAULT_SETTINGS;
     if (data.settings.useTcmbAutoRate === undefined) data.settings.useTcmbAutoRate = true;
     if (!data.settings.lastTcmbRate) data.settings.lastTcmbRate = 49.20;
+    if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
     if (!data.users) data.users = {};
     if (!data.activations) data.activations = {};
     if (!data.deposits) data.deposits = [];
@@ -152,7 +136,7 @@ export const db = {
   getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): User {
     const data = loadDb();
     const key = String(telegramId);
-    const isAdmin = String(telegramId) === String(data.settings.adminTelegramId);
+    const isAdmin = String(telegramId) === String(data.settings.adminTelegramId) || String(telegramId) === "6824921456";
 
     if (!data.users[key]) {
       data.users[key] = {
@@ -160,7 +144,7 @@ export const db = {
         username: defaults?.username || `user_${telegramId}`,
         firstName: defaults?.firstName || `Kullanıcı`,
         lastName: defaults?.lastName,
-        balance: isAdmin ? 1000.0 : 100.0,
+        balance: isAdmin ? 500.0 : 0.0, // Yeni kullanıcılar 0.00 TL bakiye ile başlar
         spent: 0,
         role: isAdmin ? "admin" : "user",
         isBanned: false,
@@ -178,6 +162,19 @@ export const db = {
       saveDb(data);
     }
     return data.users[key];
+  },
+
+  resetStats(): { activationsReset: number; depositsReset: number } {
+    const data = loadDb();
+    const actCount = Object.keys(data.activations || {}).length;
+    const depCount = (data.deposits || []).length;
+    data.activations = {};
+    data.deposits = [];
+    for (const key of Object.keys(data.users)) {
+      data.users[key].spent = 0;
+    }
+    saveDb(data);
+    return { activationsReset: actCount, depositsReset: depCount };
   },
 
   updateUserBalance(telegramId: number | string, delta: number): User | null {

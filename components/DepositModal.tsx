@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Check, Copy, CreditCard, Landmark, Coins, ArrowRight, ShieldCheck } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Check, Copy, Landmark, Coins, ArrowRight, ShieldCheck } from "lucide-react";
 import { haptic } from "@/lib/haptic";
+import { BankInfo } from "@/lib/types";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -12,12 +13,31 @@ interface DepositModalProps {
 }
 
 export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: DepositModalProps) {
-  const [method, setMethod] = useState<"CryptoBot" | "Havale/EFT" | "Kredi Kartı">("CryptoBot");
+  const [method, setMethod] = useState<"CryptoBot" | "Havale/EFT">("CryptoBot");
   const [amount, setAmount] = useState<number>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [bankInfo, setBankInfo] = useState<BankInfo>({
+    bankName: "Ziraat Bankası",
+    accountHolder: "AzFur SMS",
+    iban: "TR00 0000 0000 0000 0000 0000 00",
+    descriptionNote: "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.",
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch("/api/user/deposit")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.bankInfo) {
+            setBankInfo(data.bankInfo);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -106,8 +126,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           </button>
         </div>
 
-        {/* Method Tabs */}
-        <div className="grid grid-cols-3 gap-2 mt-4">
+        {/* Method Tabs - 2 options: CryptoBot & Havale/EFT */}
+        <div className="grid grid-cols-2 gap-2.5 mt-4">
           <button
             onClick={() => {
               haptic.selection();
@@ -136,21 +156,6 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           >
             <Landmark className="w-5 h-5 text-blue-400" />
             <span>Havale / EFT</span>
-          </button>
-
-          <button
-            onClick={() => {
-              haptic.selection();
-              setMethod("Kredi Kartı");
-            }}
-            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-xs font-semibold transition-all ${
-              method === "Kredi Kartı"
-                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300 shadow-sm"
-                : "bg-zinc-900/60 border-white/5 text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <CreditCard className="w-5 h-5 text-purple-400" />
-            <span>Kredi Kartı</span>
           </button>
         </div>
 
@@ -204,32 +209,39 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Banka:</span>
-                <span className="font-semibold text-white">Garanti BBVA / Enpara</span>
+                <span className="font-semibold text-white">{bankInfo.bankName || "Banka Belirtilmedi"}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Alıcı:</span>
-                <span className="font-semibold text-white">AzFur Teknoloji A.Ş.</span>
+                <span className="font-semibold text-white">{bankInfo.accountHolder || "Yetkili Alıcı"}</span>
               </div>
-              <div className="flex justify-between items-center bg-black/40 p-2 rounded-lg font-mono text-[11px]">
-                <span className="truncate mr-2">TR56 0006 2000 0001 2983 4812 01</span>
+              <div className="flex justify-between items-center bg-black/40 p-2.5 rounded-xl font-mono text-[11px] border border-white/5">
+                <span className="truncate mr-2 text-emerald-300 font-semibold">{bankInfo.iban}</span>
                 <button
-                  onClick={() => handleCopy("TR560006200000012983481201")}
-                  className="text-emerald-400 hover:text-emerald-300 shrink-0"
+                  type="button"
+                  onClick={() => handleCopy(bankInfo.iban.replace(/\s+/g, ""))}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[10px] font-sans font-bold"
                 >
-                  {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Kopyalandı</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Kopyala</span>
+                    </>
+                  )}
                 </button>
               </div>
-              <p className="text-[11px] text-amber-400">
-                Açıklama alanına Telegram ID&apos;nizi ({telegramId}) yazmayı unutmayınız.
-              </p>
-            </div>
-          )}
-
-          {method === "Kredi Kartı" && (
-            <div>
-              <div className="font-semibold text-white">3D Secure Güvenli Ödeme</div>
-              <p className="text-zinc-400 mt-1">
-                Tüm yurt içi ve yurt dışı banka/kredi kartları geçerlidir. Bakiyeniz ödeme anında hesabınıza yansır.
+              {bankInfo.descriptionNote && (
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  💡 {bankInfo.descriptionNote}
+                </p>
+              )}
+              <p className="text-[11px] text-amber-400 font-medium">
+                Telegram ID&apos;niz: <span className="font-mono font-bold text-white bg-black/40 px-1.5 py-0.5 rounded">{telegramId}</span>
               </p>
             </div>
           )}
@@ -252,7 +264,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
               <span>İşleniyor...</span>
             ) : (
               <>
-                <span>₺{currentFinalAmount.toFixed(2)} Yüklemeyi Başlat</span>
+                <span>₺{currentFinalAmount.toFixed(2)} Yüklemeyi Bildir</span>
                 <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </>
             )}

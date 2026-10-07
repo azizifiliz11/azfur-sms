@@ -12,6 +12,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 400 });
     }
 
+    // GrammY requires init() before handleUpdate()
+    if (!bot.isInited()) {
+      await bot.init();
+    }
+
     const body = await req.json();
     await bot.handleUpdate(body);
     return NextResponse.json({ ok: true });

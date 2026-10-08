@@ -31,6 +31,8 @@ export interface CalculatedCatalogItem {
   originalCostUsd: number;
   calculatedPriceTry: number;
   stock: number;
+  physicalStock?: number;
+  qualityScore?: number;
   icon?: string;
 }
 

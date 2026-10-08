@@ -133,6 +133,20 @@ export const pricingEngine = {
         countryObj ? countryObj.id : countryIdToUse
       );
 
+      const physicalStock = priceInfo?.physicalCount || 0;
+      // Kalite skoru: Stok derinliği ve fiziksel SIM mevcudiyetine göre gerçekçi başarı oranı (%65 - %99)
+      let qualityScore = 85;
+      if (stock > 10000) qualityScore = 98;
+      else if (stock > 2500) qualityScore = 96;
+      else if (stock > 500) qualityScore = 93;
+      else if (stock > 50) qualityScore = 89;
+      else if (stock > 0) qualityScore = 85;
+      else qualityScore = 50;
+
+      if (physicalStock > 0 && stock > 0) {
+        qualityScore = Math.min(99, qualityScore + 2);
+      }
+
       catalog.push({
         serviceCode: service.code,
         serviceName: service.name,
@@ -142,6 +156,8 @@ export const pricingEngine = {
         originalCostUsd: cost,
         calculatedPriceTry: finalPriceTry,
         stock: stock,
+        physicalStock: physicalStock,
+        qualityScore: qualityScore,
         icon: service.icon,
       });
     }

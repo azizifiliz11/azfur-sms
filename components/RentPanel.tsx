@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Globe,
@@ -9,6 +9,14 @@ import {
   ChevronDown,
   AlertCircle,
   Loader2,
+  Star,
+  TrendingDown,
+  TrendingUp,
+  Package,
+  Sparkles,
+  SlidersHorizontal,
+  Flame,
+  CheckCircle2,
 } from "lucide-react";
 import { Country, ServiceItem, CalculatedCatalogItem } from "@/lib/types";
 import { haptic } from "@/lib/haptic";
@@ -29,6 +37,8 @@ interface RentPanelProps {
   activeDiscount?: { code: string; type: 'DISCOUNT_PERCENT' | 'DISCOUNT_FIXED'; value: number } | null;
 }
 
+type SortMode = "popular" | "price_asc" | "price_desc" | "stock" | "quality";
+
 export function RentPanel({
   countries,
   catalog,
@@ -45,42 +55,192 @@ export function RentPanel({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [countrySearch, setCountrySearch] = useState<string>("");
   const [countryModalOpen, setCountryModalOpen] = useState<boolean>(false);
+  const [countryModalTab, setCountryModalTab] = useState<"all" | "favorites">("all");
   const [ordering, setOrdering] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Popüler ülkeler hızlı seçim çubukları
-  const popularCountryIds = [62, 12, 16, 43, 6, 53, 50];
-  const popularCountries = useMemo(() => {
-    return popularCountryIds
-      .map((id) => countries.find((c) => c.id === id))
-      .filter((c): c is Country => Boolean(c));
-  }, [countries]);
+  // Sıralama ve Filtre Durumları (Anlık 0ms tepki)
+  const [sortMode, setSortMode] = useState<SortMode>("popular");
+  const [filterFavoritesOnly, setFilterFavoritesOnly] = useState<boolean>(false);
+  const [filterInStockOnly, setFilterInStockOnly] = useState<boolean>(false);
 
-  // Filtrelenmiş ülke listesi
+  // Favoriler (LocalStorage kalıcı hafıza)
+  const [favoriteServices, setFavoriteServices] = useState<string[]>([]);
+  const [favoriteCountries, setFavoriteCountries] = useState<number[]>([]);
+
+  // LocalStorage'dan favorileri yükle
+  useEffect(() => {
+    try {
+      const savedServ = localStorage.getItem("azfur_fav_services");
+      if (savedServ) {
+        setFavoriteServices(JSON.parse(savedServ));
+      }
+      const savedCountr = localStorage.getItem("azfur_fav_countries");
+      if (savedCountr) {
+        setFavoriteCountries(JSON.parse(savedCountr));
+      }
+    } catch (e) {
+      console.error("Favoriler yüklenirken hata:", e);
+    }
+  }, []);
+
+  // Servis favori toggle
+  const toggleFavoriteService = (code: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    haptic.impact("medium");
+    setFavoriteServices((prev) => {
+      const exists = prev.includes(code);
+      const next = exists ? prev.filter((c) => c !== code) : [...prev, code];
+      try {
+        localStorage.setItem("azfur_fav_services", JSON.stringify(next));
+      } catch (err) {}
+      return next;
+    });
+  };
+
+  // Ülke favori toggle
+  const toggleFavoriteCountry = (id: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    haptic.impact("medium");
+    setFavoriteCountries((prev) => {
+      const exists = prev.includes(id);
+      const next = exists ? prev.filter((i) => i !== id) : [...prev, id];
+      try {
+        localStorage.setItem("azfur_fav_countries", JSON.stringify(next));
+      } catch (err) {}
+      return next;
+    });
+  };
+
+  // Popüler ve Favori ülkeler hızlı seçim çubuğu (Favoriler başta!)
+  const defaultPopularIds = [62, 12, 16, 43, 6, 53, 50];
+  const quickBarCountries = useMemo(() => {
+    const list: { country: Country; isFav: boolean }[] = [];
+    const addedIds = new Set<number>();
+
+    // 1. Önce kullanıcının favorilediği ülkeler
+    for (const favId of favoriteCountries) {
+      const c = countries.find((item) => item.id === favId);
+      if (c && !addedIds.has(c.id)) {
+        list.push({ country: c, isFav: true });
+        addedIds.add(c.id);
+      }
+    }
+
+    // 2. Ardından popüler ülkeler
+    for (const popId of defaultPopularIds) {
+      if (!addedIds.has(popId)) {
+        const c = countries.find((item) => item.id === popId);
+        if (c) {
+          list.push({ country: c, isFav: false });
+          addedIds.add(c.id);
+        }
+      }
+    }
+
+    return list;
+  }, [countries, favoriteCountries]);
+
+  // Filtrelenmiş ülke listesi (Modal için)
   const filteredCountries = useMemo(() => {
-    if (!countrySearch.trim()) return countries;
+    let list = countries;
+    if (countryModalTab === "favorites") {
+      list = list.filter((c) => favoriteCountries.includes(c.id));
+    }
+    if (!countrySearch.trim()) return list;
     const q = countrySearch.toLowerCase();
-    return countries.filter(
+    return list.filter(
       (c) => c.eng.toLowerCase().includes(q) || (c.rus && c.rus.toLowerCase().includes(q))
     );
-  }, [countries, countrySearch]);
+  }, [countries, countrySearch, countryModalTab, favoriteCountries]);
 
-  // Filtrelenmiş servis kataloğu
+  // Kalite Skoru Hesaplayıcı (%65 - %99)
+  const getItemQuality = (item: CalculatedCatalogItem): number => {
+    if (item.qualityScore) return item.qualityScore;
+    let score = 85;
+    if (item.stock > 10000) score = 98;
+    else if (item.stock > 2500) score = 96;
+    else if (item.stock > 500) score = 93;
+    else if (item.stock > 50) score = 89;
+    else if (item.stock > 0) score = 85;
+    else score = 60;
+    if (item.physicalStock && item.physicalStock > 0 && item.stock > 0) {
+      score = Math.min(99, score + 2);
+    }
+    return score;
+  };
+
+  // Filtrelenmiş & Anlık Sıralanmış Servis Kataloğu
   const filteredCatalog = useMemo(() => {
-    return catalog.filter((item) => {
+    let list = catalog.filter((item) => {
+      // Metin araması
       const matchSearch =
         item.serviceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.serviceCode.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSearch;
-    });
-  }, [catalog, searchQuery]);
+      if (!matchSearch) return false;
 
-  // Seçili servis kalemi: Sadece seçili servise odaklan, asla rastgele ilk servise atlama!
+      // Favoriler Filtresi
+      if (filterFavoritesOnly && !favoriteServices.includes(item.serviceCode)) {
+        return false;
+      }
+
+      // Stokta Olanlar Filtresi
+      if (filterInStockOnly && item.stock <= 0) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Anlık Sıralama Algoritması
+    return [...list].sort((a, b) => {
+      if (sortMode === "price_asc") {
+        // En Ucuz: Düşük fiyattan yükseğe (stokta olanlar öncelikli)
+        if (a.stock > 0 && b.stock === 0) return -1;
+        if (a.stock === 0 && b.stock > 0) return 1;
+        return a.calculatedPriceTry - b.calculatedPriceTry;
+      }
+
+      if (sortMode === "price_desc") {
+        // En Pahalı: Yüksek fiyattan düşüğe
+        if (a.stock > 0 && b.stock === 0) return -1;
+        if (a.stock === 0 && b.stock > 0) return 1;
+        return b.calculatedPriceTry - a.calculatedPriceTry;
+      }
+
+      if (sortMode === "stock") {
+        // Stoğa göre: En çok stoktan aza
+        return b.stock - a.stock;
+      }
+
+      if (sortMode === "quality") {
+        // Kaliteye göre: Yüksek kaliteli başarı puanından aza
+        const qA = getItemQuality(a);
+        const qB = getItemQuality(b);
+        if (qB !== qA) return qB - qA;
+        return b.stock - a.stock;
+      }
+
+      // Varsayılan: Popülerliğe Göre (Stokta olanlar başta, yüksek stok hacmi)
+      if (a.stock > 0 && b.stock === 0) return -1;
+      if (a.stock === 0 && b.stock > 0) return 1;
+      return b.stock - a.stock;
+    });
+  }, [
+    catalog,
+    searchQuery,
+    filterFavoritesOnly,
+    filterInStockOnly,
+    sortMode,
+    favoriteServices,
+  ]);
+
+  // Seçili servis kalemi: Sadece seçili servise odaklan
   const selectedItem = useMemo(() => {
-    if (!selectedServiceCode) return catalog[0] || null;
+    if (!selectedServiceCode) return filteredCatalog[0] || catalog[0] || null;
     const match = catalog.find((item) => item.serviceCode === selectedServiceCode);
-    return match || null;
-  }, [catalog, selectedServiceCode]);
+    return match || filteredCatalog[0] || null;
+  }, [catalog, selectedServiceCode, filteredCatalog]);
 
   const finalPriceWithDiscount = useMemo(() => {
     if (!selectedItem) return 0;
@@ -178,9 +338,9 @@ export function RentPanel({
           </button>
         </div>
 
-        {/* Hızlı Seçim Ülke Çubukları */}
+        {/* Hızlı Seçim Ülke Çubukları (Favoriler Öncelikli) */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {popularCountries.map((c) => {
+          {quickBarCountries.map(({ country: c, isFav }) => {
             const isSelected = selectedCountry?.id === c.id;
             return (
               <button
@@ -189,11 +349,16 @@ export function RentPanel({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                   isSelected
                     ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                    : isFav
+                    ? "bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:border-amber-400/50"
                     : "bg-zinc-900 border border-white/5 text-zinc-300 hover:border-white/20"
                 }`}
               >
                 <span className="text-sm">{c.flag || "🌐"}</span>
                 <span>{c.eng}</span>
+                {isFav && (
+                  <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />
+                )}
               </button>
             );
           })}
@@ -227,47 +392,249 @@ export function RentPanel({
             placeholder="WhatsApp, Telegram, OpenAI ara..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900/90 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+            className="w-full bg-zinc-900/90 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
-        {/* Servis Listesi */}
-        <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-          {filteredCatalog.slice(0, 24).map((item) => {
-            const isSelected = selectedServiceCode === item.serviceCode;
-            return (
-              <div
-                key={item.serviceCode}
-                onClick={() => handleServicePick(item.serviceCode)}
-                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? "bg-emerald-500/15 border-emerald-500/60 shadow-sm ring-1 ring-emerald-500/30"
-                    : "bg-zinc-900/70 border-white/5 hover:border-white/20"
+        {/* Anlık Sıralama Filtreleri (Scrollable Pills) */}
+        <div className="space-y-2 pt-1 border-t border-white/[0.05]">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+            <span className="flex items-center gap-1 text-zinc-400 font-medium">
+              <SlidersHorizontal className="w-3 h-3 text-emerald-400" />
+              <span>Anlık Sıralama:</span>
+            </span>
+            <span className="text-[10px] text-emerald-400/80 font-mono">0ms Real-Time</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {/* Popüler */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setSortMode("popular");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+                sortMode === "popular"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/10"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+              }`}
+            >
+              <Flame className="w-3 h-3 text-amber-400" />
+              <span>Popüler</span>
+            </button>
+
+            {/* Daha Ucuz (Fiyat Artan) */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setSortMode("price_asc");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+                sortMode === "price_asc"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+              }`}
+            >
+              <TrendingDown className="w-3 h-3 text-emerald-400" />
+              <span>En Ucuz</span>
+            </button>
+
+            {/* Daha Pahalı (Fiyat Azalan) */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setSortMode("price_desc");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+                sortMode === "price_desc"
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-500/10"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+              }`}
+            >
+              <TrendingUp className="w-3 h-3 text-purple-400" />
+              <span>En Pahalı</span>
+            </button>
+
+            {/* Stoğa Göre */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setSortMode("stock");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+                sortMode === "stock"
+                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/50 shadow-sm shadow-blue-500/10"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+              }`}
+            >
+              <Package className="w-3 h-3 text-blue-400" />
+              <span>Çok Stok</span>
+            </button>
+
+            {/* Kaliteye Göre */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setSortMode("quality");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+                sortMode === "quality"
+                  ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 shadow-sm shadow-yellow-500/10"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+              }`}
+            >
+              <Sparkles className="w-3 h-3 text-yellow-400" />
+              <span>Yüksek Kalite</span>
+            </button>
+          </div>
+
+          {/* Hızlı Filtre Toggle Butonları (Favorilerim & Sadece Stoktakiler) */}
+          <div className="flex items-center gap-2 pt-1">
+            {/* Favorilerim Filtresi */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setFilterFavoritesOnly(!filterFavoritesOnly);
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-semibold transition-all ${
+                filterFavoritesOnly
+                  ? "bg-amber-500/25 border border-amber-500/60 text-amber-200 shadow-sm shadow-amber-500/20"
+                  : "bg-zinc-900/80 border border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Star
+                className={`w-3.5 h-3.5 ${
+                  filterFavoritesOnly ? "fill-amber-400 text-amber-400" : "text-zinc-400"
                 }`}
-              >
-                <div className="flex items-start justify-between gap-1">
-                  <span className="font-semibold text-xs text-white truncate">
-                    {item.serviceName}
-                  </span>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                </div>
+              />
+              <span>Favorilerim</span>
+              {favoriteServices.length > 0 && (
+                <span className="text-[10px] bg-amber-500/30 text-amber-300 font-bold px-1.5 py-0.2 rounded-full">
+                  {favoriteServices.length}
+                </span>
+              )}
+            </button>
 
-                <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04]">
-                  <span className="text-[10px] text-zinc-400 font-mono">
-                    {item.stock <= 0
-                      ? "Tükendi"
-                      : item.stock < 1000
-                      ? `${item.stock} adet`
-                      : `${item.stock.toLocaleString("tr-TR")} adet`}
-                  </span>
-                  <span className="text-xs font-mono font-bold text-emerald-400">
-                    ₺{item.calculatedPriceTry.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+            {/* Yalnızca Stoktakiler */}
+            <button
+              onClick={() => {
+                haptic.selection();
+                setFilterInStockOnly(!filterInStockOnly);
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-semibold transition-all ${
+                filterInStockOnly
+                  ? "bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm shadow-emerald-500/20"
+                  : "bg-zinc-900/80 border border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <CheckCircle2
+                className={`w-3.5 h-3.5 ${
+                  filterInStockOnly ? "text-emerald-400" : "text-zinc-400"
+                }`}
+              />
+              <span>Yalnızca Stokta</span>
+            </button>
+          </div>
         </div>
+
+        {/* Servis Listesi Grid */}
+        {filteredCatalog.length === 0 ? (
+          <div className="p-6 text-center rounded-2xl bg-zinc-900/50 border border-white/5 space-y-2">
+            <div className="w-10 h-10 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+              <Star className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-medium text-zinc-300">
+              {filterFavoritesOnly
+                ? "Henüz favori servis eklemediniz."
+                : "Arama kriterine uygun servis bulunamadı."}
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              {filterFavoritesOnly
+                ? "Servislerin sağ üst köşesindeki yıldız (⭐) butonuna basarak favorilerinize ekleyebilirsiniz."
+                : "Filtreleri veya arama kelimesini değiştirmeyi deneyin."}
+            </p>
+            {filterFavoritesOnly && (
+              <button
+                onClick={() => setFilterFavoritesOnly(false)}
+                className="mt-2 text-xs text-amber-400 font-semibold underline"
+              >
+                Tüm Servisleri Göster
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+            {filteredCatalog.slice(0, 30).map((item) => {
+              const isSelected = selectedServiceCode === item.serviceCode;
+              const isFav = favoriteServices.includes(item.serviceCode);
+              const quality = getItemQuality(item);
+
+              return (
+                <div
+                  key={item.serviceCode}
+                  onClick={() => handleServicePick(item.serviceCode)}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative group ${
+                    isSelected
+                      ? "bg-emerald-500/15 border-emerald-500/60 shadow-sm ring-1 ring-emerald-500/30"
+                      : "bg-zinc-900/70 border-white/5 hover:border-white/20"
+                  }`}
+                >
+                  {/* Başlık & Favori Yıldız Butonu */}
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="font-semibold text-xs text-white truncate max-w-[80%]">
+                      {item.serviceName}
+                    </span>
+                    <button
+                      onClick={(e) => toggleFavoriteService(item.serviceCode, e)}
+                      title={isFav ? "Favorilerden Çıkar" : "Favorilere Ekle"}
+                      className="p-0.5 rounded-md text-zinc-500 hover:text-amber-400 transition-colors shrink-0"
+                    >
+                      <Star
+                        className={`w-3.5 h-3.5 transition-transform active:scale-125 ${
+                          isFav
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-zinc-600 hover:text-amber-400/80"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Kalite & Stok Rozetleri */}
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {item.stock <= 0
+                        ? "Tükendi"
+                        : item.stock < 1000
+                        ? `${item.stock} stok`
+                        : `${item.stock.toLocaleString("tr-TR")} stok`}
+                    </span>
+                    {item.stock > 0 && (
+                      <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-mono">
+                        %{quality} Kalite
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Fiyat ve Seçili İkonu */}
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04]">
+                    <span className="text-xs font-mono font-bold text-emerald-400">
+                      ₺{item.calculatedPriceTry.toFixed(2)}
+                    </span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {/* 3. Seçim Özeti ve Satın Alma Kartı */}
@@ -286,7 +653,7 @@ export function RentPanel({
                   )}
                 </h4>
                 <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                  {selectedCountry.eng} • 15 Dakika Kullanım
+                  {selectedCountry.eng} • 15 Dakika Kullanım • %{selectedItem ? getItemQuality(selectedItem) : 95} Kalite
                 </p>
               </div>
             </div>
@@ -372,7 +739,7 @@ export function RentPanel({
         </Card>
       )}
 
-      {/* Ülke Seçim Modalı */}
+      {/* 4. Ülke Seçim Modalı (Favori Ülke Yönetimi Destekli) */}
       {countryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-md bg-[#11131a] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh]">
@@ -389,6 +756,35 @@ export function RentPanel({
               </button>
             </div>
 
+            {/* Modal Sekmeleri: Tüm Ülkeler vs Favori Ülkelerim */}
+            <div className="flex items-center gap-2 mt-3 p-1 bg-zinc-900 rounded-xl border border-white/5">
+              <button
+                onClick={() => setCountryModalTab("all")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  countryModalTab === "all"
+                    ? "bg-zinc-800 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Tüm Ülkeler ({countries.length})
+              </button>
+              <button
+                onClick={() => setCountryModalTab("favorites")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1 transition-all ${
+                  countryModalTab === "favorites"
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Star
+                  className={`w-3 h-3 ${
+                    countryModalTab === "favorites" ? "fill-amber-400 text-amber-400" : ""
+                  }`}
+                />
+                <span>Favorilerim ({favoriteCountries.length})</span>
+              </button>
+            </div>
+
             <div className="relative my-3">
               <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -401,23 +797,64 @@ export function RentPanel({
             </div>
 
             <div className="overflow-y-auto space-y-1 pr-1 flex-1">
-              {filteredCountries.map((c) => (
-                <div
-                  key={c.id}
-                  onClick={() => handleCountryPick(c)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
-                    selectedCountry?.id === c.id
-                      ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300"
-                      : "hover:bg-zinc-800 text-zinc-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">{c.flag || "🌐"}</span>
-                    <span className="text-xs font-semibold">{c.eng}</span>
-                  </div>
-                  {selectedCountry?.id === c.id && <Check className="w-4 h-4 text-emerald-400" />}
+              {filteredCountries.length === 0 ? (
+                <div className="p-6 text-center text-xs text-zinc-400 space-y-2">
+                  <Star className="w-6 h-6 mx-auto text-amber-400/50" />
+                  <p>
+                    {countryModalTab === "favorites"
+                      ? "Henüz favori ülke eklemediniz."
+                      : "Eşleşen ülke bulunamadı."}
+                  </p>
+                  {countryModalTab === "favorites" && (
+                    <button
+                      onClick={() => setCountryModalTab("all")}
+                      className="text-amber-400 font-semibold underline text-xs"
+                    >
+                      Tüm Ülkelere Dön
+                    </button>
+                  )}
                 </div>
-              ))}
+              ) : (
+                filteredCountries.map((c) => {
+                  const isFav = favoriteCountries.includes(c.id);
+                  const isSelected = selectedCountry?.id === c.id;
+
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => handleCountryPick(c)}
+                      className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
+                        isSelected
+                          ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300"
+                          : "hover:bg-zinc-800 text-zinc-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{c.flag || "🌐"}</span>
+                        <span className="text-xs font-semibold">{c.eng}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Favori Yıldız Butonu */}
+                        <button
+                          onClick={(e) => toggleFavoriteCountry(c.id, e)}
+                          title={isFav ? "Favorilerden Çıkar" : "Favorilere Ekle"}
+                          className="p-1 rounded-md text-zinc-500 hover:text-amber-400 transition-colors"
+                        >
+                          <Star
+                            className={`w-4 h-4 transition-transform active:scale-125 ${
+                              isFav
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-zinc-600 hover:text-amber-400"
+                            }`}
+                          />
+                        </button>
+                        {isSelected && <Check className="w-4 h-4 text-emerald-400" />}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

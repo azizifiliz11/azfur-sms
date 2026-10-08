@@ -152,7 +152,10 @@ export function RentPanel({
     if (!countrySearch.trim()) return list;
     const q = countrySearch.toLowerCase();
     return list.filter(
-      (c) => c.eng.toLowerCase().includes(q) || (c.rus && c.rus.toLowerCase().includes(q))
+      (c) =>
+        c.eng.toLowerCase().includes(q) ||
+        (c.nameTr && c.nameTr.toLowerCase().includes(q)) ||
+        (c.rus && c.rus.toLowerCase().includes(q))
     );
   }, [countries, countrySearch, countryModalTab, favoriteCountries]);
 
@@ -370,7 +373,7 @@ export function RentPanel({
                 }`}
               >
                 <span className="text-sm">{c.flag || "🌐"}</span>
-                <span>{c.eng}</span>
+                <span>{c.nameTr || c.eng}</span>
                 {isFav && (
                   <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />
                 )}
@@ -668,7 +671,7 @@ export function RentPanel({
                   )}
                 </h4>
                 <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                  {selectedCountry.eng} • 15 Dakika Kullanım • %{selectedItem ? getItemQuality(selectedItem) : 95} Kalite
+                  {selectedCountry.flag || "🌐"} {selectedCountry.nameTr || selectedCountry.eng} • 15 Dakika Kullanım • %{selectedItem ? getItemQuality(selectedItem) : 95} Kalite
                 </p>
               </div>
             </div>
@@ -846,7 +849,7 @@ export function RentPanel({
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="text-xl">{c.flag || "🌐"}</span>
-                        <span className="text-xs font-semibold">{c.eng}</span>
+                        <span className="text-xs font-semibold">{c.nameTr || c.eng}</span>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -920,7 +923,7 @@ export function RentPanel({
                 <span className="text-zinc-400">Hedef Ülke:</span>
                 <span className="font-semibold text-white flex items-center gap-1.5">
                   <span>{selectedCountry.flag || "🌐"}</span>
-                  <span>{selectedCountry.eng}</span>
+                  <span>{selectedCountry.nameTr || selectedCountry.eng}</span>
                 </span>
               </div>
 

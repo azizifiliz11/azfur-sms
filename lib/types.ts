@@ -2,6 +2,7 @@ export interface Country {
   id: number;
   code?: string;
   eng: string;
+  nameTr?: string;
   rus?: string;
   chn?: string;
   visible?: number;
@@ -138,6 +139,7 @@ export interface SystemSettings {
   customStickerFileId?: string;
   heroSmsApiKey?: string;
   adminSecurityPin?: string; // Yönetici Web Paneli Giriş PIN Kodu (Örn: 2026 veya özel şifre)
+  deletedTelegramIds?: string[]; // Silinen kullanıcı ID kara listesi (asla geri gelmez)
 }
 
 export interface DepositRequest {

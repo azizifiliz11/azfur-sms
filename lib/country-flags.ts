@@ -25,7 +25,7 @@ export const COUNTRY_DATA: Record<number, CountryMeta> = {
   13: { flag: "🇮🇱", phonePrefix: "972", priority: 50, nameTr: "İsrail" },
   14: { flag: "🇭🇰", phonePrefix: "852", priority: 65, nameTr: "Hong Kong" },
   15: { flag: "🇵🇱", phonePrefix: "48", priority: 70, nameTr: "Polonya" },
-  16: { flag: "🇬🇧", phonePrefix: "44", priority: 95, nameTr: "Birleşik Krallık" },
+  16: { flag: "🇬🇧", phonePrefix: "44", priority: 95, nameTr: "İngiltere" },
   17: { flag: "🇲🇬", phonePrefix: "261", priority: 30, nameTr: "Madagaskar" },
   18: { flag: "🇨🇩", phonePrefix: "243", priority: 30, nameTr: "Kongo DC" },
   19: { flag: "🇳🇬", phonePrefix: "234", priority: 65, nameTr: "Nijerya" },

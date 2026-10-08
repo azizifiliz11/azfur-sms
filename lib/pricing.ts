@@ -151,7 +151,7 @@ export const pricingEngine = {
         serviceCode: service.code,
         serviceName: service.name,
         countryId: countryObj ? countryObj.id : countryIdToUse,
-        countryName: countryObj ? countryObj.eng : `Country ${countryIdToUse}`,
+        countryName: countryObj ? (countryObj.nameTr || countryObj.eng) : `Country ${countryIdToUse}`,
         countryFlag: countryObj ? countryObj.flag || "🌐" : "🌐",
         originalCostUsd: cost,
         calculatedPriceTry: finalPriceTry,

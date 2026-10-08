@@ -103,6 +103,7 @@ export const heroSms = {
         list.push({
           id,
           eng: item.eng || `Country ${id}`,
+          nameTr: meta.nameTr || item.eng || `Country ${id}`,
           rus: item.rus,
           chn: item.chn,
           visible: item.visible !== undefined ? item.visible : 1,
@@ -119,17 +120,18 @@ export const heroSms = {
       return list;
     } catch (err) {
       console.error("Hero-SMS getCountries error:", err);
-      // Fallback essential countries with 100% accurate flags
+      // Fallback essential countries with 100% accurate flags and Turkish names
       return [
-        { id: 62, eng: "Turkey", flag: "🇹🇷", priority: 100 },
-        { id: 187, eng: "USA", flag: "🇺🇸", priority: 95 },
-        { id: 16, eng: "United Kingdom", flag: "🇬🇧", priority: 95 },
-        { id: 43, eng: "Germany", flag: "🇩🇪", priority: 90 },
-        { id: 48, eng: "Netherlands", flag: "🇳🇱", priority: 85 },
-        { id: 6, eng: "Indonesia", flag: "🇮🇩", priority: 85 },
-        { id: 73, eng: "Brazil", flag: "🇧🇷", priority: 80 },
-        { id: 2, eng: "Kazakhstan", flag: "🇰🇿", priority: 75 },
-        { id: 1, eng: "Ukraine", flag: "🇺🇦", priority: 70 },
+        { id: 62, eng: "Turkey", nameTr: "Türkiye", flag: "🇹🇷", priority: 100 },
+        { id: 187, eng: "USA", nameTr: "ABD", flag: "🇺🇸", priority: 95 },
+        { id: 16, eng: "United Kingdom", nameTr: "İngiltere", flag: "🇬🇧", priority: 95 },
+        { id: 43, eng: "Germany", nameTr: "Almanya", flag: "🇩🇪", priority: 90 },
+        { id: 0, eng: "Russia", nameTr: "Rusya", flag: "🇷🇺", priority: 85 },
+        { id: 48, eng: "Netherlands", nameTr: "Hollanda", flag: "🇳🇱", priority: 85 },
+        { id: 6, eng: "Indonesia", nameTr: "Endonezya", flag: "🇮🇩", priority: 85 },
+        { id: 73, eng: "Brazil", nameTr: "Brezilya", flag: "🇧🇷", priority: 80 },
+        { id: 2, eng: "Kazakhstan", nameTr: "Kazakistan", flag: "🇰🇿", priority: 75 },
+        { id: 1, eng: "Ukraine", nameTr: "Ukrayna", flag: "🇺🇦", priority: 70 },
       ];
     }
   },

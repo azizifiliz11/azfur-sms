@@ -160,6 +160,19 @@ function loadDb(): DatabaseSchema {
     if (!data.deposits) data.deposits = [];
     if (!data.tickets) data.tickets = {};
     if (!data.coupons) data.coupons = {};
+
+    // Silinen kullanıcılar asla geri gelmesin
+    if (Array.isArray(data.settings?.deletedTelegramIds)) {
+      for (const delId of data.settings.deletedTelegramIds) {
+        delete data.users[delId];
+        if (Array.isArray(data.settings.adminTelegramIds)) {
+          data.settings.adminTelegramIds = data.settings.adminTelegramIds.filter(
+            (id: string) => String(id).trim() !== String(delId).trim()
+          );
+        }
+      }
+    }
+
     return data;
   } catch (err) {
     console.error("Error reading db.json, returning empty defaults:", err);
@@ -186,10 +199,57 @@ async function saveDb(data: DatabaseSchema): Promise<void> {
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
+  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için anında Upstash KV'ye yaz
+  try {
+    await saveToCloudKv(data);
+  } catch (e) {
+    console.error("Error saving to cloud KV:", e);
+  }
 }
 
 export const db = {
   async syncFromCloud(): Promise<DatabaseSchema> {
+    if (!KV_URL || !KV_TOKEN) return loadDb();
+    try {
+      const res = await fetch(KV_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${KV_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["GET", KV_KEY]),
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (json && json.result && typeof json.result === "string") {
+        const cloudData: DatabaseSchema = JSON.parse(json.result);
+        if (cloudData && typeof cloudData === "object" && cloudData.users && cloudData.settings) {
+          // Kara listedeki silinmiş kullanıcıları temizle
+          if (Array.isArray(cloudData.settings.deletedTelegramIds)) {
+            for (const delId of cloudData.settings.deletedTelegramIds) {
+              delete cloudData.users[delId];
+              if (Array.isArray(cloudData.settings.adminTelegramIds)) {
+                cloudData.settings.adminTelegramIds = cloudData.settings.adminTelegramIds.filter(
+                  (id: string) => String(id).trim() !== String(delId).trim()
+                );
+              }
+            }
+          }
+
+          // Yerel belleğe ve diske de yaz
+          ensureDbDirectory();
+          fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
+          if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
+            try {
+              fs.writeFileSync(SEED_DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
+            } catch {}
+          }
+          return cloudData;
+        }
+      }
+    } catch (err) {
+      console.error("[Cloud KV Sync Error]:", err);
+    }
     return loadDb();
   },
 
@@ -221,6 +281,11 @@ export const db = {
     const cleanId = String(telegramId).trim();
     if (!cleanId) return false;
     const data = loadDb();
+
+    // Silinen kullanıcı asla admin olamaz
+    if (Array.isArray(data.settings.deletedTelegramIds) && data.settings.deletedTelegramIds.includes(cleanId)) {
+      return false;
+    }
 
     // 1. Settings adminTelegramIds listesinde var mı?
     if (Array.isArray(data.settings.adminTelegramIds) && data.settings.adminTelegramIds.map(String).includes(cleanId)) {
@@ -506,6 +571,11 @@ export const db = {
       if (!data.settings.adminTelegramId) {
         data.settings.adminTelegramId = cleanId;
       }
+      if (Array.isArray(data.settings.deletedTelegramIds)) {
+        data.settings.deletedTelegramIds = data.settings.deletedTelegramIds.filter(
+          (id) => String(id).trim() !== cleanId
+        );
+      }
     } else {
       data.settings.adminTelegramIds = data.settings.adminTelegramIds.filter(
         (id) => String(id).trim() !== cleanId
@@ -587,6 +657,14 @@ export const db = {
     // 3. Tekil adminTelegramId eğer bu kullanıcı ise sıradaki admine devret veya boşalt
     if (String(data.settings.adminTelegramId).trim() === cleanId) {
       data.settings.adminTelegramId = data.settings.adminTelegramIds?.[0] || "";
+    }
+
+    // 4. Silinen kullanıcılar listesine ekle (asla geri dirilmez)
+    if (!Array.isArray(data.settings.deletedTelegramIds)) {
+      data.settings.deletedTelegramIds = [];
+    }
+    if (!data.settings.deletedTelegramIds.includes(cleanId)) {
+      data.settings.deletedTelegramIds.push(cleanId);
     }
 
     await saveDb(data);

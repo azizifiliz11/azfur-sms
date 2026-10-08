@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { heroSms } from "@/lib/hero-sms";
 import { tcmb } from "@/lib/tcmb";
+import { CONFIG } from "@/lib/config";
 
 export async function GET() {
   try {
@@ -41,7 +42,49 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Özel işlem: Hero-SMS API Anahtarını Test Et
+    if (body.action === "test_hero_key") {
+      const testKey = (body.heroSmsApiKey || db.getSettings().heroSmsApiKey || CONFIG.HERO_SMS_API_KEY || "").trim();
+      if (!testKey) {
+        return NextResponse.json({
+          success: false,
+          error: "Test edilecek bir Hero-SMS API anahtarı bulunamadı.",
+        });
+      }
+      const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getBalance&api_key=${testKey}`;
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const text = await res.text();
+        if (text.startsWith("ACCESS_BALANCE:")) {
+          const balance = parseFloat(text.replace("ACCESS_BALANCE:", "").trim());
+          return NextResponse.json({
+            success: true,
+            balance: isNaN(balance) ? 0 : balance,
+            message: `Bağlantı Başarılı! Sağlayıcı Bakiyesi: ${balance} ₽`,
+          });
+        }
+        if (text === "BAD_KEY") {
+          return NextResponse.json({
+            success: false,
+            error: "Geçersiz API Anahtarı (BAD_KEY). Lütfen anahtarınızı kontrol edin.",
+          });
+        }
+        return NextResponse.json({
+          success: false,
+          error: `Sağlayıcı Yanıtı: ${text}`,
+        });
+      } catch (err: any) {
+        return NextResponse.json({
+          success: false,
+          error: `Bağlantı hatası: ${err.message}`,
+        });
+      }
+    }
+
     const updated = await db.updateSettings(body);
+    if (body.heroSmsApiKey !== undefined) {
+      heroSms.clearCache();
+    }
 
     return NextResponse.json({
       success: true,

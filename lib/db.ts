@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   supportTelegramUsername: "",
   supportTelegramUsernames: [],
   customStickerFileId: "",
+  heroSmsApiKey: "",
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
@@ -147,6 +148,9 @@ function loadDb(): DatabaseSchema {
       data.settings.supportTelegramUsernames = data.settings.supportTelegramUsername
         ? [data.settings.supportTelegramUsername]
         : [];
+    }
+    if (data.settings.heroSmsApiKey === undefined) {
+      data.settings.heroSmsApiKey = process.env.HERO_SMS_API_KEY || "e1006858662edcAd8d348c9f07dfe8c5";
     }
     if (!data.users) data.users = {};
     if (data.users["100001"]) {

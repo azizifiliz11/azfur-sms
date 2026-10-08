@@ -56,12 +56,39 @@ const SERVICE_ICONS: Record<string, { icon: string; category: string; priority: 
   ot: { icon: "other", category: "Diğer Servisler", priority: 50 },
 };
 
+function getHeroApiKey(): string {
+  try {
+    const settings = db.getSettings();
+    if (settings.heroSmsApiKey !== undefined && settings.heroSmsApiKey.trim() !== "") {
+      return settings.heroSmsApiKey.trim();
+    }
+  } catch (e) {}
+  return (CONFIG.HERO_SMS_API_KEY || "").trim();
+}
+
 export const heroSms = {
+  getApiKey(): string {
+    return getHeroApiKey();
+  },
+
+  clearCache(): void {
+    cachedCountries = null;
+    countriesCacheTime = 0;
+    cachedServices = null;
+    servicesCacheTime = 0;
+    cachedPrices = null;
+    pricesCacheTime = 0;
+  },
+
   /**
    * Hero-SMS hesap bakiyesini çeker
    */
   async getBalance(): Promise<{ balance: number; raw: string }> {
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getBalance&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    if (!apiKey) {
+      return { balance: 0, raw: "NO_API_KEY" };
+    }
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getBalance&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
@@ -86,7 +113,8 @@ export const heroSms = {
       return cachedCountries;
     }
 
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getCountries&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getCountries&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { next: { revalidate: 3600 } });
       const data = await res.json();
@@ -139,7 +167,8 @@ export const heroSms = {
       return cachedServices;
     }
 
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getServicesList&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getServicesList&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { next: { revalidate: 3600 } });
       const data = await res.json();
@@ -185,7 +214,8 @@ export const heroSms = {
       return cachedPrices;
     }
 
-    let url = `${CONFIG.HERO_SMS_BASE_URL}?action=getPrices&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    let url = `${CONFIG.HERO_SMS_BASE_URL}?action=getPrices&api_key=${apiKey}`;
     if (countryId !== undefined) {
       url += `&country=${countryId}`;
     }
@@ -215,7 +245,8 @@ export const heroSms = {
       return this.simulateGetNumber(service, country);
     }
 
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getNumber&service=${service}&country=${country}&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getNumber&service=${service}&country=${country}&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
@@ -258,7 +289,8 @@ export const heroSms = {
       return this.simulateGetStatus(activationId);
     }
 
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getStatus&id=${activationId}&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getStatus&id=${activationId}&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
@@ -294,7 +326,8 @@ export const heroSms = {
       return { success: true, raw: status === 8 ? "ACCESS_CANCEL" : "ACCESS_ACTIVATION" };
     }
 
-    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=setStatus&status=${status}&id=${activationId}&api_key=${CONFIG.HERO_SMS_API_KEY}`;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=setStatus&status=${status}&id=${activationId}&api_key=${apiKey}`;
     try {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();

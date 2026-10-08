@@ -98,6 +98,7 @@ export interface SystemSettings {
   supportTelegramUsername?: string;
   supportTelegramUsernames?: string[];
   customStickerFileId?: string;
+  heroSmsApiKey?: string;
 }
 
 export interface DepositRequest {

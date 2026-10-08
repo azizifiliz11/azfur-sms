@@ -36,6 +36,7 @@ import {
   X,
   Sparkles,
   Save,
+  Key,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -119,6 +120,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [customStickerFileId, setCustomStickerFileId] = useState<string>("");
   const [savingSticker, setSavingSticker] = useState<boolean>(false);
 
+  // Hero-SMS API Key states
+  const [heroSmsApiKey, setHeroSmsApiKey] = useState<string>("");
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [savingApiKey, setSavingApiKey] = useState<boolean>(false);
+  const [testingApiKey, setTestingApiKey] = useState<boolean>(false);
+  const [apiKeyTestResult, setApiKeyTestResult] = useState<{ success: boolean; message: string; balance?: number } | null>(null);
+
   const fetchAllData = async () => {
     setRefreshing(true);
     try {
@@ -172,6 +180,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         }
         if (st.settings?.customStickerFileId !== undefined) {
           setCustomStickerFileId(st.settings.customStickerFileId || "");
+        }
+        if (st.settings?.heroSmsApiKey !== undefined) {
+          setHeroSmsApiKey(st.settings.heroSmsApiKey || "");
         }
       }
       if (us.success) {
@@ -623,6 +634,76 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       alert("Hata oluştu");
     } finally {
       setSavingSticker(false);
+    }
+  };
+
+  // Hero-SMS API Key Kaydet / Kaldır
+  const handleSaveHeroApiKey = async (newVal?: string) => {
+    const keyToSave = newVal !== undefined ? newVal : heroSmsApiKey;
+    setSavingApiKey(true);
+    setApiKeyTestResult(null);
+    haptic.impact("medium");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heroSmsApiKey: keyToSave.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg(keyToSave.trim() ? "Hero-SMS API anahtarı başarıyla güncellendi!" : "Hero-SMS API anahtarı kaldırıldı!");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSavingApiKey(false);
+    }
+  };
+
+  // Hero-SMS API Key Bağlantısını Test Et
+  const handleTestHeroApiKey = async () => {
+    setTestingApiKey(true);
+    setApiKeyTestResult(null);
+    haptic.impact("light");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test_hero_key",
+          heroSmsApiKey: heroSmsApiKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setApiKeyTestResult({
+          success: true,
+          message: data.message,
+          balance: data.balance,
+        });
+      } else {
+        haptic.error();
+        setApiKeyTestResult({
+          success: false,
+          message: data.error || "Bağlantı başarısız",
+        });
+      }
+    } catch (err: any) {
+      haptic.error();
+      setApiKeyTestResult({
+        success: false,
+        message: "Ağ veya sunucu hatası oluştu",
+      });
+    } finally {
+      setTestingApiKey(false);
     }
   };
 
@@ -1690,6 +1771,113 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   >
                     Sticker&apos;ı Kaldır (Varsayılan 3D Animasyona Dön)
                   </button>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* HERO-SMS API KEY YÖNETİMİ */}
+          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Hero-SMS API Anahtarı</span>
+                    {heroSmsApiKey.trim() ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                        Aktif
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono">
+                        Anahtar Yok
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Sanal numara sağlama, ülke/servis listesi ve SMS kod çekme işlemlerinde kullanılan sağlayıcı anahtarı.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                API Key
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={heroSmsApiKey}
+                    onChange={(e) => setHeroSmsApiKey(e.target.value)}
+                    placeholder="Örn: e1006858662edcAd8d348c9f07dfe8c5"
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 pr-10 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleSaveHeroApiKey()}
+                  disabled={savingApiKey}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md shadow-cyan-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                >
+                  {savingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>Kaydet</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  onClick={handleTestHeroApiKey}
+                  disabled={testingApiKey || !heroSmsApiKey.trim()}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  {testingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  <span>Bağlantıyı & Bakiyeyi Test Et</span>
+                </button>
+
+                {heroSmsApiKey.trim() && (
+                  <button
+                    onClick={() => {
+                      if (confirm("Hero-SMS API anahtarını kaldırmak istediğinize emin misiniz?")) {
+                        setHeroSmsApiKey("");
+                        handleSaveHeroApiKey("");
+                      }
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors"
+                  >
+                    Anahtarı Kaldır
+                  </button>
+                )}
+              </div>
+
+              {apiKeyTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs font-medium transition-all ${
+                    apiKeyTestResult.success
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                      : "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                  }`}
+                >
+                  {apiKeyTestResult.success ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <span>{apiKeyTestResult.message}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>{apiKeyTestResult.message}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

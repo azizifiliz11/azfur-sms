@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         user,
         activeOrdersCount: activeOrders.length,
         currency: settings.currencySymbol,
-        isAdmin: user.role === "admin" || String(telegramId) === String(CONFIG.ADMIN_TELEGRAM_ID),
+        isAdmin: db.isAdmin(telegramId) || user.role === "admin",
       },
       {
         headers: {

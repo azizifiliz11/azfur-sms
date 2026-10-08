@@ -9,7 +9,7 @@ export function isAuthorizedAdmin(req: Request): boolean {
     const settings = db.getSettings();
     const adminPin = (settings.adminSecurityPin || "2026").trim();
     const adminTelegramId = String(
-      settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || "6824921456"
+      settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || ""
     ).trim();
 
     // 1. Header kontrolleri (PIN veya Dahili Admin İsteği)
@@ -26,11 +26,7 @@ export function isAuthorizedAdmin(req: Request): boolean {
     // 2. Header 'x-telegram-id' kontrolü
     const headerTgId = req.headers.get("x-telegram-id")?.trim();
     if (headerTgId) {
-      if (headerTgId === adminTelegramId || headerTgId === "6824921456") {
-        return true;
-      }
-      const user = db.getUser(headerTgId);
-      if (user && user.role === "admin") {
+      if (db.isAdmin(headerTgId)) {
         return true;
       }
     }
@@ -44,11 +40,7 @@ export function isAuthorizedAdmin(req: Request): boolean {
 
     const queryTgId = url.searchParams.get("telegramId")?.trim();
     if (queryTgId) {
-      if (queryTgId === adminTelegramId || queryTgId === "6824921456") {
-        return true;
-      }
-      const user = db.getUser(queryTgId);
-      if (user && user.role === "admin") {
+      if (db.isAdmin(queryTgId)) {
         return true;
       }
     }

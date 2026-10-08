@@ -117,23 +117,11 @@ function loadDb(): DatabaseSchema {
 
     const initialData: DatabaseSchema = {
       settings: DEFAULT_SETTINGS,
-      users: {
-        // Yalnızca Admin hesabı
-        [CONFIG.ADMIN_TELEGRAM_ID]: {
-          telegramId: parseInt(CONFIG.ADMIN_TELEGRAM_ID) || 6824921456,
-          username: "admin",
-          firstName: "Sistem Yöneticisi",
-          balance: 500.0,
-          spent: 0,
-          role: "admin",
-          isBanned: false,
-          createdAt: new Date().toISOString(),
-          lastActiveAt: new Date().toISOString(),
-        },
-      },
+      users: {},
       activations: {},
       deposits: [],
       tickets: {},
+      coupons: {},
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
     return initialData;
@@ -151,6 +139,11 @@ function loadDb(): DatabaseSchema {
     if (data.settings.supportTelegramUsernames === undefined || !Array.isArray(data.settings.supportTelegramUsernames)) {
       data.settings.supportTelegramUsernames = data.settings.supportTelegramUsername
         ? [data.settings.supportTelegramUsername]
+        : [];
+    }
+    if (!data.settings.adminTelegramIds || !Array.isArray(data.settings.adminTelegramIds)) {
+      data.settings.adminTelegramIds = data.settings.adminTelegramId
+        ? [String(data.settings.adminTelegramId).trim()]
         : [];
     }
     if (data.settings.heroSmsApiKey === undefined) {
@@ -223,15 +216,57 @@ export const db = {
     );
   },
 
+  isAdmin(telegramId: number | string): boolean {
+    if (!telegramId) return false;
+    const cleanId = String(telegramId).trim();
+    if (!cleanId) return false;
+    const data = loadDb();
+
+    // 1. Settings adminTelegramIds listesinde var mı?
+    if (Array.isArray(data.settings.adminTelegramIds) && data.settings.adminTelegramIds.map(String).includes(cleanId)) {
+      return true;
+    }
+
+    // 2. Settings tekil adminTelegramId ile eşleşiyor mu?
+    if (data.settings.adminTelegramId && String(data.settings.adminTelegramId).trim() === cleanId) {
+      return true;
+    }
+
+    // 3. Kullanıcı kaydında role === 'admin' mi?
+    const user = this.getUser(cleanId);
+    if (user && user.role === "admin") {
+      return true;
+    }
+
+    return false;
+  },
+
+  getAdminTelegramIds(): string[] {
+    const data = loadDb();
+    const ids = new Set<string>();
+    if (data.settings.adminTelegramId) {
+      ids.add(String(data.settings.adminTelegramId).trim());
+    }
+    if (Array.isArray(data.settings.adminTelegramIds)) {
+      data.settings.adminTelegramIds.forEach((id) => {
+        if (id) ids.add(String(id).trim());
+      });
+    }
+    Object.values(data.users).forEach((u) => {
+      if (u && u.role === "admin" && u.telegramId) {
+        ids.add(String(u.telegramId).trim());
+      }
+    });
+    return Array.from(ids).filter(Boolean);
+  },
+
   async syncTelegramUserProfile(
     telegramId: number | string,
     profile: { username?: string; firstName?: string; lastName?: string }
   ): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
-    const isAdmin =
-      cleanId === String(data.settings.adminTelegramId).trim() ||
-      cleanId === "6824921456";
+    const isAdminUser = this.isAdmin(cleanId);
 
     let foundKey = Object.keys(data.users).find(
       (k) =>
@@ -253,9 +288,9 @@ export const db = {
         username: cleanUsername,
         firstName: cleanFirst || `Telegram Kullanıcısı`,
         lastName: cleanLast,
-        balance: isAdmin ? 500.0 : 0.0,
+        balance: 0.0,
         spent: 0,
-        role: isAdmin ? "admin" : "user",
+        role: isAdminUser ? "admin" : "user",
         isBanned: false,
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
@@ -279,7 +314,7 @@ export const db = {
         user.lastName = cleanLast;
       }
 
-      if (isAdmin && user.role !== "admin") {
+      if (isAdminUser && user.role !== "admin") {
         user.role = "admin";
       }
     }
@@ -301,9 +336,7 @@ export const db = {
   async getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
-    const isAdmin =
-      cleanId === String(data.settings.adminTelegramId).trim() ||
-      cleanId === "6824921456";
+    const isAdminUser = this.isAdmin(cleanId);
 
     let foundKey = Object.keys(data.users).find(
       (k) =>
@@ -323,9 +356,9 @@ export const db = {
         username: cleanUsername,
         firstName: cleanFirst || `Telegram Kullanıcısı`,
         lastName: cleanLast,
-        balance: isAdmin ? 500.0 : (defaults?.balance ?? 0.0),
+        balance: defaults?.balance ?? 0.0,
         spent: defaults?.spent || 0,
-        role: isAdmin ? "admin" : (defaults?.role || "user"),
+        role: (defaults?.role as "admin" | "user") || (isAdminUser ? "admin" : "user"),
         isBanned: defaults?.isBanned || false,
         createdAt: defaults?.createdAt || new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
@@ -352,7 +385,7 @@ export const db = {
       }
 
       if (defaults?.balance !== undefined) user.balance = defaults.balance;
-      if (isAdmin && user.role !== "admin") {
+      if (isAdminUser && user.role !== "admin") {
         user.role = "admin";
       }
       await saveDb(data);
@@ -395,9 +428,7 @@ export const db = {
           ? Number(userData.balance)
           : 0;
 
-      const isAdmin =
-        cleanId === String(data.settings.adminTelegramId).trim() ||
-        cleanId === "6824921456";
+      const isAdminUser = this.isAdmin(cleanId);
 
       const cleanUsername = userData?.username
         ? userData.username.replace(/^@/, "").trim()
@@ -411,7 +442,7 @@ export const db = {
         lastName: userData?.lastName?.trim(),
         balance: initialBal,
         spent: userData?.spent || 0,
-        role: (userData?.role as "admin" | "user") || (isAdmin ? "admin" : "user"),
+        role: (userData?.role as "admin" | "user") || (isAdminUser ? "admin" : "user"),
         isBanned: userData?.isBanned || false,
         createdAt: userData?.createdAt || new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
@@ -448,6 +479,13 @@ export const db = {
   ): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
+
+    if (!data.settings.adminTelegramIds || !Array.isArray(data.settings.adminTelegramIds)) {
+      data.settings.adminTelegramIds = data.settings.adminTelegramId
+        ? [String(data.settings.adminTelegramId).trim()]
+        : [];
+    }
+
     let foundKey = Object.keys(data.users).find(
       (k) =>
         String(k).trim() === cleanId ||
@@ -459,8 +497,25 @@ export const db = {
       user = await this.getOrCreateUser(cleanId, { ...userData, role });
     } else {
       user.role = role;
-      await saveDb(data);
     }
+
+    if (role === "admin") {
+      if (!data.settings.adminTelegramIds.includes(cleanId)) {
+        data.settings.adminTelegramIds.push(cleanId);
+      }
+      if (!data.settings.adminTelegramId) {
+        data.settings.adminTelegramId = cleanId;
+      }
+    } else {
+      data.settings.adminTelegramIds = data.settings.adminTelegramIds.filter(
+        (id) => String(id).trim() !== cleanId
+      );
+      if (String(data.settings.adminTelegramId).trim() === cleanId) {
+        data.settings.adminTelegramId = data.settings.adminTelegramIds[0] || "";
+      }
+    }
+
+    await saveDb(data);
     return user;
   },
 
@@ -511,15 +566,30 @@ export const db = {
   async deleteUser(telegramId: number | string): Promise<boolean> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
-    let foundKey = Object.keys(data.users).find(
+
+    // 1. users tablosundan tamamen kaldır
+    const foundKeys = Object.keys(data.users).filter(
       (k) =>
         String(k).trim() === cleanId ||
         String(data.users[k]?.telegramId).trim() === cleanId
     );
-    if (foundKey) {
-      delete data.users[foundKey];
-      await saveDb(data);
+    for (const k of foundKeys) {
+      delete data.users[k];
     }
+
+    // 2. adminTelegramIds listesinden temizle
+    if (Array.isArray(data.settings.adminTelegramIds)) {
+      data.settings.adminTelegramIds = data.settings.adminTelegramIds.filter(
+        (id) => String(id).trim() !== cleanId
+      );
+    }
+
+    // 3. Tekil adminTelegramId eğer bu kullanıcı ise sıradaki admine devret veya boşalt
+    if (String(data.settings.adminTelegramId).trim() === cleanId) {
+      data.settings.adminTelegramId = data.settings.adminTelegramIds?.[0] || "";
+    }
+
+    await saveDb(data);
     return true;
   },
 

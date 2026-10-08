@@ -124,6 +124,7 @@ export interface SystemSettings {
   currencySymbol: string; // "₺"
   mockMode: boolean; // toggle to simulate numbers if provider balance is 0 or testing
   adminTelegramId: string;
+  adminTelegramIds?: string[]; // Tüm yetkili yönetici Telegram ID listesi
   hiddenServices: string[];
   hiddenCountries: number[];
   serviceCustomMargins: Record<string, { marginPercent?: number; fixedFee?: number }>;

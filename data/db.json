@@ -5,7 +5,10 @@
     "exchangeRateToTry": 49.2152,
     "currencySymbol": "₺",
     "mockMode": false,
-    "adminTelegramId": "6824921456",
+    "adminTelegramId": "7619776444",
+    "adminTelegramIds": [
+      "7619776444"
+    ],
     "hiddenServices": [],
     "hiddenCountries": [],
     "serviceCustomMargins": {},
@@ -32,16 +35,6 @@
     "adminSecurityPin": "05377243623"
   },
   "users": {
-    "6824921456": {
-      "telegramId": 6824921456,
-      "username": "admin",
-      "firstName": "Yönetici",
-      "balance": 500,
-      "spent": 0,
-      "role": "admin",
-      "createdAt": "2026-10-07T16:07:43.215Z",
-      "lastActiveAt": "2026-10-07T17:00:00.000Z"
-    },
     "8614398114": {
       "telegramId": 8614398114,
       "username": "olanak",
@@ -59,7 +52,7 @@
       "firstName": "Aziz",
       "balance": 0,
       "spent": 0,
-      "role": "user",
+      "role": "admin",
       "isBanned": false,
       "createdAt": "2026-10-08T21:14:02.165Z",
       "lastActiveAt": "2026-10-08T21:14:39.980Z"

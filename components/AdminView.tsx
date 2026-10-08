@@ -167,7 +167,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     return {
       "x-admin-request": "true",
       "x-admin-pin": "2026",
-      ...(tgId ? { "x-telegram-id": String(tgId) } : { "x-telegram-id": "6824921456" }),
+      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
     };
   };
 

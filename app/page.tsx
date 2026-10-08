@@ -214,10 +214,7 @@ function HomeContent() {
     );
   }
 
-  const isAdmin =
-    currentUser?.role === "admin" ||
-    String(currentUser?.telegramId) === "6824921456" ||
-    String(tgUser?.id) === "6824921456";
+  const isAdmin = currentUser?.role === "admin";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0f] text-zinc-100">

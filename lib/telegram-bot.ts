@@ -189,10 +189,7 @@ export function getTelegramBot(): Bot | null {
       });
 
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
-      const isAdmin =
-        user.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user.role === "admin";
 
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
@@ -229,12 +226,7 @@ export function getTelegramBot(): Bot | null {
 
       await db.syncFromCloud();
       const user = db.getUser(from.id);
-      const settings = db.getSettings();
-      const adminId = String(settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || "6824921456").trim();
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id).trim() === adminId ||
-        String(from.id).trim() === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
 
       if (!isAdmin) {
         // Admin dışında hiçbir kullanıcıya kesinlikle tepki verme, sessizce yok say
@@ -385,10 +377,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
 
       if (!isAdmin) return;
 
@@ -425,10 +414,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
       if (!isAdmin) return;
 
       await db.syncFromCloud();
@@ -463,10 +449,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
       if (!isAdmin) return;
 
       const rawText = (ctx.match || "").trim();
@@ -521,10 +504,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
       if (!isAdmin) return;
 
       await db.syncFromCloud();
@@ -543,12 +523,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
-      const settings = db.getSettings();
-      const adminId = String(settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || "6824921456").trim();
-      const isAdmin =
-        user?.role === "admin" ||
-        String(from.id).trim() === adminId ||
-        String(from.id).trim() === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user?.role === "admin";
 
       const text = (ctx.message.text || "").trim();
 
@@ -640,10 +615,7 @@ export function getTelegramBot(): Bot | null {
       });
 
       const { appUrl, adminUrl } = getAppUrls();
-      const isAdmin =
-        user.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
+      const isAdmin = db.isAdmin(from.id) || user.role === "admin";
 
       // --- ANA MENÜYE DÖNÜŞ ---
       if (data === "btn_main_menu" || data === "btn_refresh_menu") {

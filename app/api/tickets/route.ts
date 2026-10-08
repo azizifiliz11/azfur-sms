@@ -77,23 +77,25 @@ export async function POST(req: NextRequest) {
 
       const created = await db.createTicket(ticket);
 
-      // Yöneticiye anlık Telegram bildirimi gönder
-      const adminId = CONFIG.ADMIN_TELEGRAM_ID || "6824921456";
+      // Yöneticilere anlık Telegram bildirimi gönder
+      const adminIds = db.getAdminTelegramIds();
       const safeName = (userFirstName || "Kullanıcı").replace(/[<>&]/g, "");
       const safeSubject = subject.replace(/[<>&]/g, "");
       const safeMsg = message.replace(/[<>&]/g, "");
 
-      sendTelegramDirectMessage(
-        adminId,
-        `🎫 <b>YENİ DESTEK TALEBİ GELDİ!</b>\n\n` +
-          `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
-          `👤 <b>Kullanıcı:</b> ${safeName} (@${username || "yok"})\n` +
-          `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
-          `📂 <b>Kategori:</b> ${ticket.category}\n` +
-          `📝 <b>Konu:</b> ${safeSubject}\n\n` +
-          `💬 <b>Mesaj:</b>\n${safeMsg}\n\n` +
-          `<i>Yönetici panelinden 'Destek Talepleri' sekmesine girerek yanıtlayabilirsiniz.</i>`
-      ).catch(() => {});
+      adminIds.forEach((adminId) => {
+        sendTelegramDirectMessage(
+          adminId,
+          `🎫 <b>YENİ DESTEK TALEBİ GELDİ!</b>\n\n` +
+            `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
+            `👤 <b>Kullanıcı:</b> ${safeName} (@${username || "yok"})\n` +
+            `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
+            `📂 <b>Kategori:</b> ${ticket.category}\n` +
+            `📝 <b>Konu:</b> ${safeSubject}\n\n` +
+            `💬 <b>Mesaj:</b>\n${safeMsg}\n\n` +
+            `<i>Yönetici panelinden 'Destek Talepleri' sekmesine girerek yanıtlayabilirsiniz.</i>`
+        ).catch(() => {});
+      });
 
       return NextResponse.json({
         success: true,
@@ -132,16 +134,18 @@ export async function POST(req: NextRequest) {
 
       const updated = await db.addTicketReply(ticketId, newMsg, "OPEN");
 
-      // Yöneticiye yanıt bildirimi gönder
-      const adminId = CONFIG.ADMIN_TELEGRAM_ID || "6824921456";
-      sendTelegramDirectMessage(
-        adminId,
-        `💬 <b>DESTEK TALEBİNE YENİ YANIT!</b>\n\n` +
-          `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
-          `👤 <b>Kullanıcı:</b> ${ticket.userFirstName || "Kullanıcı"}\n` +
-          `📝 <b>Konu:</b> ${ticket.subject}\n\n` +
-          `💬 <b>Mesaj:</b>\n${message.trim()}`
-      ).catch(() => {});
+      // Yöneticilere yanıt bildirimi gönder
+      const adminIds = db.getAdminTelegramIds();
+      adminIds.forEach((adminId) => {
+        sendTelegramDirectMessage(
+          adminId,
+          `💬 <b>DESTEK TALEBİNE YENİ YANIT!</b>\n\n` +
+            `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
+            `👤 <b>Kullanıcı:</b> ${ticket.userFirstName || "Kullanıcı"}\n` +
+            `📝 <b>Konu:</b> ${ticket.subject}\n\n` +
+            `💬 <b>Mesaj:</b>\n${message.trim()}`
+        ).catch(() => {});
+      });
 
       return NextResponse.json({
         success: true,

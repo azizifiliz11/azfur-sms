@@ -4,6 +4,7 @@ import { db } from "./db";
 import { heroSms } from "./hero-sms";
 import { pricingEngine } from "./pricing";
 import { ActivationOrder, User } from "./types";
+import { rateLimiter } from "./rate-limit";
 
 let botInstance: Bot | null = null;
 
@@ -22,14 +23,15 @@ const POPULAR_SERVICES = [
 // Popüler Ülke Tanımları
 const POPULAR_COUNTRIES = [
   { id: 62, name: "Türkiye", flag: "🇹🇷" },
-  { id: 12, name: "ABD", flag: "🇺🇸" },
+  { id: 187, name: "ABD", flag: "🇺🇸" },
   { id: 16, name: "İngiltere", flag: "🇬🇧" },
   { id: 43, name: "Almanya", flag: "🇩🇪" },
-  { id: 0, name: "Rusya", flag: "🇷🇺" },
-  { id: 53, name: "Hollanda", flag: "🇳🇱" },
-  { id: 50, name: "Brezilya", flag: "🇧🇷" },
+  { id: 48, name: "Hollanda", flag: "🇳🇱" },
+  { id: 73, name: "Brezilya", flag: "🇧🇷" },
+  { id: 78, name: "Fransa", flag: "🇫🇷" },
   { id: 6, name: "Endonezya", flag: "🇮🇩" },
   { id: 2, name: "Kazakistan", flag: "🇰🇿" },
+  { id: 1, name: "Ukrayna", flag: "🇺🇦" },
 ];
 
 function getAppUrls() {
@@ -171,6 +173,47 @@ export function getTelegramBot(): Bot | null {
           console.warn("Global user sync error:", e);
         }
       }
+      await next();
+    });
+
+    // ==========================================
+    // 0.1. TELEGRAM BOT & BUTON RATE LIMIT MİDDLEWARE
+    // ==========================================
+    botInstance.use(async (ctx, next) => {
+      const from = ctx.from;
+      if (!from || !from.id) return next();
+
+      // Adminler rate limit kontrolünden muaftır
+      if (db.isAdmin(from.id)) {
+        return next();
+      }
+
+      const isCallback = Boolean(ctx.callbackQuery);
+      const actionType = isCallback ? "button" : "msg";
+      // Butonlar: 3 saniyede max 4 tıklama | Mesajlar: 4 saniyede max 5 istek
+      const maxReqs = isCallback ? 4 : 5;
+      const windowSec = isCallback ? 3 : 4;
+
+      const check = rateLimiter.check(`tg_${actionType}_${from.id}`, maxReqs, windowSec);
+      if (!check.allowed) {
+        if (isCallback) {
+          try {
+            await ctx.answerCallbackQuery({
+              text: `⚠️ Çok hızlı basıyorsunuz! Lütfen ${check.retryAfterSeconds} saniye bekleyin.`,
+              show_alert: false,
+            });
+          } catch (e) {}
+        } else {
+          try {
+            await ctx.reply(
+              `⚠️ <b>Çok hızlı işlem yapıyorsunuz!</b>\nLütfen <code>${check.retryAfterSeconds}</code> saniye bekleyip tekrar deneyin.`,
+              { parse_mode: "HTML" }
+            );
+          } catch (e) {}
+        }
+        return;
+      }
+
       await next();
     });
 

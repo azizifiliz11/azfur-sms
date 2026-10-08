@@ -1,6 +1,7 @@
 import { CONFIG } from "./config";
 import { Country, ServiceItem, PriceStockItem } from "./types";
 import { db } from "./db";
+import { getCountryMeta } from "./country-flags";
 
 // In-memory cache for countries and services to keep API calls blazing fast
 let cachedCountries: Country[] | null = null;
@@ -12,32 +13,7 @@ let servicesCacheTime = 0;
 let cachedPrices: Record<string, Record<string, PriceStockItem>> | null = null;
 let pricesCacheTime = 0;
 
-// Flag and prefix helper
-const COUNTRY_METADATA: Record<number, { flag: string; phonePrefix: string; priority: number }> = {
-  0: { flag: "🇷🇺", phonePrefix: "7", priority: 80 },
-  1: { flag: "🇺🇦", phonePrefix: "380", priority: 70 },
-  2: { flag: "🇰🇿", phonePrefix: "77", priority: 75 },
-  3: { flag: "🇨🇳", phonePrefix: "86", priority: 50 },
-  4: { flag: "🇵🇭", phonePrefix: "63", priority: 60 },
-  5: { flag: "🇲🇲", phonePrefix: "95", priority: 40 },
-  6: { flag: "🇮🇩", phonePrefix: "62", priority: 85 },
-  7: { flag: "🇲🇾", phonePrefix: "60", priority: 70 },
-  10: { flag: "🇻🇳", phonePrefix: "84", priority: 75 },
-  12: { flag: "🇺🇸", phonePrefix: "1", priority: 95 },
-  13: { flag: "🇮🇱", phonePrefix: "972", priority: 50 },
-  14: { flag: "🇭🇰", phonePrefix: "852", priority: 65 },
-  15: { flag: "🇵🇱", phonePrefix: "48", priority: 70 },
-  16: { flag: "🇬🇧", phonePrefix: "44", priority: 95 },
-  22: { flag: "🇮🇳", phonePrefix: "91", priority: 80 },
-  36: { flag: "🇨🇦", phonePrefix: "1", priority: 85 },
-  43: { flag: "🇩🇪", phonePrefix: "49", priority: 90 },
-  50: { flag: "🇧🇷", phonePrefix: "55", priority: 80 },
-  53: { flag: "🇳🇱", phonePrefix: "31", priority: 85 },
-  62: { flag: "🇹🇷", phonePrefix: "90", priority: 100 }, // Türkiye highest priority
-  73: { flag: "🇧🇷", phonePrefix: "55", priority: 75 },
-  78: { flag: "🇫🇷", phonePrefix: "33", priority: 90 },
-  187: { flag: "🇺🇸", phonePrefix: "1", priority: 90 },
-};
+// Country metadata is loaded comprehensively from ./country-flags.ts
 
 // Common service icons & categorizations
 const SERVICE_ICONS: Record<string, { icon: string; category: string; priority: number }> = {
@@ -123,7 +99,7 @@ export const heroSms = {
       for (const key of Object.keys(data)) {
         const item = data[key];
         const id = Number(item.id || key);
-        const meta = COUNTRY_METADATA[id] || { flag: "🌐", phonePrefix: "", priority: 10 };
+        const meta = getCountryMeta(id, item.eng);
         list.push({
           id,
           eng: item.eng || `Country ${id}`,
@@ -143,15 +119,15 @@ export const heroSms = {
       return list;
     } catch (err) {
       console.error("Hero-SMS getCountries error:", err);
-      // Fallback essential countries
+      // Fallback essential countries with 100% accurate flags
       return [
         { id: 62, eng: "Turkey", flag: "🇹🇷", priority: 100 },
-        { id: 12, eng: "USA", flag: "🇺🇸", priority: 95 },
+        { id: 187, eng: "USA", flag: "🇺🇸", priority: 95 },
         { id: 16, eng: "United Kingdom", flag: "🇬🇧", priority: 95 },
         { id: 43, eng: "Germany", flag: "🇩🇪", priority: 90 },
-        { id: 53, eng: "Netherlands", flag: "🇳🇱", priority: 85 },
+        { id: 48, eng: "Netherlands", flag: "🇳🇱", priority: 85 },
         { id: 6, eng: "Indonesia", flag: "🇮🇩", priority: 85 },
-        { id: 50, eng: "Brazil", flag: "🇧🇷", priority: 80 },
+        { id: 73, eng: "Brazil", flag: "🇧🇷", priority: 80 },
         { id: 2, eng: "Kazakhstan", flag: "🇰🇿", priority: 75 },
         { id: 1, eng: "Ukraine", flag: "🇺🇦", priority: 70 },
       ];

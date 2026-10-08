@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createWhiteLabelPayment } from "@/lib/oxapay";
+import { checkApiRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const telegramId = Number(body.telegramId);
+
+    const rateCheck = checkApiRateLimit(req, `crypto_dep_${telegramId || "anon"}`, 4, 15);
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ success: false, error: rateCheck.error }, { status: 429 });
+    }
+
     const amount = Number(body.amount);
     const payCurrency = (body.payCurrency || "USDT").toUpperCase();
     const network = body.network || (payCurrency === "USDT" ? "TRC20" : undefined);

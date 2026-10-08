@@ -90,6 +90,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     message: string;
   } | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState<boolean>(false);
+  const [settingWebhook, setSettingWebhook] = useState<boolean>(false);
+  const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
+  const [copiedTgWebhook, setCopiedTgWebhook] = useState<boolean>(false);
 
   // Broadcast states
   const [broadcastTarget, setBroadcastTarget] = useState<"all" | "user">("all");
@@ -706,6 +709,39 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setCopiedWebhook(true);
     haptic.success();
     setTimeout(() => setCopiedWebhook(false), 2500);
+  };
+
+  // Telegram Bot Webhook Otomatik Kurulum
+  const handleSetupTelegramWebhook = async () => {
+    setSettingWebhook(true);
+    haptic.impact("heavy");
+    try {
+      const res = await fetch("/api/bot/webhook?action=setWebhook&drop=1", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) {
+        haptic.success();
+        setWebhookStatus("✅ Telegram Webhook Başarıyla Kuruldu! Bot anında aktif.");
+        setToastMsg("Telegram Webhook başarıyla bağlandı!");
+        setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        setWebhookStatus(`❌ Hata: ${data.telegramResponse?.description || data.error || "Bağlanamadı"}`);
+      }
+    } catch (e: any) {
+      haptic.error();
+      setWebhookStatus(`❌ Bağlantı hatası: ${e.message}`);
+    } finally {
+      setSettingWebhook(false);
+    }
+  };
+
+  const handleCopyTgWebhookUrl = () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://azfur-sms.vercel.app";
+    const webhookUrl = `${origin}/api/bot/webhook`;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopiedTgWebhook(true);
+    haptic.success();
+    setTimeout(() => setCopiedTgWebhook(false), 2500);
   };
 
   // Duyuru / Mesaj Gönder
@@ -2093,6 +2129,83 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             </button>
           </Card>
 
+          {/* Telegram Bot Webhook Kurulum & Hızlı Bağlantı Kutusu */}
+          <Card className="p-4 space-y-4 border-cyan-500/30">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Telegram Bot Webhook Kurulumu</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">
+                      0 Gecikme
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Botun /start ve butonlara anında tepki vermesi için webhook bağlantısını kurun.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                <span>Bot Webhook Endpoint URL:</span>
+              </div>
+              <div className="flex items-center justify-between bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[11px]">
+                <span className="truncate text-zinc-300 mr-2 select-all">
+                  {typeof window !== "undefined"
+                    ? `${window.location.origin}/api/bot/webhook`
+                    : "https://azfur-sms.vercel.app/api/bot/webhook"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyTgWebhookUrl}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-cyan-400 hover:text-cyan-300 shrink-0 text-[10px] font-sans font-bold transition-all active:scale-95"
+                >
+                  {copiedTgWebhook ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Kopyalandı</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Kopyala</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {webhookStatus && (
+                <div className={`p-2.5 rounded-xl text-xs font-semibold ${webhookStatus.startsWith("✅") ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300" : "bg-rose-500/15 border border-rose-500/30 text-rose-300"}`}>
+                  {webhookStatus}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSetupTelegramWebhook}
+                disabled={settingWebhook}
+                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs shadow-md shadow-cyan-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {settingWebhook ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Telegram Bağlanıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    <span>⚡ Webhook&apos;u Anında Otomatik Bağla (0 Gecikme)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </Card>
+
           {/* Canlı Destek & Telegram Yönetici İletişim Ayarları */}
           <Card className="p-4 space-y-4 border-purple-500/30">
             <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
@@ -2442,12 +2555,45 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                           const hasRealUsername = Boolean(u.username && !u.username.startsWith("user_") && u.username.trim() !== "");
                           const displayTitle = fullName || (hasRealUsername ? `@${u.username}` : `Kullanıcı #${u.telegramId}`);
 
+                          const lastActiveTime = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
+                          // Son 5 dakika içinde aktif olan kullanıcı canlı / çevrimiçi sayılır
+                          const isOnline = lastActiveTime > 0 && Date.now() - lastActiveTime < 5 * 60 * 1000;
+
+                          const formatLastActive = (dateStr?: string) => {
+                            if (!dateStr) return "Bilinmiyor";
+                            try {
+                              const d = new Date(dateStr);
+                              const diffMs = Date.now() - d.getTime();
+                              if (diffMs < 60000) return "Az önce";
+                              const diffMins = Math.floor(diffMs / 60000);
+                              if (diffMins < 60) return `${diffMins} dk önce`;
+                              const diffHours = Math.floor(diffMins / 60);
+                              if (diffHours < 24) return `${diffHours} sa önce`;
+                              const diffDays = Math.floor(diffHours / 24);
+                              if (diffDays === 1) return `Dün ${d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`;
+                              if (diffDays < 7) return `${diffDays} gün önce`;
+                              return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                            } catch {
+                              return dateStr;
+                            }
+                          };
+
                           return (
                             <>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-xs text-white truncate">
-                                  {displayTitle}
-                                </span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {isOnline ? (
+                                    <span className="relative flex h-2.5 w-2.5 shrink-0" title="Şu An Çevrimiçi">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
+                                    </span>
+                                  ) : (
+                                    <span className="h-2 w-2 rounded-full bg-zinc-600 shrink-0" title="Çevrimdışı" />
+                                  )}
+                                  <span className="font-bold text-xs text-white truncate">
+                                    {displayTitle}
+                                  </span>
+                                </div>
 
                                 {/* Rozetler */}
                                 {u.isBanned ? (
@@ -2458,14 +2604,21 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                                   <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-bold">
                                     👑 ADMIN
                                   </span>
+                                ) : null}
+
+                                {isOnline ? (
+                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    ÇEVRİMİÇİ
+                                  </span>
                                 ) : (
-                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-semibold">
-                                    ✓ AKTİF
+                                  <span className="text-[10px] text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded">
+                                    {formatLastActive(u.lastActiveAt)}
                                   </span>
                                 )}
                               </div>
 
-                              <div className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate flex items-center gap-1.5 flex-wrap">
+                              <div className="text-[11px] font-mono text-zinc-400 mt-1 truncate flex items-center gap-1.5 flex-wrap">
                                 <span>ID: <span className="text-zinc-200">{u.telegramId}</span></span>
                                 {hasRealUsername ? (
                                   <>
@@ -2478,6 +2631,11 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                                     <span className="text-zinc-500 text-[10px] bg-white/[0.04] px-1.5 py-0.5 rounded">kullanıcı adı yok</span>
                                   </>
                                 )}
+                                <span className="text-zinc-600">•</span>
+                                <span className="flex items-center gap-1 text-[10px] text-zinc-400">
+                                  <Clock className="w-3 h-3 text-zinc-500" />
+                                  Son aktif: <span className={isOnline ? "text-emerald-400 font-semibold" : "text-zinc-300"}>{isOnline ? "Şu an aktif" : formatLastActive(u.lastActiveAt)}</span>
+                                </span>
                               </div>
                             </>
                           );

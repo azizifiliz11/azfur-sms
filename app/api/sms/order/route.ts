@@ -3,11 +3,17 @@ import { heroSms } from "@/lib/hero-sms";
 import { pricingEngine } from "@/lib/pricing";
 import { db } from "@/lib/db";
 import { ActivationOrder } from "@/lib/types";
+import { checkApiRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { serviceCode, countryId, telegramId } = body;
+
+    const rateCheck = checkApiRateLimit(req, `order_${telegramId || "anon"}`, 4, 10);
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ success: false, error: rateCheck.error }, { status: 429 });
+    }
 
     if (!serviceCode || countryId === undefined || !telegramId) {
       return NextResponse.json(

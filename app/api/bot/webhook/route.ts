@@ -8,7 +8,6 @@ export const fetchCache = "force-no-store";
 
 export async function POST(req: NextRequest) {
   try {
-    await db.syncFromCloud();
     const bot = getTelegramBot();
     if (!bot) {
       console.error("Bot token not configured");
@@ -41,13 +40,20 @@ export async function GET(req: NextRequest) {
 
   const webhookUrl = `${CONFIG.APP_URL}/api/bot/webhook`;
 
-  if (action === "setWebhook") {
+  if (action === "setWebhook" || action === "set" || searchParams.get("set") === "1") {
     try {
+      const dropPending = searchParams.get("drop") !== "0"; // Kuyruktaki eski mesajları temizle ki bot 0 gecikmeyle anında açılsın
+      const targetUrl = searchParams.get("url") || webhookUrl;
       const res = await fetch(
-        `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
+        `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(targetUrl)}&drop_pending_updates=${dropPending}&max_connections=100`
       );
       const data = await res.json();
-      return NextResponse.json({ ok: true, webhookUrl, telegramResponse: data });
+      return NextResponse.json({
+        ok: data.ok ?? true,
+        message: data.ok ? "Telegram Webhook Başarıyla Kuruldu!" : "Telegram Webhook Hatası",
+        webhookUrl: targetUrl,
+        telegramResponse: data,
+      });
     } catch (err: any) {
       return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
     }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Ticket, TicketMessage } from "@/lib/types";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
 import { CONFIG } from "@/lib/config";
+import { checkApiRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
 
     if (action === "create") {
       const { telegramId, subject, category, message, userFirstName, username } = body;
+
+      const rateCheck = checkApiRateLimit(req, `ticket_create_${telegramId || "anon"}`, 4, 15);
+      if (!rateCheck.allowed) {
+        return NextResponse.json({ success: false, error: rateCheck.error }, { status: 429 });
+      }
 
       if (!telegramId || !subject?.trim() || !message?.trim()) {
         return NextResponse.json(

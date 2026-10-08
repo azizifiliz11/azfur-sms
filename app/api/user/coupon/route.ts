@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { checkApiRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,9 +29,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await db.syncFromCloud();
     const body = await req.json();
     const { code, telegramId } = body;
+
+    const rateCheck = checkApiRateLimit(req, `coupon_${telegramId || "anon"}`, 5, 10);
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ success: false, error: rateCheck.error }, { status: 429 });
+    }
+
+    await db.syncFromCloud();
 
     if (!code || !telegramId) {
       return NextResponse.json(

@@ -43,6 +43,10 @@ import {
   Gift,
   Tag,
   Ticket,
+  Phone,
+  ExternalLink,
+  Calendar,
+  Hash,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -112,6 +116,15 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // User management states
   const [userSearchQuery, setUserSearchQuery] = useState<string>("");
   const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
+
+  // User detail inspection states (Tüm numaralar, SMS kodları, yüklemeler, detaylar)
+  const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState<boolean>(false);
+  const [userActivations, setUserActivations] = useState<any[]>([]);
+  const [userDeposits, setUserDeposits] = useState<any[]>([]);
+  const [userTickets, setUserTickets] = useState<any[]>([]);
+  const [userDetailTab, setUserDetailTab] = useState<"numbers" | "deposits" | "tickets" | "actions">("numbers");
+  const [copiedDetailText, setCopiedDetailText] = useState<string | null>(null);
 
   // Balance edit modal state
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -1254,6 +1267,40 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       alert("Hata oluştu");
     } finally {
       setUserActionLoadingId(null);
+    }
+  };
+
+  // Kullanıcı Detay Metnini Kopyalama
+  const handleCopyDetail = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedDetailText(label);
+    haptic.impact("light");
+    setTimeout(() => setCopiedDetailText(null), 2000);
+  };
+
+  // Kullanıcı Detayını Aç ve Tüm Numaraları/Kodları Çek
+  const handleOpenUserDetail = async (user: any) => {
+    setSelectedUserDetail(user);
+    setUserDetailTab("numbers");
+    setUserDetailLoading(true);
+    setUserActivations([]);
+    setUserDeposits([]);
+    setUserTickets([]);
+    haptic.selection();
+
+    try {
+      const res = await adminFetch(`/api/admin/users?telegramId=${user.telegramId}`);
+      const data = await res.json();
+      if (data.success) {
+        if (data.user) setSelectedUserDetail(data.user);
+        setUserActivations(data.activations || []);
+        setUserDeposits(data.deposits || []);
+        setUserTickets(data.tickets || []);
+      }
+    } catch (e) {
+      console.error("User detail fetch error:", e);
+    } finally {
+      setUserDetailLoading(false);
     }
   };
 
@@ -2653,8 +2700,17 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                       </div>
                     </div>
 
-                    {/* Alt Kısım: Hızlı Yönetici Aksiyonları */}
+                    {/* Alt Kısım: Hızlı Yönetici Aksiyonları & Detay Butonu */}
                     <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-1.5 flex-wrap">
+                      {/* Detay & Numaraları İncele (Ana İstek) */}
+                      <button
+                        onClick={() => handleOpenUserDetail(u)}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                        <span>Detay & Numaralar ({u.totalOrdersCount || 0})</span>
+                      </button>
+
                       {/* Bakiye Düzenle */}
                       <button
                         onClick={() => {
@@ -2664,7 +2720,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition-all"
                       >
                         <DollarSign className="w-3.5 h-3.5" />
-                        <span>Bakiye Yönet</span>
+                        <span>Bakiye</span>
                       </button>
 
                       {/* Admin Rolü Ver / Al */}
@@ -2678,7 +2734,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         }`}
                       >
                         <ShieldAlert className="w-3.5 h-3.5" />
-                        <span>{u.role === "admin" ? "Adminliği Al" : "Admin Yap"}</span>
+                        <span>{u.role === "admin" ? "Adminliği Al" : "Admin"}</span>
                       </button>
 
                       {/* Banla / Engeli Kaldır */}
@@ -3694,6 +3750,421 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             >
               Kapat / Vazgeç
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 7. DETAYLI KULLANICI İNCELEME MODALI (TÜM NUMARALAR, SMS KODLARI, YÜKLEMELER) */}
+      {selectedUserDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-2xl bg-[#11131a] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-base shadow-inner">
+                  {selectedUserDetail.firstName ? selectedUserDetail.firstName[0].toUpperCase() : "U"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-white">
+                      {selectedUserDetail.firstName || "Kullanıcı"} {selectedUserDetail.lastName || ""}
+                    </h3>
+                    {selectedUserDetail.role === "admin" && (
+                      <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full font-bold">
+                        👑 ADMIN
+                      </span>
+                    )}
+                    {selectedUserDetail.isBanned && (
+                      <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">
+                        ⛔ BANLI
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 mt-0.5">
+                    {selectedUserDetail.username ? (
+                      <span className="text-emerald-400 font-semibold">@{selectedUserDetail.username}</span>
+                    ) : (
+                      <span className="text-zinc-500">kullanıcı adı yok</span>
+                    )}
+                    <span className="text-zinc-600">•</span>
+                    <button
+                      onClick={() => handleCopyDetail(String(selectedUserDetail.telegramId), "id")}
+                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      title="ID Kopyala"
+                    >
+                      <span>ID: {selectedUserDetail.telegramId}</span>
+                      {copiedDetailText === "id" ? (
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-zinc-500" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedUserDetail(null)}
+                className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* İstatistik Özet Kartları */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Mevcut Bakiye</span>
+                <span className="text-sm font-bold font-mono text-emerald-400">
+                  ₺{selectedUserDetail.balance?.toFixed(2) || "0.00"}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Toplam Harcama</span>
+                <span className="text-sm font-bold font-mono text-blue-400">
+                  ₺{selectedUserDetail.spent || 0}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Alınan Numara</span>
+                <span className="text-sm font-bold font-mono text-purple-400">
+                  {userActivations.length} Adet
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Gelen SMS Kodu</span>
+                <span className="text-sm font-bold font-mono text-amber-400">
+                  {userActivations.filter((a) => a.smsCode).length} Adet
+                </span>
+              </div>
+            </div>
+
+            {/* İç Sekmeler */}
+            <div className="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-xl border border-white/5 text-xs font-semibold overflow-x-auto no-scrollbar">
+              <button
+                onClick={() => setUserDetailTab("numbers")}
+                className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
+                  userDetailTab === "numbers"
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                📱 Aldığı Numaralar ({userActivations.length})
+              </button>
+              <button
+                onClick={() => setUserDetailTab("deposits")}
+                className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
+                  userDetailTab === "deposits"
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                💳 Bakiye Yüklemeleri ({userDeposits.length})
+              </button>
+              <button
+                onClick={() => setUserDetailTab("tickets")}
+                className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
+                  userDetailTab === "tickets"
+                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                🎫 Destek Talepleri ({userTickets.length})
+              </button>
+              <button
+                onClick={() => setUserDetailTab("actions")}
+                className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
+                  userDetailTab === "actions"
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                ⚡ Yönetici İşlemleri
+              </button>
+            </div>
+
+            {/* Sekme İçerikleri */}
+            <div className="overflow-y-auto flex-1 pr-1 space-y-2 max-h-[50vh]">
+              {userDetailLoading ? (
+                <div className="p-8 text-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-400 mx-auto" />
+                  <p className="text-xs text-zinc-400">Kullanıcının sipariş ve numara geçmişi yükleniyor...</p>
+                </div>
+              ) : (
+                <>
+                  {/* 1. NUMARALAR & KODLAR SEKMESİ */}
+                  {userDetailTab === "numbers" && (
+                    <div className="space-y-2">
+                      {userActivations.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                          Bu kullanıcı henüz hiç numara satın almamış.
+                        </div>
+                      ) : (
+                        userActivations.map((a) => (
+                          <div
+                            key={a.id}
+                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-2 hover:border-blue-500/30 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">{a.countryFlag || "🌐"}</span>
+                                <span className="font-bold text-xs text-white">
+                                  {a.serviceName} ({a.countryName})
+                                </span>
+                              </div>
+
+                              <div>
+                                {a.smsCode ? (
+                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">
+                                    ✅ KOD ALINDI
+                                  </span>
+                                ) : a.status === "WAIT_CODE" ? (
+                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-bold animate-pulse">
+                                    ⏳ KOD BEKLENİYOR
+                                  </span>
+                                ) : a.status === "CANCELLED" ? (
+                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold">
+                                    🚫 İPTAL EDİLDİ
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-bold">
+                                    {a.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Telefon Numarası & Kopyalama Kutusu */}
+                            <div className="p-2.5 rounded-xl bg-black/60 border border-white/5 flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] text-zinc-400 block font-sans">Tahsis Edilen Numara:</span>
+                                <span className="font-mono font-bold text-sm text-zinc-200 select-all">
+                                  {a.phoneNumber}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleCopyDetail(a.phoneNumber, `phone_${a.id}`)}
+                                className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white text-xs flex items-center gap-1 font-mono transition-colors"
+                              >
+                                {copiedDetailText === `phone_${a.id}` ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                    <span>Kopyalandı</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Kopyala</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Gelen SMS Kodu Vurgusu */}
+                            {a.smsCode ? (
+                              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                                    Gelen SMS Onay Kodu:
+                                  </span>
+                                  <span className="text-base font-black font-mono text-emerald-300 tracking-wider">
+                                    {a.smsCode}
+                                  </span>
+                                  {a.smsText && (
+                                    <p className="text-[11px] text-zinc-400 mt-1 italic select-all">
+                                      &ldquo;{a.smsText}&rdquo;
+                                    </p>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleCopyDetail(a.smsCode, `code_${a.id}`)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1 transition-all"
+                                >
+                                  {copiedDetailText === `code_${a.id}` ? "Kopyalandı" : "Kodu Kopyala"}
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {/* Fiyat ve Tarih */}
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-white/[0.04]">
+                              <span className="font-mono">Ücret: ₺{a.chargedPrice?.toFixed(2) || "0.00"}</span>
+                              <span>
+                                {a.createdAt ? new Date(a.createdAt).toLocaleString("tr-TR") : ""}
+                              </span>
+                              <span className="font-mono text-[10px] text-zinc-600">#{a.id}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2. BAKİYE YÜKLEMELERİ SEKMESİ */}
+                  {userDetailTab === "deposits" && (
+                    <div className="space-y-2">
+                      {userDeposits.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                          Bu kullanıcı henüz bakiye yükleme talebinde bulunmamış.
+                        </div>
+                      ) : (
+                        userDeposits.map((dep) => (
+                          <div
+                            key={dep.id}
+                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-emerald-400 font-mono">
+                                +₺{dep.amount?.toFixed(2)}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                  dep.status === "APPROVED"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    : dep.status === "REJECTED"
+                                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                }`}
+                              >
+                                {dep.status === "APPROVED" ? "ONAYLANDI" : dep.status === "REJECTED" ? "REDDEDİLDİ" : "BEKLEMEDE"}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                              <span>Yöntem: {dep.method || "Kripto / Havale"}</span>
+                              <span>{dep.createdAt ? new Date(dep.createdAt).toLocaleString("tr-TR") : ""}</span>
+                            </div>
+                            {dep.txid && (
+                              <p className="text-[10px] font-mono text-zinc-500 truncate">
+                                TXID: {dep.txid}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. DESTEK TALEPLERİ SEKMESİ */}
+                  {userDetailTab === "tickets" && (
+                    <div className="space-y-2">
+                      {userTickets.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                          Bu kullanıcının henüz destek talebi bulunmuyor.
+                        </div>
+                      ) : (
+                        userTickets.map((t) => (
+                          <div
+                            key={t.id}
+                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-white">{t.subject}</span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                  t.status === "OPEN"
+                                    ? "bg-amber-500/20 text-amber-300"
+                                    : t.status === "ANSWERED"
+                                    ? "bg-emerald-500/20 text-emerald-300"
+                                    : "bg-zinc-800 text-zinc-400"
+                                }`}
+                              >
+                                {t.status}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 truncate">
+                              Son Güncelleme: {new Date(t.updatedAt).toLocaleString("tr-TR")}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* 4. YÖNETİCİ HIZLI AKSİYONLARI */}
+                  {userDetailTab === "actions" && (
+                    <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-white/5 space-y-3">
+                      <span className="text-xs font-bold text-white block">
+                        Kullanıcıya Özel Yönetici İşlemleri
+                      </span>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Bakiye Düzenle */}
+                        <button
+                          onClick={() => {
+                            setEditingUser(selectedUserDetail);
+                          }}
+                          className="p-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                          <span>Bakiye Ekle / Düzenle</span>
+                        </button>
+
+                        {/* Admin Yap / Kaldır */}
+                        <button
+                          onClick={async () => {
+                            await handleToggleRole(selectedUserDetail);
+                            setSelectedUserDetail((prev: any) =>
+                              prev ? { ...prev, role: prev.role === "admin" ? "user" : "admin" } : prev
+                            );
+                          }}
+                          className="p-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          <ShieldAlert className="w-4 h-4" />
+                          <span>
+                            {selectedUserDetail.role === "admin" ? "Adminliği Kaldır" : "Admin Yap"}
+                          </span>
+                        </button>
+
+                        {/* Banla / Engeli Aç */}
+                        <button
+                          onClick={async () => {
+                            await handleToggleBan(selectedUserDetail);
+                            setSelectedUserDetail((prev: any) =>
+                              prev ? { ...prev, isBanned: !prev.isBanned } : prev
+                            );
+                          }}
+                          className="p-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          {selectedUserDetail.isBanned ? (
+                            <>
+                              <UserCheck className="w-4 h-4" />
+                              <span>Engeli Aç</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserX className="w-4 h-4" />
+                              <span>Kullanıcıyı Banla</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Sil */}
+                        <button
+                          onClick={async () => {
+                            await handleDeleteUser(selectedUserDetail);
+                            setSelectedUserDetail(null);
+                          }}
+                          className="p-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Kullanıcıyı Kalıcı Sil</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Modal Alt Kapatma */}
+            <div className="pt-2 border-t border-white/[0.08] flex justify-end">
+              <button
+                onClick={() => setSelectedUserDetail(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-white font-semibold transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
           </div>
         </div>
       )}

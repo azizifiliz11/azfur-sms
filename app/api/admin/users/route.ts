@@ -12,50 +12,55 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
+    const { searchParams } = new URL(req.url);
+    const detailTelegramId = searchParams.get("telegramId");
+
+    // Tekil kullanıcı detay sorgusu (Aldığı numaralar, kodlar, ödemeler, ticketlar)
+    if (detailTelegramId) {
+      const cleanId = String(detailTelegramId).trim();
+      const user = db.getAllUsers().find((u) => String(u.telegramId).trim() === cleanId) || null;
+      if (!user) {
+        return NextResponse.json({ success: false, error: "Kullanıcı bulunamadı" }, { status: 404 });
+      }
+
+      const activations = db.getUserActivations(cleanId);
+      const deposits = db.getDeposits().filter((d) => String(d.telegramId).trim() === cleanId);
+      const tickets = db.getUserTickets(cleanId);
+
+      return NextResponse.json(
+        {
+          success: true,
+          user,
+          activations,
+          deposits,
+          tickets,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        }
+      );
+    }
+
     const users = db.getAllUsers();
+    const allActivations = db.getAllActivations();
 
-    // Otomatik profil iyileştirme: İsmi 'Kullanıcı' kalan veya 'user_...' takma adı olanları Telegram'dan gerçek isimleriyle güncelle
-    let dbUpdated = false;
-    for (const u of users) {
-      if (u.username && u.username.startsWith("user_")) {
-        u.username = "";
-        dbUpdated = true;
-      }
-      const isPlaceholderName =
-        !u.firstName ||
-        u.firstName === "Kullanıcı" ||
-        u.firstName === "Misafir" ||
-        u.firstName === "Telegram Kullanıcısı";
-
-      if (isPlaceholderName || !u.username) {
-        try {
-          const tgProfile = await fetchTelegramUserInfo(u.telegramId);
-          if (tgProfile) {
-            if (tgProfile.firstName && u.firstName !== tgProfile.firstName) {
-              u.firstName = tgProfile.firstName;
-              dbUpdated = true;
-            }
-            if (tgProfile.lastName && u.lastName !== tgProfile.lastName) {
-              u.lastName = tgProfile.lastName;
-              dbUpdated = true;
-            }
-            if (tgProfile.username && u.username !== tgProfile.username) {
-              u.username = tgProfile.username;
-              dbUpdated = true;
-            }
-          }
-        } catch (e) {}
-      }
-    }
-
-    if (dbUpdated) {
-      for (const u of users) {
-        await db.saveUser(u);
-      }
-    }
+    // Kullanıcıları özet sipariş ve aktivasyon istatistikleriyle zenginleştir
+    const enrichedUsers = users.map((u) => {
+      const userActs = allActivations.filter((a) => Number(a.telegramId) === Number(u.telegramId));
+      const successActs = userActs.filter((a) => a.status === "COMPLETED" || a.status === "RECEIVED" || Boolean(a.smsCode));
+      return {
+        ...u,
+        totalOrdersCount: userActs.length,
+        successOrdersCount: successActs.length,
+      };
+    });
 
     return NextResponse.json(
-      { success: true, users },
+      { success: true, users: enrichedUsers },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

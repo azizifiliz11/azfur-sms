@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { User, Wallet, Plus, ShieldCheck, RefreshCw, Headphones } from "lucide-react";
+import { User, Wallet, Plus, ShieldCheck, RefreshCw, Headphones, Ticket } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 
 interface HeaderProps {
@@ -14,6 +14,7 @@ interface HeaderProps {
   } | null;
   onOpenDeposit: () => void;
   onOpenSupport?: () => void;
+  onOpenCoupon?: () => void;
   onRefreshBalance: () => void;
   isAdmin?: boolean;
   onToggleAdminView?: () => void;
@@ -24,6 +25,7 @@ export function Header({
   user,
   onOpenDeposit,
   onOpenSupport,
+  onOpenCoupon,
   onRefreshBalance,
   isAdmin = false,
   onToggleAdminView,
@@ -125,6 +127,21 @@ export function Header({
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
             <span>Yükle</span>
           </button>
+
+          {/* Kupon / Promosyon Butonu */}
+          {onOpenCoupon && (
+            <button
+              onClick={() => {
+                haptic.impact("light");
+                onOpenCoupon();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-semibold text-xs active:scale-95 transition-all shadow-sm"
+              title="Kupon / Promosyon Kodu Kullan"
+            >
+              <Ticket className="w-3.5 h-3.5" />
+              <span>Kupon</span>
+            </button>
+          )}
 
           {/* Support / Ticket Button */}
           {onOpenSupport && (

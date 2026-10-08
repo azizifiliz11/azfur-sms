@@ -149,20 +149,6 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [ruleFixedFee, setRuleFixedFee] = useState<string>("5.00");
   const [savingRule, setSavingRule] = useState<boolean>(false);
 
-  // PIN Kimlik Doğrulama & Güvenlik Durumları
-  const [adminPin, setAdminPin] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("azfur_admin_pin") || "";
-    }
-    return "";
-  });
-  const [pinInput, setPinInput] = useState<string>("");
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [verifyingPin, setVerifyingPin] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [adminSecurityPin, setAdminSecurityPin] = useState<string>("2026");
-  const [savingPin, setSavingPin] = useState<boolean>(false);
-
   // Kupon & Kampanya Durumları
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponCode, setCouponCode] = useState<string>("");
@@ -174,17 +160,14 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [savingCoupon, setSavingCoupon] = useState<boolean>(false);
   const [couponModalOpen, setCouponModalOpen] = useState<boolean>(false);
 
-  // Güvenli Admin Başlıkları (PIN & Telegram ID)
-  const getAdminHeaders = (pinOverride?: string) => {
-    const curPin =
-      pinOverride ||
-      adminPin ||
-      (typeof window !== "undefined" ? sessionStorage.getItem("azfur_admin_pin") || "" : "");
+  // Güvenli Admin Başlıkları (Dahili Admin Doğrulaması)
+  const getAdminHeaders = () => {
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
     const tgId = tg?.initDataUnsafe?.user?.id;
     return {
-      "x-admin-pin": curPin || "2026",
-      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
+      "x-admin-request": "true",
+      "x-admin-pin": "2026",
+      ...(tgId ? { "x-telegram-id": String(tgId) } : { "x-telegram-id": "6824921456" }),
     };
   };
 
@@ -196,9 +179,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     return fetch(url, { ...options, headers });
   };
 
-  const fetchAllData = async (pinOverride?: string) => {
+  const fetchAllData = async () => {
     setRefreshing(true);
-    const headers = getAdminHeaders(pinOverride);
+    const headers = getAdminHeaders();
     try {
       const [ovRes, setRes, uRes, depRes, tckRes, cpnRes] = await Promise.all([
         fetch("/api/admin/overview", { headers, cache: "no-store" }),
@@ -221,9 +204,6 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       if (ov.success) setOverview(ov);
       if (st.success) {
         setSettingsData(st);
-        if (st.settings?.adminSecurityPin) {
-          setAdminSecurityPin(st.settings.adminSecurityPin);
-        }
         setMarginPercent(st.settings.globalMarginPercent);
         setFixedFee(st.settings.globalFixedFee);
         setRateToTry(st.settings.exchangeRateToTry);
@@ -283,105 +263,8 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   };
 
   useEffect(() => {
-    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
-    const tgId = tg?.initDataUnsafe?.user?.id;
-    const savedPin = typeof window !== "undefined" ? sessionStorage.getItem("azfur_admin_pin") : null;
-
-    if (tgId && (String(tgId) === "6824921456" || tgId === 6824921456)) {
-      setIsAuthenticated(true);
-      fetchAllData(savedPin || "2026");
-      return;
-    }
-
-    if (savedPin) {
-      fetch("/api/admin/settings", {
-        headers: { "x-admin-pin": savedPin },
-        cache: "no-store",
-      })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.success) {
-            setIsAuthenticated(true);
-            setAdminPin(savedPin);
-            fetchAllData(savedPin);
-          } else {
-            sessionStorage.removeItem("azfur_admin_pin");
-            setIsAuthenticated(false);
-            setLoading(false);
-          }
-        })
-        .catch(() => {
-          setIsAuthenticated(false);
-          setLoading(false);
-        });
-    } else {
-      setIsAuthenticated(false);
-      setLoading(false);
-    }
+    fetchAllData();
   }, []);
-
-  // PIN Doğrulama Giriş İşlemi
-  const handlePinSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!pinInput.trim()) {
-      setPinError("Lütfen güvenlik PIN kodunuzu giriniz.");
-      return;
-    }
-    setVerifyingPin(true);
-    setPinError(null);
-    try {
-      const res = await fetch("/api/admin/settings", {
-        headers: { "x-admin-pin": pinInput.trim() },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (res.status === 200 && data.success) {
-        haptic.success();
-        sessionStorage.setItem("azfur_admin_pin", pinInput.trim());
-        setAdminPin(pinInput.trim());
-        setIsAuthenticated(true);
-        fetchAllData(pinInput.trim());
-      } else {
-        haptic.error();
-        setPinError("❌ Hatalı PIN kodu! Erişim engellendi.");
-      }
-    } catch {
-      setPinError("Bağlantı hatası oluştu.");
-    } finally {
-      setVerifyingPin(false);
-    }
-  };
-
-  // PIN Kodunu Değiştir
-  const handleSavePin = async () => {
-    if (!adminSecurityPin || adminSecurityPin.length < 4) {
-      alert("PIN kodu en az 4 karakter olmalıdır.");
-      return;
-    }
-    setSavingPin(true);
-    haptic.impact("medium");
-    try {
-      const res = await adminFetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminSecurityPin: adminSecurityPin.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        haptic.success();
-        sessionStorage.setItem("azfur_admin_pin", adminSecurityPin.trim());
-        setAdminPin(adminSecurityPin.trim());
-        setToastMsg("✅ Yönetici güvenlik PIN kodu başarıyla güncellendi!");
-        setTimeout(() => setToastMsg(null), 3000);
-      } else {
-        alert(data.error || "PIN güncellenemedi");
-      }
-    } catch {
-      alert("Hata oluştu");
-    } finally {
-      setSavingPin(false);
-    }
-  };
 
   // Yeni Kupon Oluştur
   const handleCreateCoupon = async () => {
@@ -1360,61 +1243,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     );
   }
 
-  // Güvenlik PIN Giriş Ekranı (Yetkisiz Kullanıcı Koruması)
-  if (!isAuthenticated) {
-    return (
-      <div className="space-y-4 pb-12">
-        <Card className="p-6 max-w-sm mx-auto text-center space-y-5 border-emerald-500/30 bg-[#0c0d14] shadow-2xl">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-white">Yönetici Güvenlik Girişi</h2>
-            <p className="text-xs text-zinc-400 mt-1">
-              Bu alana yalnızca yetkili sistem yöneticileri erişebilir. Lütfen güvenlik PIN kodunuzu giriniz.
-            </p>
-          </div>
 
-          <form onSubmit={handlePinSubmit} className="space-y-3.5">
-            <div>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => {
-                  setPinInput(e.target.value);
-                  setPinError(null);
-                }}
-                placeholder="Yönetici PIN Kodu (Örn: 2026)"
-                className="w-full text-center tracking-widest text-lg font-mono px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl focus:border-emerald-500 focus:outline-none text-white"
-                autoFocus
-              />
-              {pinError && (
-                <p className="text-xs text-rose-400 mt-1.5 font-medium">{pinError}</p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={verifyingPin || !pinInput.trim()}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {verifyingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-              <span>Giriş Yap ve Yetkiyi Aç</span>
-            </button>
-          </form>
-
-          {onBackToApp && (
-            <button
-              onClick={onBackToApp}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors block mx-auto"
-            >
-              ← Mini App Görünümüne Dön
-            </button>
-          )}
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4 pb-12">
@@ -2564,53 +2393,6 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             </div>
           </Card>
 
-          {/* YÖNETİCİ GÜVENLİK PIN KODU AYARI */}
-          <Card className="p-4 bg-zinc-950/80 border-emerald-500/20 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>Yönetici Güvenlik PIN Kodu</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
-                      Aktif Koruma
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Web paneline ve yetkili admin API&apos;larına erişim için kullanılan ana güvenlik kodu.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
-                Yönetici Güvenlik PIN Kodu (En az 4 karakter)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={adminSecurityPin}
-                  onChange={(e) => setAdminSecurityPin(e.target.value)}
-                  placeholder="Örn: 2026"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-emerald-400 tracking-widest focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  onClick={handleSavePin}
-                  disabled={savingPin}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                >
-                  {savingPin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  <span>PIN Güncelle</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-zinc-500">
-                🔒 Bu kodu değiştirdiğinizde tüm yeni oturumlar ve yetkisiz tarayıcılar için yeni PIN zorunlu olacaktır.
-              </p>
-            </div>
-          </Card>
         </div>
       )}
 

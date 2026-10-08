@@ -2,7 +2,7 @@
   "settings": {
     "globalMarginPercent": 40,
     "globalFixedFee": 6,
-    "exchangeRateToTry": 49.1976,
+    "exchangeRateToTry": 49.2152,
     "currencySymbol": "₺",
     "mockMode": false,
     "adminTelegramId": "6824921456",
@@ -10,8 +10,8 @@
     "hiddenCountries": [],
     "serviceCustomMargins": {},
     "useTcmbAutoRate": true,
-    "lastTcmbRate": 49.1976,
-    "lastTcmbFetchTime": "2026-10-07T18:42:06.999Z",
+    "lastTcmbRate": 49.2152,
+    "lastTcmbFetchTime": "2026-10-08T21:13:59.622Z",
     "bankInfo": {
       "bankName": "Ziraat Bankası",
       "accountHolder": "AzFur SMS",
@@ -21,9 +21,15 @@
     "cryptoSettings": {
       "usdtTrc20Address": "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
       "trxAddress": "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      "oxapayApiKey": "",
       "cryptoBotToken": "",
       "autoVerifyEnabled": true
-    }
+    },
+    "supportTelegramUsername": "",
+    "supportTelegramUsernames": [],
+    "customStickerFileId": "",
+    "heroSmsApiKey": "e1006858662edcAd8d348c9f07dfe8c5",
+    "adminSecurityPin": "05377243623"
   },
   "users": {
     "6824921456": {
@@ -35,8 +41,32 @@
       "role": "admin",
       "createdAt": "2026-10-07T16:07:43.215Z",
       "lastActiveAt": "2026-10-07T17:00:00.000Z"
+    },
+    "8614398114": {
+      "telegramId": 8614398114,
+      "username": "olanak",
+      "firstName": "Beyazdx",
+      "balance": 0,
+      "spent": 0,
+      "role": "user",
+      "isBanned": false,
+      "createdAt": "2026-10-08T21:11:48.253Z",
+      "lastActiveAt": "2026-10-08T21:14:59.554Z"
+    },
+    "7619776444": {
+      "telegramId": 7619776444,
+      "username": "azizifiliz",
+      "firstName": "Aziz",
+      "balance": 0,
+      "spent": 0,
+      "role": "user",
+      "isBanned": false,
+      "createdAt": "2026-10-08T21:14:02.165Z",
+      "lastActiveAt": "2026-10-08T21:14:39.980Z"
     }
   },
   "activations": {},
-  "deposits": []
+  "deposits": [],
+  "tickets": {},
+  "coupons": {}
 }

@@ -185,40 +185,18 @@ async function saveDb(data: DatabaseSchema): Promise<void> {
   ensureDbDirectory();
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
+    if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
+      try {
+        fs.writeFileSync(SEED_DB_PATH, JSON.stringify(data, null, 2), "utf8");
+      } catch {}
+    }
   } catch (err) {
     console.error("Error writing db.json:", err);
-  }
-  if (KV_URL && KV_TOKEN) {
-    await saveToCloudKv(data);
   }
 }
 
 export const db = {
   async syncFromCloud(): Promise<DatabaseSchema> {
-    if (!KV_URL || !KV_TOKEN) return loadDb();
-    try {
-      const res = await fetch(KV_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${KV_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(["GET", KV_KEY]),
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (json && json.result) {
-        const cloudData: DatabaseSchema =
-          typeof json.result === "string" ? JSON.parse(json.result) : json.result;
-        if (cloudData && (cloudData.users || cloudData.settings)) {
-          ensureDbDirectory();
-          fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-          return cloudData;
-        }
-      }
-    } catch (err) {
-      console.error("[Cloud KV Sync Error]:", err);
-    }
     return loadDb();
   },
 

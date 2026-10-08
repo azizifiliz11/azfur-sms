@@ -8,9 +8,10 @@ import { RentPanel } from "@/components/RentPanel";
 import { ActiveNumbers } from "@/components/ActiveNumbers";
 import { DepositModal } from "@/components/DepositModal";
 import { SupportModal } from "@/components/SupportModal";
+import { CouponModal } from "@/components/CouponModal";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
-import { Shield, Zap, Headphones } from "lucide-react";
+import { Shield, Zap, Headphones, Gift, Ticket } from "lucide-react";
 
 function HomeContent() {
   const { isReady, user: tgUser } = useTelegram();
@@ -24,6 +25,7 @@ function HomeContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [catalogLoading, setCatalogLoading] = useState<boolean>(false);
   const [depositModalOpen, setDepositModalOpen] = useState<boolean>(false);
+  const [couponModalOpen, setCouponModalOpen] = useState<boolean>(false);
   const [supportModalOpen, setSupportModalOpen] = useState<boolean>(false);
   const [adminViewActive, setAdminViewActive] = useState<boolean>(false);
 
@@ -223,6 +225,7 @@ function HomeContent() {
       <Header
         user={currentUser}
         onOpenDeposit={() => setDepositModalOpen(true)}
+        onOpenCoupon={() => setCouponModalOpen(true)}
         onOpenSupport={() => setSupportModalOpen(true)}
         onRefreshBalance={handleRefreshAll}
         isAdmin={isAdmin}
@@ -271,6 +274,37 @@ function HomeContent() {
                   <span className="text-xs font-bold text-purple-400">7/24 Aktif</span>
                 </div>
               </div>
+            </div>
+
+            {/* Kupon & Promosyon Kodu Kullanma Kartı */}
+            <div
+              onClick={() => setCouponModalOpen(true)}
+              className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex items-center justify-between gap-3 cursor-pointer hover:border-amber-500/50 active:scale-[0.99] transition-all shadow-md group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 group-hover:scale-105 transition-transform">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">🎁 Kupon Kodu Kullan</span>
+                    {currentUser?.activeDiscount && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-1.5 py-0.5 rounded border border-emerald-500/30">
+                        {currentUser.activeDiscount.code} (Aktif)
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-zinc-400">
+                    Bakiye hediyesi veya SMS indirim kodu tanımlayın
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 group-hover:bg-amber-500 text-amber-300 group-hover:text-black font-bold text-xs transition-all shrink-0"
+              >
+                Kupon Gir
+              </button>
             </div>
 
             {/* Aktif Numaralar (Varsa en üstte göster) */}
@@ -327,6 +361,15 @@ function HomeContent() {
         onClose={() => setDepositModalOpen(false)}
         telegramId={tgUser?.id || currentUser?.telegramId || 0}
         onSuccess={() => initUser()}
+      />
+
+      {/* Kupon & Promosyon Modalı */}
+      <CouponModal
+        isOpen={couponModalOpen}
+        onClose={() => setCouponModalOpen(false)}
+        telegramId={tgUser?.id || currentUser?.telegramId || 0}
+        onSuccess={handleRefreshAll}
+        activeDiscount={currentUser?.activeDiscount}
       />
 
       {/* Destek & Ticket Modalı */}

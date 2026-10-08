@@ -237,14 +237,7 @@ export function getTelegramBot(): Bot | null {
         String(from.id).trim() === "6824921456";
 
       if (!isAdmin) {
-        await ctx.reply(
-          `⛔ <b>Yetkisiz Erişim!</b>\n\n` +
-            `Bu komut yalnızca sistem yöneticilerine özeldir. Bilgileriniz güvenlik sebebiyle kaydedilmiştir.`,
-          {
-            parse_mode: "HTML",
-            reply_markup: new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu"),
-          }
-        );
+        // Admin dışında hiçbir kullanıcıya kesinlikle tepki verme, sessizce yok say
         return;
       }
 
@@ -1428,7 +1421,7 @@ export function getTelegramBot(): Bot | null {
       // --- YÖNETİCİ MENÜSÜ ---
       if (data === "btn_admin_menu") {
         if (!isAdmin) {
-          await editOrReply(ctx, `⛔ Bu alana sadece sistem yöneticileri erişebilir.`, new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu"));
+          try { await ctx.answerCallbackQuery(); } catch (e) {}
           return;
         }
 

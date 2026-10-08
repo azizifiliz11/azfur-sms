@@ -42,8 +42,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   },
 };
 
-const DEFAULT_KV_URL = "https://workable-midge-212606.upstash.io";
-const DEFAULT_KV_TOKEN = "gQAAAAAAAz5-AQIgcDE2MDdmNGQ1YzQ1ZmY0NTI0YmFiN2Y1NTlhZDVkYTg5Mw";
+const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
+const DEFAULT_KV_TOKEN = "gQAAAAAAAz6RAAIgcDE4YjExNzIzNGIzODI0YmNiYWNhNWE3NWU1ZWU5YWU2MA";
 
 const KV_URL =
   process.env.KV_REST_API_URL ||

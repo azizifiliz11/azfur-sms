@@ -805,33 +805,25 @@ export function getTelegramBot(): Bot | null {
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
         const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
 
-        const hasEnoughBalance = user.balance >= finalPriceTry;
-        const remainingBalance = Math.max(0, user.balance - finalPriceTry);
-
         const text =
           `🛒 <b>NUMARA SATIN ALMA ONAYI</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `📱 <b>Servis:</b> ${serviceObj.icon} ${serviceObj.name}\n` +
           `🌍 <b>Ülke:</b> ${countryObj.flag} ${countryObj.name}\n` +
           `💵 <b>Numara Tutarı:</b> <code>${finalPriceTry.toFixed(2)} ₺</code>\n` +
           `💳 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
-          `📊 <b>İşlem Sonrası Kalan:</b> <code>${remainingBalance.toFixed(2)} ₺</code>\n` +
           `⏱️ <b>Kullanım Süresi:</b> 15 Dakika (Tek Kullanımlık)\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          (hasEnoughBalance
-            ? `❓ <b>Bu numarayı satın almak istiyor musunuz?</b>\n\n` +
-              `<i>💡 15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 kesintisiz iade alabilirsiniz.</i>`
-            : `⚠️ <b>Yetersiz Bakiye!</b> Bu işlem için en az <code>${finalPriceTry.toFixed(2)} ₺</code> gereklidir. Lütfen bakiye yükleyin.`);
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `❓ <b>Bu numarayı satın almak istiyor musunuz?</b>\n\n` +
+          `<i>💡 15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 kesintisiz iade alabilirsiniz.</i>`;
 
-        const kb = new InlineKeyboard();
-        if (hasEnoughBalance) {
-          kb.text(`✅ Evet, Satın Al (${finalPriceTry.toFixed(2)} ₺)`, `buy_exec:${serviceCode}:${countryId}`).row();
-          kb.text("❌ Hayır, İptal Et", `buy_cancel:${serviceCode}`).row();
-        } else {
-          kb.text("💳 Hemen Bakiye Yükle", "btn_deposit_menu").row();
-          kb.text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`).row();
-        }
-        kb.text("🔙 Ana Menü", "btn_main_menu");
+        const kb = new InlineKeyboard()
+          .text(`✅ Evet, Satın Al (${finalPriceTry.toFixed(2)} ₺)`, `buy_exec:${serviceCode}:${countryId}`)
+          .row()
+          .text("❌ Hayır, İptal Et", `buy_cancel:${serviceCode}`)
+          .row()
+          .text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`)
+          .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
         return;

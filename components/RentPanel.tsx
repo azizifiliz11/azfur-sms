@@ -269,23 +269,21 @@ export function RentPanel({
     setErrorMsg(null);
   };
 
-  // 1. Satın almayı başlat ve onay modalını aç
-  const handleStartPurchase = () => {
-    if (!selectedItem || !selectedCountry) return;
+  // 1. Satın almayı başlat ve onay modalını aç (HER ZAMAN ÖNCE SORULUR)
+  const handleStartPurchase = (targetCode?: string | React.MouseEvent) => {
+    const code = typeof targetCode === "string" ? targetCode : selectedServiceCode;
+    if (typeof targetCode === "string") {
+      setSelectedServiceCode(targetCode);
+    }
+    const item = typeof targetCode === "string"
+      ? catalog.find((i) => i.serviceCode === targetCode) || selectedItem
+      : selectedItem;
 
-    if (selectedItem.stock === 0) {
+    if (!item || !selectedCountry) return;
+
+    if (item.stock === 0) {
       haptic.error();
       setErrorMsg("Bu servisin bu ülkede şu an uygun numarası bulunmuyor. Lütfen başka bir ülke seçin.");
-      return;
-    }
-
-    if (userBalance < finalPriceWithDiscount) {
-      haptic.error();
-      setErrorMsg(
-        `Yetersiz Bakiye! Bu numara ₺${finalPriceWithDiscount.toFixed(
-          2
-        )} tutarındadır. Mevcut bakiyeniz ₺${userBalance.toFixed(2)}.`
-      );
       return;
     }
 
@@ -297,6 +295,16 @@ export function RentPanel({
   // 2. Kullanıcı onayladığında numarayı tahsis et
   const handleExecutePurchase = async () => {
     if (!selectedItem || !selectedCountry) return;
+
+    if (userBalance < finalPriceWithDiscount) {
+      haptic.error();
+      setErrorMsg(
+        `Yetersiz Bakiye! Bu numara ₺${finalPriceWithDiscount.toFixed(
+          2
+        )} tutarındadır. Mevcut bakiyeniz ₺${userBalance.toFixed(2)}.`
+      );
+      return;
+    }
 
     setOrdering(true);
     setErrorMsg(null);
@@ -598,7 +606,10 @@ export function RentPanel({
               return (
                 <div
                   key={item.serviceCode}
-                  onClick={() => handleServicePick(item.serviceCode)}
+                  onClick={() => {
+                    handleServicePick(item.serviceCode);
+                    handleStartPurchase(item.serviceCode);
+                  }}
                   className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative group ${
                     isSelected
                       ? "bg-emerald-500/15 border-emerald-500/60 shadow-sm ring-1 ring-emerald-500/30"
@@ -904,11 +915,32 @@ export function RentPanel({
 
             {/* Soru Metni */}
             <div className="text-center py-1">
-              <span className="text-2xl block mb-1">🛒</span>
-              <p className="text-sm font-bold text-white">
+              <span className="text-3xl block mb-1.5 animate-bounce">🛒</span>
+              <h4 className="text-base font-extrabold text-white">
                 Bu numarayı satın almak istiyor musunuz?
+              </h4>
+              <p className="text-xs text-zinc-400 mt-1">
+                Onayladığınız anda numaranız tahsis edilecek ve SMS bekleme süresi başlayacaktır.
               </p>
             </div>
+
+            {userBalance < finalPriceWithDiscount && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between">
+                <div>
+                  <span className="font-semibold block">⚠️ Yetersiz Bakiye</span>
+                  <span className="text-[11px] text-zinc-400">Gereken: ₺{finalPriceWithDiscount.toFixed(2)} (Mevcut: ₺{userBalance.toFixed(2)})</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setConfirmModalOpen(false);
+                    onOpenDeposit();
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs shrink-0 hover:bg-emerald-400 transition-colors"
+                >
+                  Bakiye Yükle ➔
+                </button>
+              </div>
+            )}
 
             {/* Sipariş Detay Kartı */}
             <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/5 space-y-2 text-xs">

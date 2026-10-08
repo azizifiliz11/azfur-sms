@@ -304,7 +304,7 @@ export function getTelegramBot(): Bot | null {
           `💬 <i>Her türlü bakiye, sipariş ve teknik konuda yöneticilerimizle doğrudan görüşebilirsiniz.</i>\n\n` +
           `• <b>Hızlı Doğrulama:</b> SMS kodları 5-30 saniye içinde bot ekranınıza iletilir.\n` +
           `• <b>%100 İade Garantisi:</b> SMS kodu gelmeyen kiralamaları ücretsiz iptal edebilir, bakiyenizi anında iade alabilirsiniz.\n` +
-          `• <b>7/24 Bakiye:</b> Telegram @CryptoBot ve TRON ağı ile anında bakiye yükleyebilirsiniz.`,
+          `• <b>7/24 Bakiye:</b> Otomatik Kripto (QR Kod) ve TRON ağı ile 7/24 anında bakiye yükleyebilirsiniz.`,
         { parse_mode: "HTML", reply_markup: kb }
       );
     });
@@ -1049,7 +1049,7 @@ export function getTelegramBot(): Bot | null {
           `Lütfen ödeme yapmak istediğiniz yöntemi seçiniz:`;
 
         const kb = new InlineKeyboard()
-          .text("🤖 @CryptoBot ile Hızlı Yükle (USDT, TON, TRX)", "btn_dep_cbot")
+          .text("⚡ Kripto ile Öde (Otomatik)", "btn_dep_cbot")
           .row()
           .text("💎 TRON Cüzdanı (USDT TRC-20 / TRX)", "btn_dep_crypto")
           .row()
@@ -1061,22 +1061,23 @@ export function getTelegramBot(): Bot | null {
         return;
       }
 
-      // --- @CRYPTOBOT MENÜSÜ & TUTAR SEÇİMİ ---
-      if (data === "btn_dep_cbot") {
+      // --- OTOMATİK KRİPTO MENÜSÜ & TUTAR SEÇİMİ ---
+      if (data === "btn_dep_cbot" || data === "btn_dep_auto") {
         const text =
-          `🤖 <b>@CryptoBot İLE ANINDA BAKİYE YÜKLE</b>\n` +
+          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `⚡ <b>1-Tıkla Ödeme:</b> USDT, TON, TRX, BTC, ETH, LTC ve daha fazlası ile Telegram'dan ayrılmadan anında ödeme yapın.\n` +
+          `🔹 Bottan ayrılmadan anında özel QR kod ve cüzdan adresi oluşturun.\n` +
+          `🔹 Blokzincir onayının ardından bakiyeniz <b>otomatik olarak</b> yüklenir.\n\n` +
           `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
           `Yüklemek istediğiniz tutarı seçin 👇`;
 
         const kb = new InlineKeyboard()
-          .text("₺50", "cbot_pay:50")
-          .text("₺100", "cbot_pay:100")
-          .text("₺250", "cbot_pay:250")
+          .text("₺50", "oxa_pay:50")
+          .text("₺100", "oxa_pay:100")
+          .text("₺250", "oxa_pay:250")
           .row()
-          .text("₺500", "cbot_pay:500")
-          .text("₺1000", "cbot_pay:1000")
+          .text("₺500", "oxa_pay:500")
+          .text("₺1000", "oxa_pay:1000")
           .row()
           .webApp("✍️ Özel Tutarla Yükle (Mini App)", appUrl)
           .row()
@@ -1086,94 +1087,111 @@ export function getTelegramBot(): Bot | null {
         return;
       }
 
-      // --- @CRYPTOBOT FATURA OLUŞTURMA ---
-      if (data.startsWith("cbot_pay:")) {
+      // --- OTOMATİK KRİPTO ADRESİ & QR KOD OLUŞTURMA ---
+      if (data.startsWith("oxa_pay:") || data.startsWith("cbot_pay:")) {
         const amt = parseFloat(data.split(":")[1]) || 100;
-        const depositId = `dep_cbot_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const depositId = `dep_oxa_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-        const { createCryptoBotInvoice, getCryptoBotToken } = await import("./cryptobot");
-        const token = getCryptoBotToken();
+        const { createWhiteLabelPayment, getOxapayApiKey } = await import("./oxapay");
+        const apiKey = getOxapayApiKey();
 
-        if (!token) {
+        if (!apiKey) {
           await editOrReply(
             ctx,
-            `⚠️ <b>@CryptoBot Entegrasyonu Henüz Yapılandırılmadı</b>\n\nLütfen yöneticiyle iletişime geçiniz veya Banka Havalesi / TRON Cüzdanı yöntemini kullanınız.`,
+            `⚠️ <b>Kripto Ödeme Sistemi Henüz Yapılandırılmadı</b>\n\nLütfen yöneticiyle iletişime geçiniz veya TRON Cüzdanı yöntemini kullanınız.`,
             new InlineKeyboard().text("🔙 Ödeme Yöntemleri", "btn_deposit_menu")
           );
           return;
         }
 
-        const invResult = await createCryptoBotInvoice({
+        const payResult = await createWhiteLabelPayment({
           telegramId: Number(from.id),
+          username: from.username && !from.username.startsWith("user_") ? from.username : "",
           amountTry: amt,
-          depositId,
-          description: `AzFur SMS ${amt} ₺ Bakiye Yükleme`,
+          payCurrency: "USDT",
+          network: "TRC20",
+          orderId: depositId,
         });
 
-        if (!invResult.success || !invResult.invoice) {
+        if (!payResult.success || !payResult.address || !payResult.trackId) {
           await editOrReply(
             ctx,
-            `❌ <b>Fatura Oluşturulamadı</b>\n\n${invResult.error || "CryptoBot servisine bağlanılamadı."}`,
+            `❌ <b>Ödeme Adresi Oluşturulamadı</b>\n\n${payResult.error || "Kripto servisine bağlanılamadı."}`,
             new InlineKeyboard().text("🔙 Geri Dön", "btn_dep_cbot")
           );
           return;
         }
 
         // Pending deposit kaydı oluştur
-        await db.addDeposit({
+        await db.createDeposit({
           id: depositId,
           telegramId: Number(from.id),
           username: from.username && !from.username.startsWith("user_") ? from.username : "",
           amount: amt,
-          method: "CryptoBot",
+          method: "Crypto",
           status: "PENDING",
-          referenceCode: `CBOT-${invResult.invoice.invoice_id}`,
-          txid: String(invResult.invoice.invoice_id),
+          referenceCode: `OXA-${payResult.trackId}`,
+          txid: String(payResult.trackId),
           createdAt: new Date().toISOString(),
         });
 
-        const settings = db.getSettings();
-        const rate = settings.exchangeRateToTry || settings.lastTcmbRate || 49.2;
-        const approxUsd = (amt / rate).toFixed(2);
-
-        const payUrl = invResult.invoice.bot_invoice_url;
-        const text =
-          `🧾 <b>@CryptoBot ÖDEME FATURANIZ HAZIR!</b>\n` +
+        const caption =
+          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Yüklenecek Bakiye:</b> <code>${amt.toFixed(2)} ₺</code>\n` +
-          `💵 <b>Ödenecek Tutar:</b> <code>${amt.toFixed(2)} ₺</code> <i>(≈ $${approxUsd} USD)</i>\n` +
-          `🆔 <b>Fatura No:</b> <code>#${invResult.invoice.invoice_id}</code>\n` +
-          `🪙 <b>Kabul Edilen:</b> USDT, TON, TRX, BTC, ETH, LTC, BNB, USDC\n` +
+          `🪙 <b>Yatırılacak Tutar:</b> <code>${payResult.payAmount} ${payResult.payCurrency}</code>\n` +
+          `🌐 <b>Ağ:</b> <code>${payResult.network}</code>\n\n` +
+          `📋 <b>Cüzdan Adresi (Kopyalamak için dokunun):</b>\n` +
+          `<code>${payResult.address}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `👇 <b>Ödemeyi tamamlamak için aşağıdaki butona dokunun:</b>\n` +
-          `<i>(CryptoBot üzerinde ~${approxUsd} USDT/TON veya dilediğiniz kripto ile ödeyebilirsiniz. Ödemeniz tamamlandığında bakiyeniz anında hesabınıza yüklenecektir)</i>`;
+          `⏳ <b>Geçerlilik:</b> 60 Dakika\n` +
+          `ℹ️ Herhangi bir borsadan (Binance, Paribu vb.) veya cüzdanınızdan bu adrese transfer yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik olarak</b> hesabınıza yüklenecektir.`;
 
         const kb = new InlineKeyboard()
-          .url("⚡ Faturayı Öde (@CryptoBot)", payUrl)
-          .row()
-          .text("🔄 Ödemeyi Kontrol Et", `cbot_chk:${invResult.invoice.invoice_id}:${amt}`)
+          .text("🔄 Ödemeyi Kontrol Et", `oxa_chk:${payResult.trackId}:${amt}`)
           .row()
           .text("🔙 Ödeme Menüsü", "btn_deposit_menu");
 
-        await editOrReply(ctx, text, kb);
+        // QR kod fotoğrafı göndermeyi dene, hata olursa metin olarak göster
+        try {
+          if (payResult.qrCodeUrl) {
+            await ctx.replyWithPhoto(payResult.qrCodeUrl, {
+              caption,
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+            return;
+          }
+        } catch {
+          // Görsel gönderilemezse editOrReply ile devam et
+        }
+
+        await editOrReply(ctx, caption, kb);
         return;
       }
 
-      // --- @CRYPTOBOT MANUEL DURUM KONTROLÜ ---
-      if (data.startsWith("cbot_chk:")) {
+      // --- OTOMATİK KRİPTO ÖDEME DURUM KONTROLÜ ---
+      if (data.startsWith("oxa_chk:") || data.startsWith("cbot_chk:")) {
         const parts = data.split(":");
-        const invoiceId = parts[1];
+        const trackId = parts[1];
         const amt = parseFloat(parts[2]) || 0;
 
-        const { getCryptoBotInvoice } = await import("./cryptobot");
-        const invRes = await getCryptoBotInvoice(invoiceId);
+        const { getPaymentInformation } = await import("./oxapay");
+        const payInfo = await getPaymentInformation(trackId);
 
-        if (invRes.success && invRes.invoice?.status === "paid") {
+        if (payInfo.success && payInfo.status === "paid") {
           const deposits = db.getDeposits();
-          const dep = deposits.find((d) => d.txid === invoiceId);
+          const dep = deposits.find(
+            (d) => d.referenceCode === `OXA-${trackId}` || d.txid === String(trackId)
+          );
           if (dep && dep.status !== "APPROVED") {
-            await db.updateUserBalance(from.id, amt);
             await db.updateDepositStatus(dep.id, "APPROVED");
+            const curUser = db.getUser(from.id);
+            if (curUser) {
+              await db.updateUser(from.id, {
+                balance: Number((curUser.balance + amt).toFixed(2)),
+              });
+            }
           }
 
           const updatedUser = db.getUser(from.id);
@@ -1184,15 +1202,25 @@ export function getTelegramBot(): Bot | null {
             `💰 <b>Yüklenen Tutar:</b> <code>+${amt.toFixed(2)} ₺</code>\n` +
             `💳 <b>Yeni Bakiyeniz:</b> <code>${(updatedUser?.balance || 0).toFixed(2)} ₺</code>\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `<i>Keyifli alışverişler dileriz!</i>`,
+            `<i>Bakiyeniz hesabınıza aktarılmıştır. Keyifli alışverişler dileriz!</i>`,
             new InlineKeyboard().text("🛒 Hemen Numara Al", "btn_buy_menu").row().text("🔙 Ana Menü", "btn_main_menu")
           );
           return;
         }
 
+        if (payInfo.status === "paying") {
+          try {
+            await ctx.answerCallbackQuery({
+              text: "⚡ İşleminiz blokzincirinde tespit edildi! Ağ onayı bekleniyor, lütfen biraz bekleyiniz.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          return;
+        }
+
         try {
           await ctx.answerCallbackQuery({
-            text: "⏳ Fatura henüz ödenmedi veya ağ onayı bekleniyor. Lütfen Telegram'da ödemeyi tamamlayınız.",
+            text: "⏳ Ödeme henüz blokzincirinde tespit edilmedi. Transfer yaptıktan 1-2 dakika sonra tekrar kontrol ediniz.",
             show_alert: true,
           });
         } catch (e) {}

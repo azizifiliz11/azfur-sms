@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   cryptoSettings: {
     usdtTrc20Address: "",
     trxAddress: "",
+    oxapayApiKey: "",
     cryptoBotToken: "",
     autoVerifyEnabled: true,
   },
@@ -499,6 +500,27 @@ export const db = {
       await saveDb(data);
     }
     return user;
+  },
+
+  async updateUser(
+    telegramId: number | string,
+    updates: Partial<User>
+  ): Promise<User | null> {
+    const data = loadDb();
+    const cleanId = String(telegramId).trim();
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+    if (!foundKey || !data.users[foundKey]) return null;
+    data.users[foundKey] = { ...data.users[foundKey], ...updates };
+    await saveDb(data);
+    return data.users[foundKey];
+  },
+
+  async createDeposit(deposit: DepositRequest): Promise<void> {
+    return this.addDeposit(deposit);
   },
 
   async deleteUser(telegramId: number | string): Promise<boolean> {

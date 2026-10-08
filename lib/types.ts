@@ -76,8 +76,9 @@ export interface BankInfo {
 export interface CryptoSettings {
   usdtTrc20Address?: string; // USDT (TRC-20) cüzdan adresi
   trxAddress?: string; // TRX cüzdan adresi
-  cryptoBotToken?: string; // Telegram @CryptoBot API token
-  autoVerifyEnabled?: boolean; // TronScan ile anında otomatik doğrulama
+  oxapayApiKey?: string; // OxaPay Merchant API Key
+  cryptoBotToken?: string; // Geriye dönük uyumluluk
+  autoVerifyEnabled?: boolean; // TronScan / OxaPay ile anında otomatik doğrulama
 }
 
 export interface CustomPriceRule {
@@ -118,7 +119,7 @@ export interface DepositRequest {
   telegramId: number;
   username: string;
   amount: number;
-  method: 'CryptoBot' | 'Havale/EFT' | 'USDT_TRC20' | 'TRX';
+  method: 'Crypto' | 'USDT_TRC20' | 'TRX' | 'CryptoBot' | 'Havale/EFT';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   referenceCode: string;
   txid?: string;

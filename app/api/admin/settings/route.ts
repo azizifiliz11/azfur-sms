@@ -81,29 +81,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Özel işlem: @CryptoBot API Token Test Et
-    if (body.action === "test_cryptobot_token") {
-      const { testCryptoBotToken } = await import("@/lib/cryptobot");
-      const testToken = (body.token || db.getSettings().cryptoSettings?.cryptoBotToken || "").trim();
-      const testRes = await testCryptoBotToken(testToken);
-      if (testRes.success && testRes.app) {
-        const netLabel = testRes.isTestnet ? "Testnet (@CryptoTestnetBot)" : "Mainnet (@CryptoBot)";
-        let balStr = "";
-        if (testRes.balances && testRes.balances.length > 0) {
-          balStr = " • Bakiye: " + testRes.balances.map((b) => `${b.available} ${b.currency_code}`).join(", ");
-        }
-
+    // Özel işlem: OxaPay API Anahtarı Test Et
+    if (body.action === "test_oxapay_key") {
+      const { testOxapayApiKey } = await import("@/lib/oxapay");
+      const testKey = (body.key || db.getSettings().cryptoSettings?.oxapayApiKey || "").trim();
+      const testRes = await testOxapayApiKey(testKey);
+      if (testRes.success) {
         return NextResponse.json({
           success: true,
-          message: `Bağlantı Başarılı! [${netLabel}] Uygulama: ${testRes.app.name} (@${testRes.app.payment_processing_bot_username})${balStr}`,
-          app: testRes.app,
-          isTestnet: testRes.isTestnet,
-          balances: testRes.balances,
+          message: testRes.message || "OxaPay Merchant API bağlantısı başarılı!",
         });
       }
       return NextResponse.json({
         success: false,
-        error: testRes.error || "CryptoBot API Token doğrulanamadı.",
+        error: testRes.error || "OxaPay API Anahtarı doğrulanamadı.",
       });
     }
 

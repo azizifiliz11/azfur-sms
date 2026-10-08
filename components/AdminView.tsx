@@ -78,14 +78,13 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Crypto wallet states
   const [usdtTrc20Address, setUsdtTrc20Address] = useState<string>("");
   const [trxAddress, setTrxAddress] = useState<string>("");
-  const [cryptoBotToken, setCryptoBotToken] = useState<string>("");
+  const [oxapayApiKey, setOxapayApiKey] = useState<string>("");
   const [autoVerifyEnabled, setAutoVerifyEnabled] = useState<boolean>(true);
   const [savingCrypto, setSavingCrypto] = useState<boolean>(false);
-  const [testingCryptoBot, setTestingCryptoBot] = useState<boolean>(false);
-  const [cryptoBotTestResult, setCryptoBotTestResult] = useState<{
+  const [testingOxapay, setTestingOxapay] = useState<boolean>(false);
+  const [oxapayTestResult, setOxapayTestResult] = useState<{
     success: boolean;
     message: string;
-    app?: any;
   } | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState<boolean>(false);
 
@@ -185,7 +184,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         if (st.settings?.cryptoSettings) {
           setUsdtTrc20Address(st.settings.cryptoSettings.usdtTrc20Address || "");
           setTrxAddress(st.settings.cryptoSettings.trxAddress || "");
-          setCryptoBotToken(st.settings.cryptoSettings.cryptoBotToken || "");
+          setOxapayApiKey(st.settings.cryptoSettings.oxapayApiKey || "");
           setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
         if (st.settings?.supportTelegramUsernames && Array.isArray(st.settings.supportTelegramUsernames)) {
@@ -502,7 +501,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           cryptoSettings: {
             usdtTrc20Address,
             trxAddress,
-            cryptoBotToken,
+            oxapayApiKey,
             autoVerifyEnabled,
           },
         }),
@@ -525,51 +524,50 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     }
   };
 
-  // CryptoBot API Token Test Et
-  const handleTestCryptoBot = async () => {
-    if (!cryptoBotToken.trim()) {
-      alert("Lütfen önce bir @CryptoBot API Token giriniz.");
+  // OxaPay API Anahtarını Test Et
+  const handleTestOxapayKey = async () => {
+    if (!oxapayApiKey.trim()) {
+      alert("Lütfen önce bir OxaPay Merchant API Key giriniz.");
       return;
     }
-    setTestingCryptoBot(true);
-    setCryptoBotTestResult(null);
+    setTestingOxapay(true);
+    setOxapayTestResult(null);
     haptic.impact("medium");
     try {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "test_cryptobot_token", token: cryptoBotToken.trim() }),
+        body: JSON.stringify({ action: "test_oxapay_key", key: oxapayApiKey.trim() }),
       });
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setCryptoBotTestResult({
+        setOxapayTestResult({
           success: true,
-          message: data.message || "Bağlantı Başarılı!",
-          app: data.app,
+          message: data.message || "OxaPay Bağlantısı Başarılı!",
         });
       } else {
         haptic.error();
-        setCryptoBotTestResult({
+        setOxapayTestResult({
           success: false,
-          message: data.error || "Geçersiz token veya bağlantı hatası.",
+          message: data.error || "Geçersiz anahtar veya bağlantı hatası.",
         });
       }
     } catch {
       haptic.error();
-      setCryptoBotTestResult({
+      setOxapayTestResult({
         success: false,
-        message: "CryptoBot sunucusuna ulaşılamadı.",
+        message: "OxaPay sunucusuna ulaşılamadı.",
       });
     } finally {
-      setTestingCryptoBot(false);
+      setTestingOxapay(false);
     }
   };
 
   // Webhook URL Kopyala
   const handleCopyWebhookUrl = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://azfur-sms.vercel.app";
-    const webhookUrl = `${origin}/api/user/deposit/cryptobot-webhook`;
+    const webhookUrl = `${origin}/api/user/deposit/crypto-webhook`;
     navigator.clipboard.writeText(webhookUrl);
     setCopiedWebhook(true);
     haptic.success();
@@ -1827,42 +1825,42 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 />
               </div>
 
-              {/* CryptoBot API Token & Test Section */}
+              {/* Otomatik Kripto (OxaPay White-Label) API & Test Bölümü */}
               <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/25 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-white">Telegram @CryptoBot (Crypto Pay API)</span>
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white">Otomatik Kripto Ödeme Sistemi (OxaPay API)</span>
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                    Otomatik Onay
+                    Bot İçi QR + Otomatik Onay
                   </span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-300">Crypto Pay API Token</label>
+                  <label className="text-[11px] font-semibold text-zinc-300">OxaPay Merchant API Key</label>
                   <div className="flex gap-2">
                     <input
                       type="password"
-                      value={cryptoBotToken}
-                      onChange={(e) => setCryptoBotToken(e.target.value)}
-                      placeholder="Örn: 12345:AA..."
+                      value={oxapayApiKey}
+                      onChange={(e) => setOxapayApiKey(e.target.value)}
+                      placeholder="Örn: 2B9X-XXXX-XXXX-XXXX"
                       className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
                     />
                     <button
                       type="button"
-                      onClick={handleTestCryptoBot}
-                      disabled={testingCryptoBot || !cryptoBotToken.trim()}
+                      onClick={handleTestOxapayKey}
+                      disabled={testingOxapay || !oxapayApiKey.trim()}
                       className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 shrink-0 transition-all disabled:opacity-50"
                     >
-                      {testingCryptoBot ? (
+                      {testingOxapay ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Test Ediliyor...</span>
                         </>
                       ) : (
                         <>
-                          <Bot className="w-3.5 h-3.5" />
+                          <CheckCircle className="w-3.5 h-3.5" />
                           <span>Bağlantıyı Test Et</span>
                         </>
                       )}
@@ -1871,29 +1869,29 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 </div>
 
                 {/* Test Sonucu Bildirimi */}
-                {cryptoBotTestResult && (
+                {oxapayTestResult && (
                   <div
                     className={`p-2.5 rounded-xl text-xs font-medium border ${
-                      cryptoBotTestResult.success
+                      oxapayTestResult.success
                         ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
                         : "bg-rose-950/60 border-rose-500/40 text-rose-300"
                     }`}
                   >
-                    {cryptoBotTestResult.message}
+                    {oxapayTestResult.message}
                   </div>
                 )}
 
                 {/* Webhook URL Kopyalama Kutusu */}
                 <div className="space-y-1 pt-1 border-t border-white/5">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                    <span>CryptoBot Webhook URL:</span>
+                    <span>OxaPay Webhook Callback URL:</span>
                     <span className="text-[10px] text-zinc-500">Otomatik Anında Bakiye Yükleme İçin</span>
                   </div>
                   <div className="flex items-center justify-between bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[11px]">
                     <span className="truncate text-zinc-300 mr-2 select-all">
                       {typeof window !== "undefined"
-                        ? `${window.location.origin}/api/user/deposit/cryptobot-webhook`
-                        : "https://azfur-sms.vercel.app/api/user/deposit/cryptobot-webhook"}
+                        ? `${window.location.origin}/api/user/deposit/crypto-webhook`
+                        : "https://azfur-sms.vercel.app/api/user/deposit/crypto-webhook"}
                     </span>
                     <button
                       type="button"
@@ -1914,7 +1912,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                     </button>
                   </div>
                   <p className="text-[10px] text-zinc-500 pt-0.5">
-                    💡 <b>Nasıl Yapılır:</b> Telegram&apos;da <code>@CryptoBot</code> &gt; <code>/pay</code> &gt; <b>Crypto Pay</b> &gt; <b>Create App</b> ile aldığınız tokeni buraya girin. Ardından <b>Webhooks</b> kısmına yukarıdaki adresi yapıştırın.
+                    💡 <b>Nasıl Çalışır:</b> OxaPay panelinizden (Merchant Services) aldığınız API Key&apos;i buraya girin. Kullanıcılar bot veya web panelden ayrılmadan doğrudan bot mesajında QR kod ve cüzdan adresi alır; ödeme blokzincirinde onaylandığında bakiye anında otomatik hesaba geçer.
                   </p>
                 </div>
               </div>

@@ -21,7 +21,7 @@ export async function GET() {
         cryptoSettings: settings.cryptoSettings || {
           usdtTrc20Address: "",
           trxAddress: "",
-          cryptoBotToken: "",
+          oxapayApiKey: "",
           autoVerifyEnabled: true,
         },
         exchangeRate: settings.exchangeRateToTry || 49.2,

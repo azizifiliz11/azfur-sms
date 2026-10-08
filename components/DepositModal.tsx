@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Check, Copy, Coins, ShieldCheck, Loader2, Sparkles, Bot, ExternalLink, RefreshCw } from "lucide-react";
+import { X, Check, Copy, Coins, ShieldCheck, Loader2, RefreshCw, Zap } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { CryptoSettings } from "@/lib/types";
 
@@ -13,20 +13,29 @@ interface DepositModalProps {
 }
 
 export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: DepositModalProps) {
-  const [cryptoSubMethod, setCryptoSubMethod] = useState<"CryptoBot" | "DirectWallet">("CryptoBot");
+  const [cryptoSubMethod, setCryptoSubMethod] = useState<"AutoCrypto" | "DirectWallet">("AutoCrypto");
   const [cryptoType, setCryptoType] = useState<"USDT_TRC20" | "TRX">("USDT_TRC20");
   const [amount, setAmount] = useState<number>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [isAddressCopied, setIsAddressCopied] = useState<boolean>(false);
   const [verifyingCrypto, setVerifyingCrypto] = useState<boolean>(false);
-  const [creatingCryptoBot, setCreatingCryptoBot] = useState<boolean>(false);
-  const [activeInvoice, setActiveInvoice] = useState<{
-    invoiceId: number;
-    payUrl: string;
+  const [creatingPayment, setCreatingPayment] = useState<boolean>(false);
+
+  // Otomatik Kripto Ödeme Detayları
+  const [activePayment, setActivePayment] = useState<{
+    trackId: number | string;
+    address: string;
+    payAmount: number;
+    payCurrency: string;
+    network: string;
+    qrCodeUrl: string;
     amountTry: number;
-    amountUsd: number;
+    amountUsd?: number;
+    expiredAt?: number;
   } | null>(null);
-  const [verifyingInvoice, setVerifyingInvoice] = useState<boolean>(false);
+
+  const [verifyingPayment, setVerifyingPayment] = useState<boolean>(false);
   const [txidInput, setTxidInput] = useState<string>("");
   const [message, setMessage] = useState<string | null>(null);
   const [isErrorMsg, setIsErrorMsg] = useState<boolean>(false);
@@ -55,6 +64,39 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
     }
   }, [isOpen]);
 
+  // Otomatik ödeme açıkken periyodik durum kontrolü (her 5 saniyede bir)
+  useEffect(() => {
+    if (!isOpen || !activePayment) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/user/deposit/crypto-verify-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trackId: activePayment.trackId,
+            telegramId,
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.isPaid) {
+          haptic.success();
+          setIsErrorMsg(false);
+          setMessage(`🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz otomatik olarak onaylandı ve hesabınıza yüklendi!`);
+          onSuccess(activePayment.amountTry);
+          clearInterval(interval);
+          setTimeout(() => {
+            onClose();
+          }, 2200);
+        }
+      } catch {
+        // Hata durumunda sessiz kal
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, activePayment, telegramId, onSuccess, onClose]);
+
   if (!isOpen) return null;
 
   const quickAmounts = [50, 100, 250, 500];
@@ -65,6 +107,14 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
     setIsCopied(true);
     haptic.success();
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleCopyAddress = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setIsAddressCopied(true);
+    haptic.success();
+    setTimeout(() => setIsAddressCopied(false), 2000);
   };
 
   const handleSelectAmount = (val: number) => {
@@ -84,8 +134,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
       ? cryptoSettings.usdtTrc20Address || "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t"
       : cryptoSettings.trxAddress || cryptoSettings.usdtTrc20Address || "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
-  // 1. Telegram @CryptoBot Otomatik Fatura Oluşturma
-  const handlePayWithCryptoBot = async () => {
+  // 1. Kripto ile Öde (Otomatik) - Adres ve QR Kod Oluşturma
+  const handleCreateAutoCrypto = async () => {
     if (currentFinalAmount < 10) {
       haptic.error();
       setIsErrorMsg(true);
@@ -93,95 +143,96 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
       return;
     }
 
-    setCreatingCryptoBot(true);
+    setCreatingPayment(true);
     setMessage(null);
     setIsErrorMsg(false);
     haptic.impact("heavy");
 
     try {
-      const res = await fetch("/api/user/deposit/cryptobot-create", {
+      const res = await fetch("/api/user/deposit/crypto-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telegramId,
           amount: currentFinalAmount,
+          payCurrency: "USDT",
+          network: "TRC20",
         }),
       });
 
       const data = await res.json();
-      if (data.success && (data.miniAppUrl || data.payUrl)) {
+      if (data.success && data.address && data.trackId) {
         haptic.success();
-        const estUsd = Number((currentFinalAmount / (exchangeRate || 49.2)).toFixed(2));
-        const invoiceLink = data.miniAppUrl || data.payUrl;
-
-        setActiveInvoice({
-          invoiceId: data.invoiceId,
-          payUrl: invoiceLink,
-          amountTry: currentFinalAmount,
-          amountUsd: estUsd,
+        setActivePayment({
+          trackId: data.trackId,
+          address: data.address,
+          payAmount: data.payAmount,
+          payCurrency: data.payCurrency || "USDT",
+          network: data.network || "TRC20",
+          qrCodeUrl: data.qrCodeUrl,
+          amountTry: data.amountTry,
+          amountUsd: data.amountUsd,
+          expiredAt: data.expiredAt,
         });
 
-        // Telegram WebApp içerisinde doğrudan Telegram linkini aç
-        try {
-          if (typeof window !== "undefined" && (window as any).Telegram?.WebApp?.openTelegramLink) {
-            (window as any).Telegram.WebApp.openTelegramLink(invoiceLink);
-          } else {
-            window.open(invoiceLink, "_blank");
-          }
-        } catch {
-          window.open(invoiceLink, "_blank");
-        }
-
-        setMessage("🚀 Fatura oluşturuldu! Açılan pencerede veya @CryptoBot botunda ödemenizi tamamlayınız. Ödeme onaylandığında bakiyeniz anında yüklenecektir.");
+        setMessage("🚀 Ödeme adresi hazırlandı! Aşağıdaki QR kodu okutarak veya cüzdan adresine transfer yaparak ödemenizi tamamlayabilirsiniz.");
       } else {
         haptic.error();
         setIsErrorMsg(true);
-        setMessage(data.error || "CryptoBot faturası oluşturulamadı.");
+        setMessage(data.error || "Ödeme adresi oluşturulamadı.");
       }
     } catch {
       haptic.error();
       setIsErrorMsg(true);
       setMessage("Sunucuya bağlanırken bir sorun oluştu.");
     } finally {
-      setCreatingCryptoBot(false);
+      setCreatingPayment(false);
     }
   };
 
-  // CryptoBot Faturasını Kontrol Et
-  const handleCheckInvoiceStatus = async () => {
-    if (!activeInvoice) return;
-    setVerifyingInvoice(true);
+  // Kripto Ödeme Durumunu Manuel Kontrol Et
+  const handleCheckAutoPaymentStatus = async () => {
+    if (!activePayment) return;
+    setVerifyingPayment(true);
     haptic.impact("medium");
 
     try {
-      const res = await fetch(`/api/user/deposit/cryptobot-verify?invoiceId=${activeInvoice.invoiceId}`);
+      const res = await fetch("/api/user/deposit/crypto-verify-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId: activePayment.trackId,
+          telegramId,
+        }),
+      });
       const data = await res.json();
 
-      if (data.success && data.status === "paid") {
+      if (data.success && data.isPaid) {
         haptic.success();
         setIsErrorMsg(false);
-        setMessage(`🎉 Tebrikler! ₺${activeInvoice.amountTry.toFixed(2)} bakiyeniz @CryptoBot ile başarıyla onaylandı ve hesabınıza yüklendi!`);
-        onSuccess(activeInvoice.amountTry);
+        setMessage(`🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz başarıyla onaylandı ve hesabınıza yüklendi!`);
+        onSuccess(activePayment.amountTry);
         setTimeout(() => {
           onClose();
         }, 2200);
-      } else if (data.status === "active") {
+      } else if (data.status === "paying") {
         haptic.selection();
         setIsErrorMsg(false);
-        setMessage("⏳ Fatura henüz ödenmedi veya ağ onayı bekleniyor. Lütfen Telegram'da ödemeyi tamamladıktan sonra tekrar kontrol edin.");
+        setMessage("⚡ İşleminiz blokzincirinde tespit edildi! Ağ onayı bekleniyor, lütfen birkaç saniye bekleyiniz.");
       } else {
-        setIsErrorMsg(true);
-        setMessage(`Fatura durumu: ${data.status || "Beklemede"}`);
+        haptic.selection();
+        setIsErrorMsg(false);
+        setMessage("⏳ Transfer henüz blokzincirinde tespit edilmedi. Gönderim yaptıktan sonra 1-2 dakika içinde tekrar deneyiniz.");
       }
     } catch {
       setIsErrorMsg(true);
       setMessage("Durum sorgulanamadı, lütfen az sonra tekrar deneyiniz.");
     } finally {
-      setVerifyingInvoice(false);
+      setVerifyingPayment(false);
     }
   };
 
-  // 2. Otomatik TronScan ile Kripto Doğrulama & Anında Bakiye Yükleme
+  // 2. Manuel TronScan TXID Doğrulama
   const handleVerifyCrypto = async () => {
     if (!txidInput.trim()) {
       haptic.error();
@@ -246,7 +297,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                   Otomatik Onay
                 </span>
               </h3>
-              <p className="text-xs text-zinc-400">@CryptoBot ve TRON ile anında bakiye yükleme</p>
+              <p className="text-xs text-zinc-400">Anında QR Kod ve cüzdan adresi ile bakiye yükleyin</p>
             </div>
           </div>
           <button
@@ -265,7 +316,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-zinc-400 font-medium">Yüklenecek Tutar (₺)</label>
             <span className="text-[11px] font-mono text-emerald-400 font-semibold">
-              ≈ {cryptoType === "USDT_TRC20" ? `${calculatedUsdt} USDT` : `${calculatedTrx} TRX`}
+              ≈ {calculatedUsdt} USDT
             </span>
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -295,24 +346,23 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           </div>
         </div>
 
-        {/* OTOMATİK KRİPTO (CRYPTOBOT & TRONSCAN) */}
+        {/* KRİPTO YÖNTEMLERİ SEÇİMİ */}
         <div className="mt-4 space-y-3">
-          {/* Kripto Alt Seçenek Tabı: CryptoBot veya Manuel TronScan */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950/80 rounded-2xl border border-white/5">
             <button
               type="button"
               onClick={() => {
                 haptic.selection();
-                setCryptoSubMethod("CryptoBot");
+                setCryptoSubMethod("AutoCrypto");
               }}
               className={`py-2.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                cryptoSubMethod === "CryptoBot"
+                cryptoSubMethod === "AutoCrypto"
                   ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              <Bot className="w-4 h-4" />
-              <span>@CryptoBot (Otomatik)</span>
+              <Zap className="w-4 h-4" />
+              <span>Kripto ile Öde (Otomatik)</span>
             </button>
 
             <button
@@ -332,18 +382,18 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
             </button>
           </div>
 
-          {/* SEÇENEK A: @CRYPTOBOT OTOMATİK ÖDEME */}
-          {cryptoSubMethod === "CryptoBot" && (
+          {/* SEÇENEK A: KRİPTO İLE ÖDE (OTOMATİK) */}
+          {cryptoSubMethod === "AutoCrypto" && (
             <div className="space-y-3">
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#121824] to-[#0c0f18] border border-emerald-500/30 space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
-                      <Bot className="w-4 h-4" />
+                      <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-white block">Telegram @CryptoBot ile 1-Tıkla Öde</span>
-                      <span className="text-[10px] text-zinc-400 block">Komisyonsuz, anında bot içi onay</span>
+                      <span className="text-xs font-bold text-white block">Kripto ile Öde (Otomatik)</span>
+                      <span className="text-[10px] text-zinc-400 block">QR kod ve cüzdan adresi ile anında otomatik onay</span>
                     </div>
                   </div>
                   <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
@@ -364,7 +414,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 {/* Desteklenen coin rozetleri */}
                 <div className="flex flex-wrap items-center gap-1 text-[10px]">
                   <span className="text-zinc-400 mr-1">Kabul Edilen:</span>
-                  {["USDT", "TON", "TRX", "BTC", "ETH", "LTC"].map((coin) => (
+                  {["USDT (TRC-20)", "TRX", "TON", "BTC", "ETH", "LTC"].map((coin) => (
                     <span
                       key={coin}
                       className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-white/5 font-mono font-medium"
@@ -374,67 +424,101 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                   ))}
                 </div>
 
-                {!activeInvoice ? (
+                {!activePayment ? (
                   <button
                     type="button"
-                    onClick={handlePayWithCryptoBot}
-                    disabled={creatingCryptoBot || currentFinalAmount <= 0}
+                    onClick={handleCreateAutoCrypto}
+                    disabled={creatingPayment || currentFinalAmount <= 0}
                     className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50"
                   >
-                    {creatingCryptoBot ? (
+                    {creatingPayment ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Fatura Oluşturuluyor...</span>
+                        <span>Adres ve QR Kod Oluşturuluyor...</span>
                       </>
                     ) : (
                       <>
-                        <Bot className="w-4 h-4" />
-                        <span>🚀 @CryptoBot ile Hemen Öde (1-Tıkla)</span>
+                        <Zap className="w-4 h-4" />
+                        <span>Kripto ile Öde (Otomatik)</span>
                       </>
                     )}
                   </button>
                 ) : (
-                  <div className="space-y-2 pt-1 border-t border-white/[0.08]">
-                    <div className="flex items-center justify-between text-xs text-zinc-300 bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-500/30">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="font-semibold text-emerald-300">Fatura Aktif (#{activeInvoice.invoiceId})</span>
+                  <div className="space-y-3 pt-2 border-t border-white/[0.08]">
+                    {/* QR Kod Görseli */}
+                    <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+                      <div className="p-2 bg-white rounded-xl shadow-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={activePayment.qrCodeUrl}
+                          alt="Ödeme QR Kodu"
+                          className="w-44 h-44 object-contain"
+                        />
                       </div>
-                      <span className="font-mono text-white font-bold">₺{activeInvoice.amountTry.toFixed(2)}</span>
+                      <div className="text-center space-y-0.5">
+                        <span className="text-[11px] text-zinc-400 block">Yatırılacak Tutar:</span>
+                        <span className="font-mono font-bold text-base text-emerald-400">
+                          {activePayment.payAmount} {activePayment.payCurrency}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 block font-mono">
+                          Ağ: {activePayment.network}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <a
-                        href={activeInvoice.payUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all"
+                    {/* Cüzdan Adresi Kopyalama Alanı */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-zinc-400 font-medium">Cüzdan Adresi (Dokun-Kopyala):</label>
+                      <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-white/10 text-xs font-mono">
+                        <span className="truncate text-emerald-300 mr-2 select-all font-semibold">
+                          {activePayment.address}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyAddress(activePayment.address)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[11px] font-sans font-bold transition-all active:scale-95"
+                        >
+                          {isAddressCopied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Kopyalandı</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Kopyala</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-zinc-400 leading-relaxed bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-500/20">
+                      ℹ️ Herhangi bir borsadan (Binance, Paribu, vb.) veya cüzdandan bu adrese gönderim yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik yüklenecektir</b>.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCheckAutoPaymentStatus}
+                        disabled={verifyingPayment}
+                        className="col-span-2 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all disabled:opacity-50 shadow-md shadow-emerald-500/20"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Faturayı Aç ↗</span>
-                      </a>
+                        <RefreshCw className={`w-3.5 h-3.5 ${verifyingPayment ? "animate-spin" : ""}`} />
+                        <span>{verifyingPayment ? "Doğrulanıyor..." : "Ödemeyi Kontrol Et"}</span>
+                      </button>
 
                       <button
                         type="button"
-                        onClick={handleCheckInvoiceStatus}
-                        disabled={verifyingInvoice}
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all disabled:opacity-50"
+                        onClick={() => {
+                          setActivePayment(null);
+                          setMessage(null);
+                        }}
+                        className="col-span-2 text-center text-[10px] text-zinc-500 hover:text-zinc-300 py-1"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${verifyingInvoice ? "animate-spin" : ""}`} />
-                        <span>{verifyingInvoice ? "Kontrol..." : "Ödemeyi Doğrula"}</span>
+                        Farklı Tutarla Yeni Ödeme Başlat
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveInvoice(null);
-                        setMessage(null);
-                      }}
-                      className="w-full text-center text-[10px] text-zinc-500 hover:text-zinc-300 pt-1"
-                    >
-                      Farklı Tutarla Yeni Fatura Oluştur
-                    </button>
                   </div>
                 )}
               </div>
@@ -444,60 +528,56 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           {/* SEÇENEK B: MANUEL TRONSCAN TXID DOĞRULAMA */}
           {cryptoSubMethod === "DirectWallet" && (
             <div className="space-y-3">
-              {/* Kripto Birimi Seçimi */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    haptic.selection();
-                    setCryptoType("USDT_TRC20");
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  onClick={() => setCryptoType("USDT_TRC20")}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     cryptoType === "USDT_TRC20"
-                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
-                      : "bg-zinc-900/80 border-white/5 text-zinc-400"
+                      ? "bg-emerald-500/15 border-emerald-500 text-emerald-300"
+                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   <span>USDT (TRC-20)</span>
+                  <span className="text-[10px] font-mono font-normal text-zinc-400">
+                    ≈ {calculatedUsdt} USDT
+                  </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    haptic.selection();
-                    setCryptoType("TRX");
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  onClick={() => setCryptoType("TRX")}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     cryptoType === "TRX"
-                      ? "bg-rose-500/20 border-rose-500 text-rose-300"
-                      : "bg-zinc-900/80 border-white/5 text-zinc-400"
+                      ? "bg-emerald-500/15 border-emerald-500 text-emerald-300"
+                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-rose-400" />
                   <span>TRX (Tron)</span>
+                  <span className="text-[10px] font-mono font-normal text-zinc-400">
+                    ≈ {calculatedTrx} TRX
+                  </span>
                 </button>
               </div>
 
-              {/* Yatırma Cüzdanı Kartı */}
-              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 text-xs text-zinc-300 space-y-2.5">
-                <div className="flex items-center justify-between text-zinc-400">
-                  <span>Gönderilecek Adres ({cryptoType === "USDT_TRC20" ? "TRC-20" : "Tron"}):</span>
-                  <span className="text-[10px] text-amber-400 font-bold">Yalnızca Tron Ağı</span>
+              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <span>Gönderilecek Adres:</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Tron (TRC-20) Ağı</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-black/50 p-2.5 rounded-xl font-mono text-[11px] border border-white/5">
-                  <span className="truncate mr-2 text-emerald-300 font-bold select-all">
+                <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-white/10 font-mono text-xs">
+                  <span className="truncate text-white mr-2 select-all font-semibold">
                     {activeCryptoAddress}
                   </span>
                   <button
                     type="button"
                     onClick={() => handleCopy(activeCryptoAddress)}
-                    className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[10px] font-sans font-bold active:scale-95 transition-transform"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[11px] font-sans font-bold transition-all active:scale-95"
                   >
                     {isCopied ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5" />
                         <span>Kopyalandı</span>
                       </>
                     ) : (
@@ -509,68 +589,54 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] bg-zinc-950/60 p-2 rounded-lg border border-white/5">
-                  <span className="text-zinc-400">Gönderilecek Tutar:</span>
-                  <span className="font-mono font-bold text-white">
-                    {cryptoType === "USDT_TRC20" ? `${calculatedUsdt} USDT` : `${calculatedTrx} TRX`} (₺{currentFinalAmount.toFixed(2)})
-                  </span>
-                </div>
-              </div>
-
-              {/* Otomatik Doğrulama Kutusu */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#121622] to-[#0d0f17] border border-emerald-500/30 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
-                  <Sparkles className="w-4 h-4" />
-                  <span>Otomatik TronScan Doğrulama</span>
-                </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  Transferi tamamladıktan sonra aldığınız <b>TXID (İşlem Kodu / Hash)</b> kodunu buraya yapıştırıp butona dokunun:
-                </p>
-
-                <div className="space-y-1">
+                <div className="space-y-1 pt-1">
+                  <label className="text-[11px] text-zinc-400">
+                    İşlem Kodu (TXID / Transaction Hash):
+                  </label>
                   <input
                     type="text"
-                    placeholder="İşlem Kodu (TXID) yapıştırın... (Örn: e2a94f...)"
+                    placeholder="Örn: 5a9e3bc..."
                     value={txidInput}
                     onChange={(e) => setTxidInput(e.target.value)}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/60"
+                    className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleVerifyCrypto}
-                  disabled={verifyingCrypto || !txidInput.trim()}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {verifyingCrypto ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>TronScan Ağında Doğrulanıyor...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>⚡ Ödemeyi Otomatik Doğrula & Bakiyeyi Yükle</span>
-                    </>
-                  )}
-                </button>
               </div>
+
+              <button
+                type="button"
+                onClick={handleVerifyCrypto}
+                disabled={verifyingCrypto || !txidInput.trim()}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50"
+              >
+                {verifyingCrypto ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>TronScan ile Doğrulanıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>TronScan ile Otomatik Doğrula</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Bildirim / Mesaj Kutusu */}
+          {message && (
+            <div
+              className={`p-3 rounded-xl text-xs font-medium border leading-relaxed ${
+                isErrorMsg
+                  ? "bg-rose-950/60 border-rose-500/40 text-rose-300"
+                  : "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+              }`}
+            >
+              {message}
             </div>
           )}
         </div>
-
-        {/* Bildirim / Mesaj Kutusu */}
-        {message && (
-          <div
-            className={`mt-3 p-3 rounded-xl border text-xs font-medium leading-relaxed ${
-              isErrorMsg
-                ? "bg-rose-950/60 border-rose-500/40 text-rose-300"
-                : "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-            }`}
-          >
-            {message}
-          </div>
-        )}
       </div>
     </div>
   );

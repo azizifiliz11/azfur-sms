@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const originalCost = priceStock?.cost || 0.15;
 
     // 3. Kâr marjlı satış fiyatını hesapla
-    const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode);
+    const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, Number(countryId));
 
     // 4. Kullanıcı bakiyesi yeterli mi?
     if (user.balance < finalPriceTry) {

@@ -10,13 +10,50 @@ export const pricingEngine = {
   calculatePrice(
     originalCostUsd: number,
     serviceCode: string,
-    customRate?: number
-  ): { finalPriceTry: number; costTry: number; profitTry: number; usedRate: number } {
+    customRate?: number,
+    countryId?: number
+  ): { finalPriceTry: number; costTry: number; profitTry: number; usedRate: number; isManualPrice?: boolean } {
     const settings = db.getSettings();
     const rate = customRate || settings.exchangeRateToTry || settings.lastTcmbRate || 49.20;
     const costTry = originalCostUsd * rate;
 
-    // Özel servis kârı kontrol et
+    // 1. Ülke + Servis Kombinasyonuna Özel Manuel Kural Kontrolü
+    if (countryId !== undefined) {
+      const ruleKey = `${countryId}_${serviceCode}`;
+      const rule = settings.customPriceRules?.[ruleKey];
+      if (rule) {
+        // Sabit TL Satış Fiyatı varsa doğrudan kullan
+        if (rule.fixedPriceTry !== undefined && !isNaN(Number(rule.fixedPriceTry)) && Number(rule.fixedPriceTry) > 0) {
+          const finalPriceTry = Number(Number(rule.fixedPriceTry).toFixed(2));
+          const profitTry = Number((finalPriceTry - costTry).toFixed(2));
+          return {
+            finalPriceTry,
+            costTry: Number(costTry.toFixed(2)),
+            profitTry,
+            usedRate: rate,
+            isManualPrice: true,
+          };
+        }
+
+        // Özel kâr yüzdesi veya sabit ek ücret varsa
+        if (rule.marginPercent !== undefined || rule.fixedFee !== undefined) {
+          const marginPercent = rule.marginPercent !== undefined ? rule.marginPercent : settings.globalMarginPercent;
+          const fixedFee = rule.fixedFee !== undefined ? rule.fixedFee : settings.globalFixedFee;
+          const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
+          const finalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
+          const profitTry = Number((finalPriceTry - costTry).toFixed(2));
+          return {
+            finalPriceTry,
+            costTry: Number(costTry.toFixed(2)),
+            profitTry,
+            usedRate: rate,
+            isManualPrice: true,
+          };
+        }
+      }
+    }
+
+    // 2. Özel Servis Kârı Kontrolü
     const custom = settings.serviceCustomMargins?.[serviceCode];
     const marginPercent = custom?.marginPercent !== undefined ? custom.marginPercent : settings.globalMarginPercent;
     const fixedFee = custom?.fixedFee !== undefined ? custom.fixedFee : settings.globalFixedFee;
@@ -31,6 +68,7 @@ export const pricingEngine = {
       costTry: Number(costTry.toFixed(2)),
       profitTry,
       usedRate: rate,
+      isManualPrice: false,
     };
   },
 
@@ -88,7 +126,12 @@ export const pricingEngine = {
       const cost = priceInfo?.cost || 0.15;
       const stock = priceInfo?.count || (priceInfo?.physicalCount ? priceInfo.physicalCount * 10 : 0);
 
-      const { finalPriceTry } = this.calculatePrice(cost, service.code, effectiveRate);
+      const { finalPriceTry } = this.calculatePrice(
+        cost,
+        service.code,
+        effectiveRate,
+        countryObj ? countryObj.id : countryIdToUse
+      );
 
       catalog.push({
         serviceCode: service.code,

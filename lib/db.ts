@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   hiddenServices: [],
   hiddenCountries: [],
   serviceCustomMargins: {},
+  customPriceRules: {},
   bankInfo: {
     bankName: "Ziraat Bankası",
     accountHolder: "AzFur SMS",

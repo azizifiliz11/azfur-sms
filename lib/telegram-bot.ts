@@ -636,11 +636,11 @@ export function getTelegramBot(): Bot | null {
             const c2 = POPULAR_COUNTRIES[i + 1];
 
             const cost1 = prices[String(c1.id)]?.[serviceCode]?.cost || 0.15;
-            const p1 = pricingEngine.calculatePrice(cost1, serviceCode).finalPriceTry;
+            const p1 = pricingEngine.calculatePrice(cost1, serviceCode, undefined, c1.id).finalPriceTry;
 
             if (c2) {
               const cost2 = prices[String(c2.id)]?.[serviceCode]?.cost || 0.15;
-              const p2 = pricingEngine.calculatePrice(cost2, serviceCode).finalPriceTry;
+              const p2 = pricingEngine.calculatePrice(cost2, serviceCode, undefined, c2.id).finalPriceTry;
               kb.text(`${c1.flag} ${c1.name} • ${p1.toFixed(1)}₺`, `buy_confirm:${serviceCode}:${c1.id}`).text(
                 `${c2.flag} ${c2.name} • ${p2.toFixed(1)}₺`,
                 `buy_confirm:${serviceCode}:${c2.id}`
@@ -683,7 +683,7 @@ export function getTelegramBot(): Bot | null {
 
         const prices = await heroSms.getPrices(countryId);
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
-        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode);
+        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
 
         const hasEnoughBalance = user.balance >= finalPriceTry;
 
@@ -741,7 +741,7 @@ export function getTelegramBot(): Bot | null {
 
         const prices = await heroSms.getPrices(countryId);
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
-        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode);
+        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
 
         if (user.balance < finalPriceTry) {
           await editOrReply(

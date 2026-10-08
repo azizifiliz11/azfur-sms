@@ -80,6 +80,17 @@ export interface CryptoSettings {
   autoVerifyEnabled?: boolean; // TronScan ile anında otomatik doğrulama
 }
 
+export interface CustomPriceRule {
+  countryId: number;
+  countryName?: string;
+  countryFlag?: string;
+  serviceCode: string;
+  serviceName?: string;
+  fixedPriceTry?: number; // Doğrudan sabit TL satış fiyatı (örn: 18.00 ₺)
+  marginPercent?: number; // Veya özel kâr oranı (%)
+  fixedFee?: number; // Veya özel sabit ek ücret (₺)
+}
+
 export interface SystemSettings {
   globalMarginPercent: number; // e.g. 35 -> %35
   globalFixedFee: number; // e.g. 5.0 -> 5 TL
@@ -93,6 +104,7 @@ export interface SystemSettings {
   hiddenServices: string[];
   hiddenCountries: number[];
   serviceCustomMargins: Record<string, { marginPercent?: number; fixedFee?: number }>;
+  customPriceRules?: Record<string, CustomPriceRule>; // key: `${countryId}_${serviceCode}` e.g. "62_wa"
   bankInfo?: BankInfo;
   cryptoSettings?: CryptoSettings;
   supportTelegramUsername?: string;

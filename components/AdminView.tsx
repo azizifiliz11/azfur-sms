@@ -127,6 +127,16 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [testingApiKey, setTestingApiKey] = useState<boolean>(false);
   const [apiKeyTestResult, setApiKeyTestResult] = useState<{ success: boolean; message: string; balance?: number } | null>(null);
 
+  // Custom Country & Service Price Rules states
+  const [customPriceRules, setCustomPriceRules] = useState<Record<string, any>>({});
+  const [ruleCountryId, setRuleCountryId] = useState<number>(62);
+  const [ruleServiceCode, setRuleServiceCode] = useState<string>("wa");
+  const [ruleType, setRuleType] = useState<"fixed" | "margin">("fixed");
+  const [ruleFixedPrice, setRuleFixedPrice] = useState<string>("15.00");
+  const [ruleMarginPercent, setRuleMarginPercent] = useState<string>("50");
+  const [ruleFixedFee, setRuleFixedFee] = useState<string>("5.00");
+  const [savingRule, setSavingRule] = useState<boolean>(false);
+
   const fetchAllData = async () => {
     setRefreshing(true);
     try {
@@ -183,6 +193,11 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         }
         if (st.settings?.heroSmsApiKey !== undefined) {
           setHeroSmsApiKey(st.settings.heroSmsApiKey || "");
+        }
+        if (st.settings?.customPriceRules) {
+          setCustomPriceRules(st.settings.customPriceRules);
+        } else {
+          setCustomPriceRules({});
         }
       }
       if (us.success) {
@@ -704,6 +719,87 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       });
     } finally {
       setTestingApiKey(false);
+    }
+  };
+
+  // Ülke ve Servise Özel Manuel Fiyat Kuralı Kaydet
+  const handleSaveCustomPriceRule = async () => {
+    if (!ruleCountryId || !ruleServiceCode) {
+      alert("Lütfen ülke ve servis seçiniz.");
+      return;
+    }
+    setSavingRule(true);
+    haptic.impact("medium");
+
+    const countries = settingsData?.allCountries || [];
+    const services = settingsData?.allServices || [];
+    const country = countries.find((c: any) => c.id === Number(ruleCountryId));
+    const service = services.find((s: any) => s.code === ruleServiceCode);
+
+    const ruleKey = `${ruleCountryId}_${ruleServiceCode}`;
+    const newRule: any = {
+      countryId: Number(ruleCountryId),
+      countryName: country ? country.eng : `Country ${ruleCountryId}`,
+      countryFlag: country ? country.flag || "🌐" : "🌐",
+      serviceCode: ruleServiceCode,
+      serviceName: service ? service.name : ruleServiceCode.toUpperCase(),
+    };
+
+    if (ruleType === "fixed") {
+      const p = parseFloat(ruleFixedPrice);
+      if (isNaN(p) || p <= 0) {
+        alert("Lütfen geçerli bir sabit fiyat giriniz.");
+        setSavingRule(false);
+        return;
+      }
+      newRule.fixedPriceTry = Number(p.toFixed(2));
+    } else {
+      const m = parseFloat(ruleMarginPercent);
+      const f = parseFloat(ruleFixedFee);
+      newRule.marginPercent = isNaN(m) ? 40 : m;
+      newRule.fixedFee = isNaN(f) ? 5 : f;
+    }
+
+    const updatedRules = { ...customPriceRules, [ruleKey]: newRule };
+    setCustomPriceRules(updatedRules);
+
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customPriceRules: updatedRules }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMsg(`✅ ${newRule.countryName} - ${newRule.serviceName} için özel fiyatlandırma kaydedildi!`);
+        setTimeout(() => setToastMsg(null), 3500);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  // Özel Fiyat Kuralını Sil
+  const handleDeleteCustomPriceRule = async (ruleKey: string) => {
+    if (!confirm("Bu özel fiyatlandırma kuralını silmek istediğinize emin misiniz?")) return;
+    haptic.impact("medium");
+
+    const updatedRules = { ...customPriceRules };
+    delete updatedRules[ruleKey];
+    setCustomPriceRules(updatedRules);
+
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customPriceRules: updatedRules }),
+      });
+      setToastMsg("🗑️ Özel fiyat kuralı silindi.");
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -1367,6 +1463,217 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             >
               {savingSettings ? "Kaydediliyor..." : "Ayarları Kaydet & Fiyatları Güncelle"}
             </button>
+          </Card>
+
+          {/* 🎯 Ülke ve Servise Özel Manuel Fiyatlandırma Kartı */}
+          <Card className="p-4 space-y-4 border-amber-500/40 bg-gradient-to-br from-[#161208] to-[#0c0e15] shadow-lg">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Ülke & Servise Özel Manuel Fiyatlandırma</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {Object.keys(customPriceRules).length} Özel Kural
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Belirli ülke ve servis kombinasyonlarına özel sabit satış fiyatı veya kâr marjı tanımlayın.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Alanı */}
+            <div className="space-y-3 p-3 rounded-xl bg-zinc-900/90 border border-white/5">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Ülke Seçimi */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-zinc-300 block">Ülke Seçin:</label>
+                  <select
+                    value={ruleCountryId}
+                    onChange={(e) => setRuleCountryId(Number(e.target.value))}
+                    className="w-full bg-[#181a24] border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                  >
+                    {(settingsData?.allCountries || []).map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.flag || "🌐"} {c.eng} (ID: {c.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Servis Seçimi */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-zinc-300 block">Servis Seçin:</label>
+                  <select
+                    value={ruleServiceCode}
+                    onChange={(e) => setRuleServiceCode(e.target.value)}
+                    className="w-full bg-[#181a24] border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                  >
+                    {(settingsData?.allServices || []).map((s: any) => (
+                      <option key={s.code} value={s.code}>
+                        {s.icon || "📱"} {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Fiyatlandırma Modu Tabları */}
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRuleType("fixed")}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      ruleType === "fixed"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                        : "bg-zinc-800 text-zinc-400 border border-transparent"
+                    }`}
+                  >
+                    🏷️ Sabit Satış Fiyatı (₺)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRuleType("margin")}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      ruleType === "margin"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                        : "bg-zinc-800 text-zinc-400 border border-transparent"
+                    }`}
+                  >
+                    📈 Özel Kâr % + Sabit Ücret
+                  </button>
+                </div>
+
+                {ruleType === "fixed" ? (
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-zinc-400 block">
+                      Sabit Satış Fiyatı (Maliyet ve kurdan bağımsız bu fiyata satılır):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-zinc-500">₺</span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={ruleFixedPrice}
+                        onChange={(e) => setRuleFixedPrice(e.target.value)}
+                        className="w-full pl-7 bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        placeholder="Örn: 18.00"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-400 block">Özel Kâr Oranı (%):</label>
+                      <input
+                        type="number"
+                        step="5"
+                        value={ruleMarginPercent}
+                        onChange={(e) => setRuleMarginPercent(e.target.value)}
+                        className="w-full bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        placeholder="%50"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-400 block">Ek Hizmet Ücreti (₺):</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={ruleFixedFee}
+                        onChange={(e) => setRuleFixedFee(e.target.value)}
+                        className="w-full bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        placeholder="5.00"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveCustomPriceRule}
+                disabled={savingRule}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{savingRule ? "Kaydediliyor..." : "Özel Fiyat Kuralını Tanımla"}</span>
+              </button>
+            </div>
+
+            {/* Tanımlı Kurallar Listesi */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-zinc-300 block">
+                Aktif Özel Fiyat Kuralları ({Object.keys(customPriceRules).length}):
+              </span>
+
+              {Object.keys(customPriceRules).length === 0 ? (
+                <div className="p-4 rounded-xl bg-zinc-900/40 border border-dashed border-white/10 text-center text-xs text-zinc-500">
+                  Henüz özel fiyat kuralı eklenmedi. Tüm servis ve ülkelerde genel kâr marjı (%{marginPercent} + ₺{fixedFee}) geçerlidir.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {Object.entries(customPriceRules).map(([key, rule]: [string, any]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/90 border border-white/5 hover:border-amber-500/30 transition-all text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{rule.countryFlag || "🌐"}</span>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-white">{rule.countryName || `Ülke ${rule.countryId}`}</span>
+                            <span className="text-zinc-600">•</span>
+                            <span className="text-amber-300 font-semibold">{rule.serviceName || rule.serviceCode}</span>
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                            {rule.fixedPriceTry !== undefined ? (
+                              <span className="text-emerald-400 font-bold">Sabit Fiyat: ₺{Number(rule.fixedPriceTry).toFixed(2)}</span>
+                            ) : (
+                              <span>Özel Kâr: %{rule.marginPercent || 0} + ₺{rule.fixedFee || 0}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRuleCountryId(rule.countryId);
+                            setRuleServiceCode(rule.serviceCode);
+                            if (rule.fixedPriceTry !== undefined) {
+                              setRuleType("fixed");
+                              setRuleFixedPrice(String(rule.fixedPriceTry));
+                            } else {
+                              setRuleType("margin");
+                              setRuleMarginPercent(String(rule.marginPercent || 40));
+                              setRuleFixedFee(String(rule.fixedFee || 5));
+                            }
+                            haptic.selection();
+                          }}
+                          className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold"
+                        >
+                          Düzenle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCustomPriceRule(key)}
+                          className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
+                          title="Kuralı Sil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* Hide / Show Services Toggles */}

@@ -81,9 +81,9 @@ function buildMainMenuKeyboard(isAdmin: boolean, appUrl: string, adminUrl: strin
     .text("📜 Numaralarım", "btn_my_orders")
     .row()
     .text("💳 Bakiye Yükle", "btn_deposit_menu")
-    .text("👤 Profilim & Bakiye", "btn_my_profile")
+    .text("🎁 Kupon Kullan", "btn_coupon_info")
     .row()
-    .text("🔄 Menüyü Yenile", "btn_refresh_menu")
+    .text("👤 Profilim & Bakiye", "btn_my_profile")
     .text("🆘 Yardım & Destek", "btn_help_info");
 
   if (isAdmin) {
@@ -222,10 +222,32 @@ export function getTelegramBot(): Bot | null {
     botInstance.command("start", sendWelcome);
     botInstance.command("menu", sendWelcome);
 
-    // /admin Komutu
+    // /admin Komutu (GÜVENLİK DOĞRULAMASI İLE KORUMALI)
     botInstance.command("admin", async (ctx) => {
       const from = ctx.from;
       if (!from) return;
+
+      await db.syncFromCloud();
+      const user = db.getUser(from.id);
+      const settings = db.getSettings();
+      const adminId = String(settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || "6824921456").trim();
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id).trim() === adminId ||
+        String(from.id).trim() === "6824921456";
+
+      if (!isAdmin) {
+        await ctx.reply(
+          `⛔ <b>Yetkisiz Erişim!</b>\n\n` +
+            `Bu komut yalnızca sistem yöneticilerine özeldir. Bilgileriniz güvenlik sebebiyle kaydedilmiştir.`,
+          {
+            parse_mode: "HTML",
+            reply_markup: new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu"),
+          }
+        );
+        return;
+      }
+
       const { adminUrl } = getAppUrls();
       const kb = new InlineKeyboard()
         .webApp("🛡️ Yönetici Panelini Aç", adminUrl)
@@ -237,6 +259,7 @@ export function getTelegramBot(): Bot | null {
         `👑 <b>AzFur Yönetici Paneli</b>\n\n` +
           `• Canlı TCMB kuru ve kâr marjı yönetimi\n` +
           `• Kullanıcı bakiyeleri ve yetkilendirme\n` +
+          `• Kupon & Promosyon yönetimi\n` +
           `• Banlama ve güvenlik ayarları\n` +
           `• Toplu duyuru ve push bildirimleri\n\n` +
           `Aşağıdaki butonlara tıklayarak işlem yapabilirsiniz 👇`,
@@ -245,6 +268,59 @@ export function getTelegramBot(): Bot | null {
           reply_markup: kb,
         }
       );
+    });
+
+    // /kupon Komutu
+    botInstance.command("kupon", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      await sendAnimatedVisual(ctx, "🎯");
+
+      const rawText = ctx.message?.text || "";
+      const parts = rawText.trim().split(/\s+/);
+      const codeInput = parts[1];
+
+      if (!codeInput) {
+        await ctx.reply(
+          `🎁 <b>Kupon Kodu Kullanımı</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Promosyon veya hediye kuponunuzu kullanmak için komutun yanına kodunuzu yazın:\n\n` +
+          `👉 <code>/kupon KODUNUZ</code>\n\n` +
+          `<i>Örnek Kullanım: <code>/kupon HOSGELDIN</code></i>`,
+          {
+            parse_mode: "HTML",
+            reply_markup: new InlineKeyboard()
+              .text("💳 Bakiye Yükle", "btn_deposit_menu")
+              .text("🔙 Ana Menü", "btn_main_menu"),
+          }
+        );
+        return;
+      }
+
+      await db.syncFromCloud();
+      const redeemRes = await db.redeemCoupon(codeInput, from.id);
+
+      if (!redeemRes.success) {
+        await ctx.reply(
+          `${redeemRes.message}`,
+          {
+            parse_mode: "HTML",
+            reply_markup: new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu"),
+          }
+        );
+        return;
+      }
+
+      const kb = new InlineKeyboard()
+        .text("🛒 Hemen Numara Al", "btn_buy_menu")
+        .row()
+        .text("💳 Bakiyem & Profil", "btn_my_profile")
+        .text("🔙 Ana Menü", "btn_main_menu");
+
+      await ctx.reply(redeemRes.message, {
+        parse_mode: "HTML",
+        reply_markup: kb,
+      });
     });
 
     // /bakiye Komutu
@@ -474,13 +550,35 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       const user = db.getUser(from.id);
+      const settings = db.getSettings();
+      const adminId = String(settings.adminTelegramId || CONFIG.ADMIN_TELEGRAM_ID || "6824921456").trim();
       const isAdmin =
         user?.role === "admin" ||
-        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
-        String(from.id) === "6824921456";
-      if (!isAdmin) return;
+        String(from.id).trim() === adminId ||
+        String(from.id).trim() === "6824921456";
 
       const text = (ctx.message.text || "").trim();
+
+      if (!isAdmin) {
+        // Kullanıcı doğrudan bir kupon kodu yazdıysa (örn: HOSGELDIN, AZFUR20)
+        const potentialCoupon = text.toUpperCase().replace(/^#/, "").trim();
+        if (potentialCoupon.length >= 3 && potentialCoupon.length <= 30 && !potentialCoupon.includes(" ") && !potentialCoupon.startsWith("/")) {
+          const coupon = db.getCoupon(potentialCoupon);
+          if (coupon && coupon.isActive) {
+            await db.syncFromCloud();
+            const redeemRes = await db.redeemCoupon(potentialCoupon, from.id);
+            const kb = new InlineKeyboard()
+              .text("🛒 Hemen Numara Al", "btn_buy_menu")
+              .row()
+              .text("💳 Bakiyem & Profil", "btn_my_profile")
+              .text("🔙 Ana Menü", "btn_main_menu");
+
+            await ctx.reply(redeemRes.message, { parse_mode: "HTML", reply_markup: kb });
+            return;
+          }
+        }
+        return;
+      }
 
       // Sticker paketi linki gönderildiyse
       if (text.includes("t.me/addstickers/")) {
@@ -1053,6 +1151,8 @@ export function getTelegramBot(): Bot | null {
           .row()
           .text("💎 TRON Cüzdanı (USDT TRC-20 / TRX)", "btn_dep_crypto")
           .row()
+          .text("🎁 Kupon / Hediye Kodu Kullan", "btn_coupon_info")
+          .row()
           .webApp("🚀 Mini App İle Yükle", appUrl)
           .row()
           .text("🔙 Ana Menü", "btn_main_menu");
@@ -1356,6 +1456,29 @@ export function getTelegramBot(): Bot | null {
           .webApp("🛡️ Detaylı Web Admin Paneli", adminUrl)
           .row()
           .text("🔄 Bilgileri Yenile", "btn_admin_menu")
+          .text("🔙 Ana Menü", "btn_main_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- KUPON VE PROMOSYON MENÜSÜ ---
+      if (data === "btn_coupon_info") {
+        const text =
+          `🎁 <b>KUPON & PROMOSYON KULLANIMI</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Elinizde AzFur hediye bakiye veya indirim kuponunuz varsa, bota doğrudan şu komutla iletebilirsiniz:\n\n` +
+          `👉 <code>/kupon KODUNUZ</code>\n\n` +
+          `<i>Örnek Kullanım:</i>\n` +
+          `<code>/kupon HOSGELDIN</code>\n` +
+          `<code>/kupon AZFUR20</code>\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💡 <i>Kupon tanımlandığında bakiyeniz anında yüklenir veya bir sonraki numara kiralama işleminizde indirim otomatik olarak uygulanır!</i>`;
+
+        const kb = new InlineKeyboard()
+          .webApp("🚀 Mini App'te Tanımla", appUrl)
+          .row()
+          .text("🛒 Numara Satın Al", "btn_buy_menu")
           .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);

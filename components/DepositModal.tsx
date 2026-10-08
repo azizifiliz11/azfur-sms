@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Check, Copy, Coins, ShieldCheck, Loader2, RefreshCw, Zap } from "lucide-react";
+import { X, Check, Copy, Coins, ShieldCheck, Loader2, RefreshCw, Zap, Gift, Tag } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { CryptoSettings } from "@/lib/types";
 
@@ -13,7 +13,7 @@ interface DepositModalProps {
 }
 
 export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: DepositModalProps) {
-  const [cryptoSubMethod, setCryptoSubMethod] = useState<"AutoCrypto" | "DirectWallet">("AutoCrypto");
+  const [cryptoSubMethod, setCryptoSubMethod] = useState<"AutoCrypto" | "DirectWallet" | "Coupon">("AutoCrypto");
   const [cryptoType, setCryptoType] = useState<"USDT_TRC20" | "TRX">("USDT_TRC20");
   const [amount, setAmount] = useState<number>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
@@ -21,6 +21,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
   const [isAddressCopied, setIsAddressCopied] = useState<boolean>(false);
   const [verifyingCrypto, setVerifyingCrypto] = useState<boolean>(false);
   const [creatingPayment, setCreatingPayment] = useState<boolean>(false);
+  const [couponInput, setCouponInput] = useState<string>("");
+  const [redeemingCoupon, setRedeemingCoupon] = useState<boolean>(false);
 
   // Otomatik Kripto Ödeme Detayları
   const [activePayment, setActivePayment] = useState<{
@@ -346,23 +348,23 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           </div>
         </div>
 
-        {/* KRİPTO YÖNTEMLERİ SEÇİMİ */}
+        {/* YÖNTEMLER SEÇİMİ */}
         <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950/80 rounded-2xl border border-white/5">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-950/80 rounded-2xl border border-white/5">
             <button
               type="button"
               onClick={() => {
                 haptic.selection();
                 setCryptoSubMethod("AutoCrypto");
               }}
-              className={`py-2.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
                 cryptoSubMethod === "AutoCrypto"
                   ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              <Zap className="w-4 h-4" />
-              <span>Kripto ile Öde (Otomatik)</span>
+              <Zap className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Kripto (Oto)</span>
             </button>
 
             <button
@@ -371,14 +373,30 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 haptic.selection();
                 setCryptoSubMethod("DirectWallet");
               }}
-              className={`py-2.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
                 cryptoSubMethod === "DirectWallet"
                   ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              <Coins className="w-4 h-4" />
-              <span>TronScan (TXID)</span>
+              <Coins className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">TRON Cüzdan</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                haptic.selection();
+                setCryptoSubMethod("Coupon");
+              }}
+              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
+                cryptoSubMethod === "Coupon"
+                  ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Kupon Kodu</span>
             </button>
           </div>
 
@@ -621,6 +639,88 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                   </>
                 )}
               </button>
+            </div>
+          )}
+
+          {/* SEÇENEK C: KUPON VE İNDİRİM KODU KULLAN */}
+          {cryptoSubMethod === "Coupon" && (
+            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">Hediye Bakiye & Promosyon Kuponu</h4>
+                  <p className="text-[11px] text-zinc-400">Kodunuzu girerek anında hesabınıza tanımlayın</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] text-zinc-400 font-medium">Kupon Kodu</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="ÖRN: HOSGELDIN, AZFUR20"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold tracking-wider text-white uppercase placeholder-zinc-600 focus:outline-none focus:border-purple-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={redeemingCoupon || !couponInput.trim()}
+                    onClick={async () => {
+                      if (!couponInput.trim()) return;
+                      setRedeemingCoupon(true);
+                      setMessage(null);
+                      setIsErrorMsg(false);
+                      haptic.impact("heavy");
+                      try {
+                        const res = await fetch("/api/user/coupon", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            code: couponInput.trim(),
+                            telegramId,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          haptic.success();
+                          setIsErrorMsg(false);
+                          setMessage(data.message);
+                          if (data.addedBalance) {
+                            onSuccess(data.addedBalance);
+                          }
+                          setCouponInput("");
+                        } else {
+                          haptic.error();
+                          setIsErrorMsg(true);
+                          setMessage(data.error || "Kupon uygulanamadı.");
+                        }
+                      } catch {
+                        haptic.error();
+                        setIsErrorMsg(true);
+                        setMessage("Bağlantı hatası oluştu.");
+                      } finally {
+                        setRedeemingCoupon(false);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 active:scale-95 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {redeemingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Tag className="w-3.5 h-3.5" />}
+                    <span>Uygula</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1 text-[11px] text-zinc-400">
+                <p className="flex items-center gap-1 text-zinc-300 font-semibold">
+                  <span>💡</span> Kupon Kullanım Bilgisi:
+                </p>
+                <p>• Bakiye kuponları anında hesabınıza para olarak eklenir.</p>
+                <p>• İndirim kuponları sonraki numara kiralamanızda otomatik uygulanır.</p>
+                <p>• Her kupon tek kullanımlıktır ve kişi bazlı tanımlanır.</p>
+              </div>
             </div>
           )}
 

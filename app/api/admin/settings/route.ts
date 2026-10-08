@@ -3,9 +3,13 @@ import { db } from "@/lib/db";
 import { heroSms } from "@/lib/hero-sms";
 import { tcmb } from "@/lib/tcmb";
 import { CONFIG } from "@/lib/config";
+import { isAuthorizedAdmin } from "@/lib/auth-check";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const settings = db.getSettings();
     const [allCountries, allServices, tcmbRateInfo] = await Promise.all([
@@ -28,6 +32,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const body = await req.json();
 

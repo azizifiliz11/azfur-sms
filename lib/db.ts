@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { User, ActivationOrder, SystemSettings, DepositRequest, Ticket, TicketMessage, TicketStatus } from "./types";
+import { User, ActivationOrder, SystemSettings, DepositRequest, Ticket, TicketMessage, TicketStatus, Coupon } from "./types";
 import { CONFIG } from "./config";
 
 interface DatabaseSchema {
@@ -9,6 +9,7 @@ interface DatabaseSchema {
   activations: Record<string, ActivationOrder>;
   deposits: DepositRequest[];
   tickets: Record<string, Ticket>;
+  coupons?: Record<string, Coupon>;
 }
 
 const SEED_DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -26,6 +27,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   currencySymbol: "₺",
   mockMode: false, // Default to live API
   adminTelegramId: CONFIG.ADMIN_TELEGRAM_ID,
+  adminSecurityPin: "2026",
   hiddenServices: [],
   hiddenCountries: [],
   serviceCustomMargins: {},
@@ -154,6 +156,9 @@ function loadDb(): DatabaseSchema {
     if (data.settings.heroSmsApiKey === undefined) {
       data.settings.heroSmsApiKey = process.env.HERO_SMS_API_KEY || "e1006858662edcAd8d348c9f07dfe8c5";
     }
+    if (!data.settings.adminSecurityPin) {
+      data.settings.adminSecurityPin = "2026";
+    }
     if (!data.users) data.users = {};
     if (data.users["100001"]) {
       delete data.users["100001"];
@@ -161,6 +166,7 @@ function loadDb(): DatabaseSchema {
     if (!data.activations) data.activations = {};
     if (!data.deposits) data.deposits = [];
     if (!data.tickets) data.tickets = {};
+    if (!data.coupons) data.coupons = {};
     return data;
   } catch (err) {
     console.error("Error reading db.json, returning empty defaults:", err);
@@ -170,6 +176,7 @@ function loadDb(): DatabaseSchema {
       activations: {},
       deposits: [],
       tickets: {},
+      coupons: {},
     };
   }
 }
@@ -726,5 +733,156 @@ export const db = {
     delete data.tickets[ticketId];
     await saveDb(data);
     return true;
+  },
+
+  // ==========================================
+  // KAMPANYA VE KUPON KODU METOTLARI
+  // ==========================================
+  getCoupons(): Coupon[] {
+    const data = loadDb();
+    if (!data.coupons) return [];
+    return Object.values(data.coupons).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getCoupon(code: string): Coupon | null {
+    const data = loadDb();
+    if (!data.coupons) return null;
+    const cleanCode = (code || "").trim().toUpperCase();
+    const found = Object.values(data.coupons).find(
+      (c) => c.code.trim().toUpperCase() === cleanCode
+    );
+    return found || null;
+  },
+
+  async saveCoupon(coupon: Coupon): Promise<Coupon> {
+    const data = loadDb();
+    if (!data.coupons) data.coupons = {};
+    coupon.code = coupon.code.trim().toUpperCase();
+    data.coupons[coupon.id] = coupon;
+    await saveDb(data);
+    return coupon;
+  },
+
+  async deleteCoupon(id: string): Promise<boolean> {
+    const data = loadDb();
+    if (!data.coupons || !data.coupons[id]) return false;
+    delete data.coupons[id];
+    await saveDb(data);
+    return true;
+  },
+
+  async redeemCoupon(
+    codeInput: string,
+    telegramId: number
+  ): Promise<{
+    success: boolean;
+    message: string;
+    coupon?: Coupon;
+    addedBalance?: number;
+    newBalance?: number;
+  }> {
+    const data = loadDb();
+    if (!data.coupons) data.coupons = {};
+
+    const cleanCode = (codeInput || "").trim().toUpperCase();
+    if (!cleanCode) {
+      return { success: false, message: "Lütfen bir kupon kodu giriniz." };
+    }
+
+    const coupon = Object.values(data.coupons).find(
+      (c) => c.code.trim().toUpperCase() === cleanCode
+    );
+
+    if (!coupon) {
+      return {
+        success: false,
+        message: "❌ Geçersiz kupon kodu. Lütfen kontrol edip tekrar deneyiniz.",
+      };
+    }
+
+    if (!coupon.isActive) {
+      return { success: false, message: "⚠️ Bu kupon şu anda aktif değildir." };
+    }
+
+    // Tarih kontrolü
+    if (coupon.expiresAt) {
+      const expTime = new Date(coupon.expiresAt).getTime();
+      if (!isNaN(expTime) && expTime < Date.now()) {
+        return { success: false, message: "⏳ Bu kuponun geçerlilik süresi dolmuştur." };
+      }
+    }
+
+    // Maksimum kullanım kontrolü
+    if (coupon.maxUses && coupon.maxUses > 0) {
+      if (coupon.usedCount >= coupon.maxUses) {
+        return {
+          success: false,
+          message: "🚫 Bu kuponun toplam kullanım limiti (kotası) dolmuştur.",
+        };
+      }
+    }
+
+    // Kullanıcı bazlı tekil kullanım kontrolü
+    if (!coupon.usedByUserIds) coupon.usedByUserIds = [];
+    if (coupon.usedByUserIds.includes(telegramId)) {
+      return {
+        success: false,
+        message: "ℹ️ Bu kuponu daha önce kullandınız. Her kupon tek kullanımlıktır.",
+      };
+    }
+
+    // Kullanıcıyı al veya oluştur
+    let user = this.getUser(telegramId);
+    if (!user) {
+      user = await this.getOrCreateUser(telegramId);
+    }
+
+    // Kuponu kullanıldı olarak kaydet
+    coupon.usedCount = (coupon.usedCount || 0) + 1;
+    coupon.usedByUserIds.push(telegramId);
+
+    // 1. HEDİYE BAKİYE KUPONU (BALANCE)
+    if (coupon.type === "BALANCE") {
+      const bonus = Number(coupon.value) || 0;
+      await this.updateUserBalance(telegramId, bonus);
+      const updatedUser = this.getUser(telegramId);
+      await saveDb(data);
+
+      return {
+        success: true,
+        message: `🎉 <b>Tebrikler!</b> <code>${coupon.code}</code> kuponu başarıyla kullanıldı ve hesabınıza <b>+₺${bonus.toFixed(2)}</b> hediye bakiye yüklendi!`,
+        coupon,
+        addedBalance: bonus,
+        newBalance: updatedUser?.balance || 0,
+      };
+    }
+
+    // 2. İNDİRİM KUPONU (DISCOUNT_PERCENT veya DISCOUNT_FIXED)
+    if (coupon.type === "DISCOUNT_PERCENT" || coupon.type === "DISCOUNT_FIXED") {
+      await this.updateUser(telegramId, {
+        activeDiscount: {
+          code: coupon.code,
+          type: coupon.type,
+          value: coupon.value,
+        },
+      });
+      await saveDb(data);
+
+      const label =
+        coupon.type === "DISCOUNT_PERCENT"
+          ? `%${coupon.value}`
+          : `₺${coupon.value.toFixed(2)}`;
+
+      return {
+        success: true,
+        message: `🎉 <b>Tebrikler!</b> <code>${coupon.code}</code> kuponu başarıyla tanımlandı!\n\nBir sonraki numara kiralama işleminizde <b>${label}</b> indirim otomatik olarak uygulanacaktır.`,
+        coupon,
+      };
+    }
+
+    await saveDb(data);
+    return { success: true, message: `Kupon başarıyla uygulandı!`, coupon };
   },
 };

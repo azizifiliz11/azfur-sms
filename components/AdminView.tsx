@@ -40,6 +40,9 @@ import {
   Copy,
   Check,
   Bot,
+  Gift,
+  Tag,
+  Ticket,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -53,7 +56,7 @@ interface AdminViewProps {
 }
 
 export function AdminView({ onBackToApp }: AdminViewProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons">("overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -146,28 +149,81 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [ruleFixedFee, setRuleFixedFee] = useState<string>("5.00");
   const [savingRule, setSavingRule] = useState<boolean>(false);
 
-  const fetchAllData = async () => {
+  // PIN Kimlik Doğrulama & Güvenlik Durumları
+  const [adminPin, setAdminPin] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("azfur_admin_pin") || "";
+    }
+    return "";
+  });
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [verifyingPin, setVerifyingPin] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [adminSecurityPin, setAdminSecurityPin] = useState<string>("2026");
+  const [savingPin, setSavingPin] = useState<boolean>(false);
+
+  // Kupon & Kampanya Durumları
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponCode, setCouponCode] = useState<string>("");
+  const [couponType, setCouponType] = useState<"BALANCE" | "DISCOUNT_PERCENT" | "DISCOUNT_FIXED">("BALANCE");
+  const [couponValue, setCouponValue] = useState<string>("25");
+  const [couponDesc, setCouponDesc] = useState<string>("");
+  const [couponMaxUses, setCouponMaxUses] = useState<string>("50");
+  const [couponExpiresAt, setCouponExpiresAt] = useState<string>("");
+  const [savingCoupon, setSavingCoupon] = useState<boolean>(false);
+  const [couponModalOpen, setCouponModalOpen] = useState<boolean>(false);
+
+  // Güvenli Admin Başlıkları (PIN & Telegram ID)
+  const getAdminHeaders = (pinOverride?: string) => {
+    const curPin =
+      pinOverride ||
+      adminPin ||
+      (typeof window !== "undefined" ? sessionStorage.getItem("azfur_admin_pin") || "" : "");
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+    const tgId = tg?.initDataUnsafe?.user?.id;
+    return {
+      "x-admin-pin": curPin || "2026",
+      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
+    };
+  };
+
+  const adminFetch = (url: string, options: RequestInit = {}) => {
+    const headers = {
+      ...getAdminHeaders(),
+      ...(options.headers || {}),
+    };
+    return fetch(url, { ...options, headers });
+  };
+
+  const fetchAllData = async (pinOverride?: string) => {
     setRefreshing(true);
+    const headers = getAdminHeaders(pinOverride);
     try {
-      const [ovRes, setRes, uRes, depRes, tckRes] = await Promise.all([
-        fetch("/api/admin/overview", { cache: "no-store" }),
-        fetch("/api/admin/settings", { cache: "no-store" }),
-        fetch("/api/admin/users", { cache: "no-store" }),
-        fetch("/api/admin/deposits", { cache: "no-store" }),
-        fetch("/api/admin/tickets", { cache: "no-store" }),
+      const [ovRes, setRes, uRes, depRes, tckRes, cpnRes] = await Promise.all([
+        fetch("/api/admin/overview", { headers, cache: "no-store" }),
+        fetch("/api/admin/settings", { headers, cache: "no-store" }),
+        fetch("/api/admin/users", { headers, cache: "no-store" }),
+        fetch("/api/admin/deposits", { headers, cache: "no-store" }),
+        fetch("/api/admin/tickets", { headers, cache: "no-store" }),
+        fetch("/api/admin/coupons", { headers, cache: "no-store" }),
       ]);
 
-      const [ov, st, us, dep, tck] = await Promise.all([
+      const [ov, st, us, dep, tck, cpn] = await Promise.all([
         ovRes.json(),
         setRes.json(),
         uRes.json(),
         depRes.json(),
         tckRes.json(),
+        cpnRes.json(),
       ]);
 
       if (ov.success) setOverview(ov);
       if (st.success) {
         setSettingsData(st);
+        if (st.settings?.adminSecurityPin) {
+          setAdminSecurityPin(st.settings.adminSecurityPin);
+        }
         setMarginPercent(st.settings.globalMarginPercent);
         setFixedFee(st.settings.globalFixedFee);
         setRateToTry(st.settings.exchangeRateToTry);
@@ -217,6 +273,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       }
       if (dep.success) setDeposits(dep.deposits);
       if (tck.success) setTickets(tck.tickets || []);
+      if (cpn.success) setCoupons(cpn.coupons || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -226,15 +283,209 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   };
 
   useEffect(() => {
-    fetchAllData();
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+    const tgId = tg?.initDataUnsafe?.user?.id;
+    const savedPin = typeof window !== "undefined" ? sessionStorage.getItem("azfur_admin_pin") : null;
+
+    if (tgId && (String(tgId) === "6824921456" || tgId === 6824921456)) {
+      setIsAuthenticated(true);
+      fetchAllData(savedPin || "2026");
+      return;
+    }
+
+    if (savedPin) {
+      fetch("/api/admin/settings", {
+        headers: { "x-admin-pin": savedPin },
+        cache: "no-store",
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) {
+            setIsAuthenticated(true);
+            setAdminPin(savedPin);
+            fetchAllData(savedPin);
+          } else {
+            sessionStorage.removeItem("azfur_admin_pin");
+            setIsAuthenticated(false);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          setIsAuthenticated(false);
+          setLoading(false);
+        });
+    } else {
+      setIsAuthenticated(false);
+      setLoading(false);
+    }
   }, []);
+
+  // PIN Doğrulama Giriş İşlemi
+  const handlePinSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!pinInput.trim()) {
+      setPinError("Lütfen güvenlik PIN kodunuzu giriniz.");
+      return;
+    }
+    setVerifyingPin(true);
+    setPinError(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        headers: { "x-admin-pin": pinInput.trim() },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.status === 200 && data.success) {
+        haptic.success();
+        sessionStorage.setItem("azfur_admin_pin", pinInput.trim());
+        setAdminPin(pinInput.trim());
+        setIsAuthenticated(true);
+        fetchAllData(pinInput.trim());
+      } else {
+        haptic.error();
+        setPinError("❌ Hatalı PIN kodu! Erişim engellendi.");
+      }
+    } catch {
+      setPinError("Bağlantı hatası oluştu.");
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
+  // PIN Kodunu Değiştir
+  const handleSavePin = async () => {
+    if (!adminSecurityPin || adminSecurityPin.length < 4) {
+      alert("PIN kodu en az 4 karakter olmalıdır.");
+      return;
+    }
+    setSavingPin(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminSecurityPin: adminSecurityPin.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        sessionStorage.setItem("azfur_admin_pin", adminSecurityPin.trim());
+        setAdminPin(adminSecurityPin.trim());
+        setToastMsg("✅ Yönetici güvenlik PIN kodu başarıyla güncellendi!");
+        setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        alert(data.error || "PIN güncellenemedi");
+      }
+    } catch {
+      alert("Hata oluştu");
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
+  // Yeni Kupon Oluştur
+  const handleCreateCoupon = async () => {
+    if (!couponCode.trim()) {
+      alert("Lütfen kupon kodu giriniz.");
+      return;
+    }
+    const val = parseFloat(couponValue);
+    if (isNaN(val) || val <= 0) {
+      alert("Lütfen geçerli bir tutar veya yüzde giriniz.");
+      return;
+    }
+    setSavingCoupon(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          code: couponCode.trim().toUpperCase(),
+          type: couponType,
+          value: val,
+          description: couponDesc.trim(),
+          maxUses: parseInt(couponMaxUses) || 0,
+          expiresAt: couponExpiresAt || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg(`✅ '${couponCode.toUpperCase()}' kuponu başarıyla oluşturuldu!`);
+        setTimeout(() => setToastMsg(null), 3500);
+        setCouponCode("");
+        setCouponDesc("");
+        setCouponModalOpen(false);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kupon oluşturulamadı");
+      }
+    } catch {
+      alert("Hata oluştu");
+    } finally {
+      setSavingCoupon(false);
+    }
+  };
+
+  // Kupon Durumunu Değiştir (Aktif / Pasif)
+  const handleToggleCouponActive = async (coupon: any) => {
+    haptic.impact("light");
+    try {
+      const res = await adminFetch("/api/admin/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_active",
+          id: coupon.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCoupons((prev) =>
+          prev.map((c) => (c.id === coupon.id ? { ...c, isActive: !c.isActive } : c))
+        );
+        setToastMsg(data.message);
+        setTimeout(() => setToastMsg(null), 2500);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Kupon Sil
+  const handleDeleteCoupon = async (couponId: string, code: string) => {
+    if (!confirm(`'${code}' kuponunu kalıcı olarak silmek istediğinize emin misiniz?`)) return;
+    haptic.impact("heavy");
+    try {
+      const res = await adminFetch("/api/admin/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          id: couponId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setCoupons((prev) => prev.filter((c) => c.id !== couponId));
+        setToastMsg("🗑️ Kupon başarıyla silindi.");
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     haptic.impact("medium");
 
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -263,7 +514,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setTcmbRefreshing(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "refresh_tcmb" }),
@@ -304,7 +555,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       settings: { ...settingsData.settings, hiddenServices: newHidden },
     });
 
-    await fetch("/api/admin/settings", {
+    await adminFetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hiddenServices: newHidden }),
@@ -322,7 +573,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       settings: { ...settingsData.settings, hiddenCountries: newHidden },
     });
 
-    await fetch("/api/admin/settings", {
+    await adminFetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hiddenCountries: newHidden }),
@@ -337,7 +588,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     );
 
     try {
-      const res = await fetch("/api/admin/deposits", {
+      const res = await adminFetch("/api/admin/deposits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ depositId, status }),
@@ -377,7 +628,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setEditingUser(null);
 
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await adminFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -431,7 +682,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setResettingStats(true);
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/overview", {
+      const res = await adminFetch("/api/admin/overview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "reset_stats" }),
@@ -459,7 +710,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSavingBank(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -494,7 +745,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSavingCrypto(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -534,7 +785,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setOxapayTestResult(null);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "test_oxapay_key", key: oxapayApiKey.trim() }),
@@ -597,7 +848,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSendingBroadcast(true);
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/broadcast", {
+      const res = await adminFetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -629,7 +880,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSavingSupportUser(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -688,7 +939,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSavingSticker(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customStickerFileId: fileIdToSave.trim() }),
@@ -718,7 +969,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setApiKeyTestResult(null);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ heroSmsApiKey: keyToSave.trim() }),
@@ -747,7 +998,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setApiKeyTestResult(null);
     haptic.impact("light");
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -823,7 +1074,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setCustomPriceRules(updatedRules);
 
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customPriceRules: updatedRules }),
@@ -850,7 +1101,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setCustomPriceRules(updatedRules);
 
     try {
-      await fetch("/api/admin/settings", {
+      await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customPriceRules: updatedRules }),
@@ -868,7 +1119,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setSendingTicketReply(true);
     haptic.impact("medium");
     try {
-      const res = await fetch("/api/admin/tickets", {
+      const res = await adminFetch("/api/admin/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -903,7 +1154,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     const nextStatus = currentStatus === "CLOSED" ? "OPEN" : "CLOSED";
     haptic.impact("light");
     try {
-      const res = await fetch("/api/admin/tickets", {
+      const res = await adminFetch("/api/admin/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -932,7 +1183,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     }
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/tickets", {
+      const res = await adminFetch("/api/admin/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -969,7 +1220,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setUserActionLoadingId(user.telegramId);
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await adminFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1016,7 +1267,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setUserActionLoadingId(user.telegramId);
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await adminFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1060,7 +1311,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setUserActionLoadingId(user.telegramId);
     haptic.impact("heavy");
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await adminFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1098,6 +1349,72 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         String(u.telegramId).includes(q)
     );
   }, [users, userSearchQuery]);
+
+  // Yükleme Durumu
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 space-y-3">
+        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+        <span className="text-xs text-zinc-400 font-medium">Yönetici yetkileri ve sistem verileri kontrol ediliyor...</span>
+      </div>
+    );
+  }
+
+  // Güvenlik PIN Giriş Ekranı (Yetkisiz Kullanıcı Koruması)
+  if (!isAuthenticated) {
+    return (
+      <div className="space-y-4 pb-12">
+        <Card className="p-6 max-w-sm mx-auto text-center space-y-5 border-emerald-500/30 bg-[#0c0d14] shadow-2xl">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-white">Yönetici Güvenlik Girişi</h2>
+            <p className="text-xs text-zinc-400 mt-1">
+              Bu alana yalnızca yetkili sistem yöneticileri erişebilir. Lütfen güvenlik PIN kodunuzu giriniz.
+            </p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="space-y-3.5">
+            <div>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value);
+                  setPinError(null);
+                }}
+                placeholder="Yönetici PIN Kodu (Örn: 2026)"
+                className="w-full text-center tracking-widest text-lg font-mono px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl focus:border-emerald-500 focus:outline-none text-white"
+                autoFocus
+              />
+              {pinError && (
+                <p className="text-xs text-rose-400 mt-1.5 font-medium">{pinError}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={verifyingPin || !pinInput.trim()}
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {verifyingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+              <span>Giriş Yap ve Yetkiyi Aç</span>
+            </button>
+          </form>
+
+          {onBackToApp && (
+            <button
+              onClick={onBackToApp}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors block mx-auto"
+            >
+              ← Mini App Görünümüne Dön
+            </button>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-12">
@@ -1148,7 +1465,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
+      <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
         <button
           onClick={() => {
             haptic.selection();
@@ -1186,7 +1503,20 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Kripto & Ayarlar
+          Kripto & Ayar
+        </button>
+        <button
+          onClick={() => {
+            haptic.selection();
+            setActiveTab("coupons");
+          }}
+          className={`py-2 px-1 rounded-xl transition-all text-center ${
+            activeTab === "coupons"
+              ? "bg-purple-500 text-white shadow-md shadow-purple-500/20"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Kuponlar ({coupons.length})
         </button>
         <button
           onClick={() => {
@@ -2233,6 +2563,54 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               )}
             </div>
           </Card>
+
+          {/* YÖNETİCİ GÜVENLİK PIN KODU AYARI */}
+          <Card className="p-4 bg-zinc-950/80 border-emerald-500/20 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Yönetici Güvenlik PIN Kodu</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                      Aktif Koruma
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Web paneline ve yetkili admin API&apos;larına erişim için kullanılan ana güvenlik kodu.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Yönetici Güvenlik PIN Kodu (En az 4 karakter)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={adminSecurityPin}
+                  onChange={(e) => setAdminSecurityPin(e.target.value)}
+                  placeholder="Örn: 2026"
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-emerald-400 tracking-widest focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  onClick={handleSavePin}
+                  disabled={savingPin}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                >
+                  {savingPin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>PIN Güncelle</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                🔒 Bu kodu değiştirdiğinizde tüm yeni oturumlar ve yetkisiz tarayıcılar için yeni PIN zorunlu olacaktır.
+              </p>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -2987,6 +3365,316 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               <p className="text-[10px] text-zinc-500">
                 💡 Yanıtınız kaydedildiği anda kullanıcının Telegram hesabına anlık bildirim iletilir.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 8: KUPONLAR & KAMPANYALAR */}
+      {activeTab === "coupons" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Gift className="w-4 h-4 text-purple-400" />
+                <span>Kuponlar & İndirim Kampanyaları</span>
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Kullanıcılar için hediye bakiye ve SMS onay indirim kodları tanımlayın
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                haptic.impact("medium");
+                setCouponModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs shadow-md shadow-purple-500/20 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yeni Kupon Oluştur</span>
+            </button>
+          </div>
+
+          {/* İstatistikler */}
+          <div className="grid grid-cols-3 gap-2">
+            <Card className="p-3 bg-zinc-950/80 border-white/5">
+              <span className="text-[10px] text-zinc-400 block font-medium">Toplam Kupon</span>
+              <span className="text-lg font-bold text-white font-mono mt-0.5 block">{coupons.length}</span>
+            </Card>
+            <Card className="p-3 bg-zinc-950/80 border-white/5">
+              <span className="text-[10px] text-zinc-400 block font-medium">Aktif Kuponlar</span>
+              <span className="text-lg font-bold text-emerald-400 font-mono mt-0.5 block">
+                {coupons.filter((c) => c.isActive).length}
+              </span>
+            </Card>
+            <Card className="p-3 bg-zinc-950/80 border-white/5">
+              <span className="text-[10px] text-zinc-400 block font-medium">Toplam Kullanım</span>
+              <span className="text-lg font-bold text-purple-400 font-mono mt-0.5 block">
+                {coupons.reduce((sum, c) => sum + (c.usedCount || 0), 0)} kez
+              </span>
+            </Card>
+          </div>
+
+          {/* Kupon Listesi */}
+          {coupons.length === 0 ? (
+            <Card className="p-8 text-center bg-zinc-950/60 border-white/5 space-y-2">
+              <Gift className="w-8 h-8 mx-auto text-zinc-600" />
+              <p className="text-xs text-zinc-400">Henüz tanımlanmış bir kupon kodu bulunmuyor.</p>
+              <button
+                onClick={() => setCouponModalOpen(true)}
+                className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
+              >
+                + İlk kuponu hemen oluşturun
+              </button>
+            </Card>
+          ) : (
+            <div className="space-y-2.5">
+              {coupons.map((c) => {
+                const isExpired = c.expiresAt && new Date(c.expiresAt).getTime() < Date.now();
+                const isFull = c.maxUses > 0 && c.usedCount >= c.maxUses;
+                return (
+                  <Card
+                    key={c.id}
+                    className={`p-3.5 space-y-2.5 border transition-all ${
+                      !c.isActive || isExpired || isFull
+                        ? "bg-zinc-950/40 border-white/5 opacity-70"
+                        : "bg-zinc-900/80 border-white/10 hover:border-purple-500/30"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-lg bg-black/60 border border-white/10 font-mono font-black text-sm text-white tracking-wider flex items-center gap-1.5 select-all">
+                          <span>🎟️</span>
+                          <span>{c.code}</span>
+                        </span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(c.code);
+                            haptic.success();
+                            setToastMsg(`📋 '${c.code}' kodu kopyalandı!`);
+                            setTimeout(() => setToastMsg(null), 2000);
+                          }}
+                          className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                          title="Kodu Kopyala"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            c.type === "BALANCE"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : c.type === "DISCOUNT_PERCENT"
+                              ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                              : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                          }`}
+                        >
+                          {c.type === "BALANCE"
+                            ? `+₺${c.value} Hediye Bakiye`
+                            : c.type === "DISCOUNT_PERCENT"
+                            ? `-%${c.value} İndirim`
+                            : `-₺${c.value} Sabit İndirim`}
+                        </span>
+
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                            !c.isActive
+                              ? "bg-zinc-800 text-zinc-400"
+                              : isExpired
+                              ? "bg-rose-500/20 text-rose-300"
+                              : isFull
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-emerald-500/20 text-emerald-300"
+                          }`}
+                        >
+                          {!c.isActive
+                            ? "Pasif"
+                            : isExpired
+                            ? "Süresi Doldu"
+                            : isFull
+                            ? "Kota Doldu"
+                            : "Aktif"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {c.description && (
+                      <p className="text-xs text-zinc-300 leading-relaxed font-sans">{c.description}</p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04] text-[11px] text-zinc-400">
+                      <div className="flex items-center gap-3">
+                        <span>
+                          Kullanım:{" "}
+                          <b className="text-white font-mono">{c.usedCount || 0}</b> /{" "}
+                          <span className="font-mono">{c.maxUses > 0 ? c.maxUses : "Sınırsız"}</span>
+                        </span>
+                        {c.expiresAt && (
+                          <span>
+                            Bitiş:{" "}
+                            <b className="text-zinc-300">
+                              {new Date(c.expiresAt).toLocaleDateString("tr-TR")}
+                            </b>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleCouponActive(c)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            c.isActive
+                              ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30"
+                              : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30"
+                          }`}
+                        >
+                          {c.isActive ? "Pasife Al" : "Aktif Et"}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCoupon(c.id, c.code)}
+                          className="p-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                          title="Kuponu Sil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Yeni Kupon Oluşturma Modalı */}
+      {couponModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#11131a] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300">
+                  <Gift className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Yeni Kupon / Kampanya Tanımla</h3>
+              </div>
+              <button
+                onClick={() => setCouponModalOpen(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">Kupon Kodu</label>
+                <input
+                  type="text"
+                  placeholder="ÖRN: HOSGELDIN, YAZ2026, VIP50"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold tracking-wider text-white uppercase focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">Kupon Türü</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { id: "BALANCE", label: "🎁 Bakiye", desc: "Doğrudan TL Yükler" },
+                    { id: "DISCOUNT_PERCENT", label: "📉 Yüzde %", desc: "SMS'te % İndirim" },
+                    { id: "DISCOUNT_FIXED", label: "🏷️ Sabit TL", desc: "SMS'te Sabit ₺" },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setCouponType(t.id as any)}
+                      className={`p-2 rounded-xl border text-center transition-all ${
+                        couponType === t.id
+                          ? "bg-purple-500/20 border-purple-500 text-purple-200"
+                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <span className="text-xs font-bold block">{t.label}</span>
+                      <span className="text-[9px] text-zinc-500 block">{t.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    {couponType === "DISCOUNT_PERCENT" ? "İndirim Oranı (%)" : "Tutar (₺)"}
+                  </label>
+                  <input
+                    type="number"
+                    placeholder={couponType === "DISCOUNT_PERCENT" ? "Örn: 20" : "Örn: 25"}
+                    value={couponValue}
+                    onChange={(e) => setCouponValue(e.target.value)}
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                    Kullanım Limiti (0 = Sınırsız)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Örn: 100"
+                    value={couponMaxUses}
+                    onChange={(e) => setCouponMaxUses(e.target.value)}
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  Son Geçerlilik Tarihi (Opsiyonel)
+                </label>
+                <input
+                  type="date"
+                  value={couponExpiresAt}
+                  onChange={(e) => setCouponExpiresAt(e.target.value)}
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  Kampanya Açıklaması / Notu
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Örn: İlk defa kayıt olan kullanıcılara hoş geldin hediyesi."
+                  value={couponDesc}
+                  onChange={(e) => setCouponDesc(e.target.value)}
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCouponModalOpen(false)}
+                className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateCoupon}
+                disabled={savingCoupon || !couponCode.trim()}
+                className="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {savingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>Kuponu Yayınla</span>
+              </button>
             </div>
           </div>
         </div>

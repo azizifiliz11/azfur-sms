@@ -26,6 +26,7 @@ interface RentPanelProps {
   telegramId: number;
   onOpenDeposit: () => void;
   isCatalogLoading?: boolean;
+  activeDiscount?: { code: string; type: 'DISCOUNT_PERCENT' | 'DISCOUNT_FIXED'; value: number } | null;
 }
 
 export function RentPanel({
@@ -38,6 +39,7 @@ export function RentPanel({
   telegramId,
   onOpenDeposit,
   isCatalogLoading = false,
+  activeDiscount = null,
 }: RentPanelProps) {
   const [selectedServiceCode, setSelectedServiceCode] = useState<string>("wa");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -79,6 +81,15 @@ export function RentPanel({
     const match = catalog.find((item) => item.serviceCode === selectedServiceCode);
     return match || null;
   }, [catalog, selectedServiceCode]);
+
+  const finalPriceWithDiscount = useMemo(() => {
+    if (!selectedItem) return 0;
+    if (!activeDiscount) return selectedItem.calculatedPriceTry;
+    if (activeDiscount.type === "DISCOUNT_PERCENT") {
+      return Math.max(1.0, Number((selectedItem.calculatedPriceTry * (1 - activeDiscount.value / 100)).toFixed(2)));
+    }
+    return Math.max(1.0, Number((selectedItem.calculatedPriceTry - activeDiscount.value).toFixed(2)));
+  }, [selectedItem, activeDiscount]);
 
   const handleCountryPick = (c: Country) => {
     haptic.selection();
@@ -289,10 +300,29 @@ export function RentPanel({
                 </div>
               ) : selectedItem ? (
                 <>
-                  <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
-                    ₺{selectedItem.calculatedPriceTry.toFixed(2)}
-                  </div>
-                  <span className="text-[10px] text-zinc-500 block">Net Ücret</span>
+                  {activeDiscount ? (
+                    <div className="flex flex-col items-end">
+                      <div className="flex items-center gap-1.5">
+                        <span className="line-through text-zinc-500 text-xs font-mono">
+                          ₺{selectedItem.calculatedPriceTry.toFixed(2)}
+                        </span>
+                        <span className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                          ₺{finalPriceWithDiscount.toFixed(2)}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-purple-400 font-semibold flex items-center gap-0.5">
+                        <span>🎟️</span>
+                        <span>{activeDiscount.code} ({activeDiscount.type === "DISCOUNT_PERCENT" ? `%${activeDiscount.value}` : `₺${activeDiscount.value}`} İndirim)</span>
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                        ₺{selectedItem.calculatedPriceTry.toFixed(2)}
+                      </div>
+                      <span className="text-[10px] text-zinc-500 block">Net Ücret</span>
+                    </>
+                  )}
                 </>
               ) : (
                 <span className="text-xs text-rose-400 font-semibold">Stok Yok</span>

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
+import { isAuthorizedAdmin } from "@/lib/auth-check";
 
 export async function POST(req: NextRequest) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     const { target, telegramId, message } = await req.json();
 
     if (!message || !message.trim()) {

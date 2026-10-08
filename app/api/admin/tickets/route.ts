@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { TicketMessage } from "@/lib/types";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
+import { isAuthorizedAdmin } from "@/lib/auth-check";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const tickets = db.getAllTickets();
     const openCount = tickets.filter((t) => t.status === "OPEN").length;
@@ -32,6 +36,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const body = await req.json();
     const { action, ticketId } = body;

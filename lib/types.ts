@@ -34,6 +34,23 @@ export interface CalculatedCatalogItem {
   icon?: string;
 }
 
+export type CouponType = 'BALANCE' | 'DISCOUNT_PERCENT' | 'DISCOUNT_FIXED';
+
+export interface Coupon {
+  id: string;
+  code: string; // e.g. "AZFUR10", "HOSGELDIN", "BAYRAM50"
+  type: CouponType;
+  value: number; // 25 (for 25 TL) or 20 (for 20%)
+  description?: string;
+  minOrderAmount?: number;
+  maxUses?: number; // 0 veya undefined ise sınırsız
+  usedCount: number;
+  usedByUserIds: number[];
+  isActive: boolean;
+  expiresAt?: string;
+  createdAt: string;
+}
+
 export interface User {
   telegramId: number;
   username?: string;
@@ -43,6 +60,11 @@ export interface User {
   spent: number;
   role: 'user' | 'admin';
   isBanned?: boolean;
+  activeDiscount?: {
+    code: string;
+    type: 'DISCOUNT_PERCENT' | 'DISCOUNT_FIXED';
+    value: number;
+  };
   createdAt: string;
   lastActiveAt: string;
 }
@@ -112,6 +134,7 @@ export interface SystemSettings {
   supportTelegramUsernames?: string[];
   customStickerFileId?: string;
   heroSmsApiKey?: string;
+  adminSecurityPin?: string; // Yönetici Web Paneli Giriş PIN Kodu (Örn: 2026 veya özel şifre)
 }
 
 export interface DepositRequest {

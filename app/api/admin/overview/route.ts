@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { heroSms } from "@/lib/hero-sms";
 import { db } from "@/lib/db";
+import { isAuthorizedAdmin } from "@/lib/auth-check";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const [providerBalance, users, activations, settings] = await Promise.all([
       heroSms.getBalance(),
@@ -116,6 +120,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
+    }
     await db.syncFromCloud();
     const body = await req.json();
     if (body.action === "reset_stats") {

@@ -41,7 +41,30 @@ export async function POST(req: NextRequest) {
     const originalCost = priceStock?.cost || 0.15;
 
     // 3. Kâr marjlı satış fiyatını hesapla
-    const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, Number(countryId));
+    const baseCalc = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, Number(countryId));
+    let finalPriceTry = baseCalc.finalPriceTry;
+    let appliedDiscount: { code: string; type: string; value: number; discountAmount: number; originalPrice: number } | null = null;
+
+    // Kullanıcının tanımlı aktif promosyon / indirim kuponu var mı?
+    if (user.activeDiscount) {
+      const discount = user.activeDiscount;
+      let discountAmount = 0;
+      if (discount.type === "DISCOUNT_PERCENT") {
+        discountAmount = (finalPriceTry * Number(discount.value)) / 100;
+      } else if (discount.type === "DISCOUNT_FIXED") {
+        discountAmount = Number(discount.value);
+      }
+
+      const discountedPrice = Math.max(1.0, Number((finalPriceTry - discountAmount).toFixed(2)));
+      appliedDiscount = {
+        code: discount.code,
+        type: discount.type,
+        value: discount.value,
+        originalPrice: finalPriceTry,
+        discountAmount: Number((finalPriceTry - discountedPrice).toFixed(2)),
+      };
+      finalPriceTry = discountedPrice;
+    }
 
     // 4. Kullanıcı bakiyesi yeterli mi?
     if (user.balance < finalPriceTry) {
@@ -78,6 +101,11 @@ export async function POST(req: NextRequest) {
     // 6. Kullanıcının bakiyesinden ücreti düş
     await db.updateUserBalance(telegramId, -finalPriceTry);
 
+    // Eğer indirim kuponu kullanıldıysa hakkı tüket (sıfırla)
+    if (appliedDiscount) {
+      await db.updateUser(telegramId, { activeDiscount: undefined });
+    }
+
     // 7. Aktivasyon siparişini kaydet
     const now = Date.now();
     const order: ActivationOrder = {
@@ -105,6 +133,7 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "Numara başarıyla kiralandı",
       order,
+      appliedDiscount,
       remainingBalance: (user.balance - finalPriceTry).toFixed(2),
     });
   } catch (err: any) {

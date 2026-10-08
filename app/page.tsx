@@ -294,6 +294,7 @@ function HomeContent() {
               telegramId={tgUser?.id || currentUser?.telegramId || 0}
               onOpenDeposit={() => setDepositModalOpen(true)}
               isCatalogLoading={catalogLoading}
+              activeDiscount={currentUser?.activeDiscount}
             />
 
             {/* Alt Bilgi & Canlı Destek Butonu */}

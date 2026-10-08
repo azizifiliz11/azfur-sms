@@ -47,12 +47,43 @@ function getAppUrls() {
 // ==========================================
 // ANİMASYONLU GÖRSEL VE STİCKER MOTORU
 // ==========================================
+const POPULAR_ANIMATED_SETS = ["ResistanceDog", "HotCherry", "Animals"];
+
+async function autoLoadAnimatedSticker(api: any, setName?: string): Promise<{ fileId: string; name: string } | null> {
+  const setsToTry = setName ? [setName] : POPULAR_ANIMATED_SETS;
+  for (const s of setsToTry) {
+    try {
+      const set = await api.getStickerSet(s);
+      if (set && set.stickers && set.stickers.length > 0) {
+        const anim = set.stickers.find((st: any) => st.is_animated || st.is_video) || set.stickers[0];
+        if (anim && anim.file_id) {
+          await db.syncFromCloud();
+          await db.updateSettings({ customStickerFileId: anim.file_id });
+          return { fileId: anim.file_id, name: set.title || s };
+        }
+      }
+    } catch (e) {
+      // Diğer paketi dene
+    }
+  }
+  return null;
+}
+
 async function sendAnimatedVisual(ctx: any, fallbackDice: "🎯" | "🎰" = "🎯") {
   try {
     const settings = db.getSettings();
     if (settings.customStickerFileId) {
       await ctx.replyWithSticker(settings.customStickerFileId);
       return;
+    }
+
+    // Özel sticker yoksa popüler animasyonlu paketten yüklemeyi dene
+    if (ctx.api) {
+      const auto = await autoLoadAnimatedSticker(ctx.api);
+      if (auto) {
+        await ctx.replyWithSticker(auto.fileId);
+        return;
+      }
     }
   } catch (e) {}
 
@@ -298,6 +329,11 @@ export function getTelegramBot(): Bot | null {
           customStickerFileId: fileId,
         });
 
+        // Gönderilen sticker'ı canlı önizleme olarak hemen geri oynat
+        try {
+          await ctx.replyWithSticker(fileId);
+        } catch (e) {}
+
         await ctx.reply(
           `✨ <b>Yeni Hareketli Görsel / Sticker Başarıyla Tanımlandı!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -321,17 +357,91 @@ export function getTelegramBot(): Bot | null {
         String(from.id) === "6824921456";
       if (!isAdmin) return;
 
-      const settings = db.getSettings();
-      if (!settings.customStickerFileId) {
-        await ctx.reply("⚠️ Henüz kayıtlı özel bir sticker yok. Telegram 3D animasyon (🎯) test ediliyor:");
-        await ctx.replyWithDice("🎯");
+      let settings = db.getSettings();
+
+      // Eğer henüz sticker seçilmediyse popüler paketten otomatik çek
+      if (!settings.customStickerFileId && ctx.api) {
+        await ctx.reply("🔄 Özel bir sticker henüz seçilmemiş. Popüler animasyonlu paketten otomatik yükleniyor...");
+        const auto = await autoLoadAnimatedSticker(ctx.api);
+        if (auto) {
+          settings = db.getSettings();
+          await ctx.reply(`🎉 <b>'${auto.name}'</b> paketinden hareketli sticker otomatik aktif edildi!`, { parse_mode: "HTML" });
+        }
+      }
+
+      if (settings.customStickerFileId) {
+        try {
+          await ctx.replyWithSticker(settings.customStickerFileId);
+          await ctx.reply(
+            `✅ <b>Hareketli Sticker Canlı Oynatıldı!</b>\n` +
+            `🔑 <b>File ID:</b> <code>${settings.customStickerFileId}</code>\n\n` +
+            `💡 <b>Değiştirmek İçin:</b>\n` +
+            `• Bota dilediğiniz herhangi bir hareketli (.tgs / .webm) çıkartma gönderin,\n` +
+            `• Veya <code>/setpack paket_adi</code> yazın (örn: <code>/setpack ResistanceDog</code>),\n` +
+            `• Veya Web Admin Panelinden File ID girin.`,
+            { parse_mode: "HTML" }
+          );
+          return;
+        } catch (err: any) {
+          await ctx.reply(`⚠️ Sticker gönderilirken hata: ${err?.message || "Bilinmeyen hata"}`);
+        }
+      }
+
+      await ctx.reply("⚠️ Sticker yüklenemedi. Telegram 3D animasyon (🎯) test ediliyor:");
+      await ctx.replyWithDice("🎯");
+    });
+
+    // /setpack Komutu
+    botInstance.command("setpack", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      const user = db.getUser(from.id);
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
+        String(from.id) === "6824921456";
+      if (!isAdmin) return;
+
+      const rawText = (ctx.match || "").trim();
+      if (!rawText) {
+        await ctx.reply(
+          `ℹ️ <b>Kullanım:</b> <code>/setpack paket_adi</code> veya <code>/setpack https://t.me/addstickers/paket_adi</code>\n\n` +
+          `Örnek:\n<code>/setpack ResistanceDog</code>\n<code>/setpack Animals</code>\n\n` +
+          `Veya bota doğrudan dilediğiniz herhangi bir hareketli sticker'ı bu sohbete gönderebilirsiniz!`,
+          { parse_mode: "HTML" }
+        );
         return;
       }
-      try {
-        await ctx.replyWithSticker(settings.customStickerFileId);
-        await ctx.reply(`✅ Kayıtlı hareketli sticker başarıyla gönderildi!\n🔑 File ID: <code>${settings.customStickerFileId}</code>`, { parse_mode: "HTML" });
-      } catch (err: any) {
-        await ctx.reply(`❌ Sticker gönderilirken hata oluştu: ${err?.message || "Bilinmeyen hata"}`);
+
+      let packName = rawText;
+      if (packName.includes("addstickers/")) {
+        packName = packName.split("addstickers/")[1]?.split("/")[0]?.split("?")[0] || packName;
+      } else if (packName.includes("addemoji/")) {
+        await ctx.reply(
+          `⚠️ <b>Bu bir Custom Emoji paketidir!</b>\n\n` +
+          `Telegram Bot kuralları gereği botlar custom emoji paketlerini mesaj çıkartması olarak gönderemez.\n` +
+          `Lütfen bir <b>Sticker Paketi</b> (<code>t.me/addstickers/...</code>) adı girin veya bota dilediğiniz hareketli sticker'ı doğrudan sohbette gönderin!`,
+          { parse_mode: "HTML" }
+        );
+        return;
+      }
+
+      const res = await autoLoadAnimatedSticker(ctx.api, packName);
+      if (res) {
+        try {
+          await ctx.replyWithSticker(res.fileId);
+        } catch (e) {}
+        await ctx.reply(
+          `✅ <b>'${res.name}' Paketi Başarıyla Tanımlandı!</b>\n` +
+          `Bot artık /start, /bakiye, /yardim vb. her yerde bu canlı animasyonu oynatacaktır.`,
+          { parse_mode: "HTML" }
+        );
+      } else {
+        await ctx.reply(
+          `❌ <b>'${packName}' paketi bulunamadı veya Telegram Bot API tarafından erişilemedi.</b>\n\n` +
+          `💡 <i>İpucu: En garantili yöntem, bota istediğiniz paketten bir çıkartmayı doğrudan bu sohbete göndermektir.</i>`,
+          { parse_mode: "HTML" }
+        );
       }
     });
 
@@ -349,6 +459,63 @@ export function getTelegramBot(): Bot | null {
       await db.syncFromCloud();
       await db.updateSettings({ customStickerFileId: "" });
       await ctx.reply("🗑️ Özel sticker kaldırıldı. Bot varsayılan Telegram 3D animasyonlarına (🎯 / 🎰) döndü.");
+    });
+
+    // ==========================================
+    // 1.6. YÖNETİCİ METİN VE LİNK YAKALAYICI
+    // ==========================================
+    botInstance.on("message:text", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      const user = db.getUser(from.id);
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
+        String(from.id) === "6824921456";
+      if (!isAdmin) return;
+
+      const text = (ctx.message.text || "").trim();
+
+      // Sticker paketi linki gönderildiyse
+      if (text.includes("t.me/addstickers/")) {
+        const packName = text.split("addstickers/")[1]?.split("/")[0]?.split("?")[0] || "";
+        if (packName) {
+          const res = await autoLoadAnimatedSticker(ctx.api, packName);
+          if (res) {
+            try {
+              await ctx.replyWithSticker(res.fileId);
+            } catch (e) {}
+            await ctx.reply(
+              `✅ <b>'${res.name}' Paketi Başarıyla Tanımlandı!</b>`,
+              { parse_mode: "HTML" }
+            );
+            return;
+          }
+        }
+      }
+
+      // Emoji paketi linki gönderildiyse
+      if (text.includes("t.me/addemoji/")) {
+        await ctx.reply(
+          `ℹ️ <b>Gönderdiğiniz link bir 'Özel Emoji Paketi'dir.</b>\n\n` +
+          `📌 <b>Telegram Kuralı:</b> Telegram botları emoji paketlerini (<code>t.me/addemoji/...</code>) bağımsız çıkartma olarak gönderemez (bunun için Telegram Fragment üzerinden 5.000 TON değerinde kullanıcı adı gereklidir).\n\n` +
+          `🚀 <b>Çözüm:</b>\n` +
+          `1. Bota doğrudan beğendiğiniz herhangi bir <b>hareketli sticker</b> atabilirsiniz (bot anında yakalar).\n` +
+          `2. Veya bir <b>çıkartma paketi linki</b> (<code>t.me/addstickers/...</code>) atabilirsiniz.\n` +
+          `3. Veya <code>/teststicker</code> yazarak otomatik yüklenen animasyonu test edebilirsiniz!`,
+          { parse_mode: "HTML" }
+        );
+        return;
+      }
+
+      // Eğer mesajda custom emoji var ama sticker değilse
+      const hasCustomEmoji = ctx.message.entities?.some((e) => e.type === "custom_emoji");
+      if (hasCustomEmoji) {
+        await ctx.reply(
+          `💡 <i>Attığınız mesaj bir Custom Emoji içeriyor. Botun bunu animasyon olarak oynatabilmesi için lütfen bu emojiyi değil, bir <b>çıkartma (sticker)</b> gönderiniz.</i>`,
+          { parse_mode: "HTML" }
+        );
+      }
     });
 
     // ==========================================

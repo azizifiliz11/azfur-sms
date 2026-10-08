@@ -195,6 +195,29 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     return fetch(url, { ...options, headers });
   };
 
+  // Kullanıcı Son Görülme ve Canlılık Formatlayıcı (Tüm alanlarda tutarlı)
+  const formatUserLastActive = (dateStr?: string) => {
+    if (!dateStr) return "Bilinmiyor";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "Bilinmiyor";
+      const now = Date.now();
+      const diffMs = Math.max(0, now - d.getTime());
+      if (diffMs < 60 * 1000) return "Az önce";
+      const diffMins = Math.floor(diffMs / (60 * 1000));
+      if (diffMins < 60) return `${diffMins} dk önce`;
+      const diffHours = Math.floor(diffMs / (3600 * 1000));
+      const timeStr = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+      if (diffHours < 24) return `${diffHours} sa önce (${timeStr})`;
+      const diffDays = Math.floor(diffMs / (86400 * 1000));
+      if (diffDays === 1) return `Dün ${timeStr}`;
+      if (diffDays < 7) return `${diffDays} gün önce (${timeStr})`;
+      return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const fetchAllData = async () => {
     setRefreshing(true);
     const headers = getAdminHeaders();
@@ -280,6 +303,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
 
   useEffect(() => {
     fetchAllData();
+    const interval = setInterval(() => {
+      fetchAllData();
+    }, 20000);
+    return () => clearInterval(interval);
   }, []);
 
   // Yeni Kupon Oluştur
@@ -2606,25 +2633,6 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                           // Son 5 dakika içinde aktif olan kullanıcı canlı / çevrimiçi sayılır
                           const isOnline = lastActiveTime > 0 && Date.now() - lastActiveTime < 5 * 60 * 1000;
 
-                          const formatLastActive = (dateStr?: string) => {
-                            if (!dateStr) return "Bilinmiyor";
-                            try {
-                              const d = new Date(dateStr);
-                              const diffMs = Date.now() - d.getTime();
-                              if (diffMs < 60000) return "Az önce";
-                              const diffMins = Math.floor(diffMs / 60000);
-                              if (diffMins < 60) return `${diffMins} dk önce`;
-                              const diffHours = Math.floor(diffMins / 60);
-                              if (diffHours < 24) return `${diffHours} sa önce`;
-                              const diffDays = Math.floor(diffHours / 24);
-                              if (diffDays === 1) return `Dün ${d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`;
-                              if (diffDays < 7) return `${diffDays} gün önce`;
-                              return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-                            } catch {
-                              return dateStr;
-                            }
-                          };
-
                           return (
                             <>
                               <div className="flex items-center gap-2 flex-wrap">
@@ -2660,7 +2668,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                                   </span>
                                 ) : (
                                   <span className="text-[10px] text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded">
-                                    {formatLastActive(u.lastActiveAt)}
+                                    {formatUserLastActive(u.lastActiveAt)}
                                   </span>
                                 )}
                               </div>
@@ -2681,7 +2689,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                                 <span className="text-zinc-600">•</span>
                                 <span className="flex items-center gap-1 text-[10px] text-zinc-400">
                                   <Clock className="w-3 h-3 text-zinc-500" />
-                                  Son aktif: <span className={isOnline ? "text-emerald-400 font-semibold" : "text-zinc-300"}>{isOnline ? "Şu an aktif" : formatLastActive(u.lastActiveAt)}</span>
+                                  Son aktif: <span className={isOnline ? "text-emerald-400 font-semibold" : "text-zinc-300"}>{isOnline ? "Şu an aktif (Çevrimiçi)" : formatUserLastActive(u.lastActiveAt)}</span>
                                 </span>
                               </div>
                             </>
@@ -3799,6 +3807,22 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         <Copy className="w-3 h-3 text-zinc-500" />
                       )}
                     </button>
+                    <span className="text-zinc-600">•</span>
+                    {(() => {
+                      const latMs = selectedUserDetail.lastActiveAt ? new Date(selectedUserDetail.lastActiveAt).getTime() : 0;
+                      const isDetailOnline = latMs > 0 && Date.now() - latMs < 5 * 60 * 1000;
+                      return isDetailOnline ? (
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Şu an aktif (Çevrimiçi)
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-zinc-500" />
+                          Son aktif: {formatUserLastActive(selectedUserDetail.lastActiveAt)}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

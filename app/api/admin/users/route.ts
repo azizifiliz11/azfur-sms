@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
+    const reqAdminTgId = req.headers.get("x-telegram-id") || db.getSettings().adminTelegramId;
+    if (reqAdminTgId) {
+      await db.touchUserActive(reqAdminTgId);
+    }
     const { searchParams } = new URL(req.url);
     const detailTelegramId = searchParams.get("telegramId");
 

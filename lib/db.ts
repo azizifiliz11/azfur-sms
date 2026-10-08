@@ -325,6 +325,39 @@ export const db = {
     return Array.from(ids).filter(Boolean);
   },
 
+  async touchUserActive(
+    telegramId: number | string,
+    profile?: { username?: string; firstName?: string; lastName?: string }
+  ): Promise<void> {
+    if (!telegramId) return;
+    const data = loadDb();
+    const cleanId = String(telegramId).trim();
+
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    const nowIso = new Date().toISOString();
+
+    if (foundKey && data.users[foundKey]) {
+      const user = data.users[foundKey];
+      user.lastActiveAt = nowIso;
+      if (profile?.username) user.username = profile.username.replace(/^@/, "").trim();
+      if (profile?.firstName) user.firstName = profile.firstName.trim();
+      if (profile?.lastName !== undefined) user.lastName = profile.lastName ? profile.lastName.trim() : undefined;
+      await saveDb(data);
+    } else if (profile?.firstName) {
+      await this.getOrCreateUser(cleanId, {
+        username: profile.username,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        lastActiveAt: nowIso,
+      });
+    }
+  },
+
   async syncTelegramUserProfile(
     telegramId: number | string,
     profile: { username?: string; firstName?: string; lastName?: string }

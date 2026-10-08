@@ -63,6 +63,9 @@ export async function GET(req: NextRequest) {
     let user = db.getUser(telegramId);
     if (!user) {
       user = await db.getOrCreateUser(telegramId);
+    } else {
+      await db.touchUserActive(telegramId);
+      user = db.getUser(telegramId);
     }
 
     // Otomatik profil iyileştirme

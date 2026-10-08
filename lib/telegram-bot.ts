@@ -165,7 +165,7 @@ export function getTelegramBot(): Bot | null {
       if (from && from.id) {
         try {
           await db.syncFromCloud();
-          await db.syncTelegramUserProfile(from.id, {
+          await db.touchUserActive(from.id, {
             username: from.username,
             firstName: from.first_name,
             lastName: from.last_name,

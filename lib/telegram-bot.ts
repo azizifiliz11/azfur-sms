@@ -1132,17 +1132,21 @@ export function getTelegramBot(): Bot | null {
           createdAt: new Date().toISOString(),
         });
 
+        const settings = db.getSettings();
+        const rate = settings.exchangeRateToTry || settings.lastTcmbRate || 49.2;
+        const approxUsd = (amt / rate).toFixed(2);
+
         const payUrl = invResult.invoice.bot_invoice_url;
         const text =
           `🧾 <b>@CryptoBot ÖDEME FATURANIZ HAZIR!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Yüklenecek Bakiye:</b> <code>${amt.toFixed(2)} ₺</code>\n` +
-          `💵 <b>Tutar:</b> <code>$${invResult.invoice.amount} USD</code>\n` +
+          `💵 <b>Ödenecek Tutar:</b> <code>${amt.toFixed(2)} ₺</code> <i>(≈ $${approxUsd} USD)</i>\n` +
           `🆔 <b>Fatura No:</b> <code>#${invResult.invoice.invoice_id}</code>\n` +
           `🪙 <b>Kabul Edilen:</b> USDT, TON, TRX, BTC, ETH, LTC, BNB, USDC\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `👇 <b>Ödemeyi tamamlamak için aşağıdaki butona dokunun:</b>\n` +
-          `<i>(Ödemeniz onaylandığı anda bakiyeniz hesabınıza otomatik yüklenecektir)</i>`;
+          `<i>(CryptoBot üzerinde ~${approxUsd} USDT/TON veya dilediğiniz kripto ile ödeyebilirsiniz. Ödemeniz tamamlandığında bakiyeniz anında hesabınıza yüklenecektir)</i>`;
 
         const kb = new InlineKeyboard()
           .url("⚡ Faturayı Öde (@CryptoBot)", payUrl)

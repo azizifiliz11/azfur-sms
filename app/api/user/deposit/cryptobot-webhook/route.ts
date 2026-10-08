@@ -5,19 +5,31 @@ import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
+// Webhook ping / healthcheck desteği
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "CryptoBot Webhook Endpoint Active" });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
-    const signature = req.headers.get("crypto-pay-api-signature");
+    const signature =
+      req.headers.get("crypto-pay-api-signature") ||
+      req.headers.get("Crypto-Pay-Api-Signature");
 
-    // İmza doğrulaması (güvenlik kontrolü)
+    // İmza doğrulaması (resmi HMAC SHA-256 kontrolü)
     const isValid = verifyCryptoBotSignature(rawBody, signature);
     if (!isValid) {
-      console.warn("Invalid CryptoBot webhook signature");
+      console.warn("Invalid CryptoBot webhook signature:", {
+        receivedSig: signature,
+        hasBody: !!rawBody,
+      });
       return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
     }
 
     const data = JSON.parse(rawBody);
+
+    // Yalnızca invoice_paid olayında bakiye yükle
     if (data.update_type === "invoice_paid" && data.payload) {
       const invoice = data.payload;
       const invoiceId = invoice.invoice_id;
@@ -42,8 +54,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, message: "Already credited" });
       }
 
+      const settings = db.getSettings();
       const telegramId = payloadData?.telegramId || deposit?.telegramId;
-      const amountTry = payloadData?.amountTry || deposit?.amount || 0;
+
+      let amountTry = 0;
+      if (payloadData?.amountTry && !isNaN(parseFloat(payloadData.amountTry))) {
+        amountTry = parseFloat(payloadData.amountTry);
+      } else if (invoice.currency_type === "fiat" && invoice.fiat === "TRY") {
+        amountTry = parseFloat(invoice.amount) || 0;
+      } else if (invoice.currency_type === "fiat" && invoice.fiat === "USD") {
+        const rate = settings.exchangeRateToTry || settings.lastTcmbRate || 49.2;
+        amountTry = Number(((parseFloat(invoice.amount) || 0) * rate).toFixed(2));
+      } else if (deposit?.amount) {
+        amountTry = deposit.amount;
+      }
 
       if (telegramId && amountTry > 0) {
         // 1. Bakiyeyi otomatik yükle
@@ -54,16 +78,20 @@ export async function POST(req: NextRequest) {
           await db.updateDepositStatus(deposit.id, "APPROVED");
         }
 
-        // 3. Kullanıcıya Telegram'dan anlık push bildirimi gönder
+        // 3. Kullanıcıya Telegram'dan anlık bildirim gönder
+        const paidAssetStr = invoice.paid_asset
+          ? ` (${invoice.paid_amount} ${invoice.paid_asset})`
+          : "";
+
         const messageText =
           `🎉 <b>BAKİYE YÜKLEMESİ ONAYLANDI!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `🤖 <b>Ödeme Yöntemi:</b> @CryptoBot (Kripto)\n` +
-          `💰 <b>Yüklenen Tutar:</b> <code>+${amountTry.toFixed(2)} ₺</code>\n` +
+          `💰 <b>Yüklenen Tutar:</b> <code>+${amountTry.toFixed(2)} ₺</code>${paidAssetStr}\n` +
           `💳 <b>Yeni Bakiyeniz:</b> <code>${updatedUser.balance.toFixed(2)} ₺</code>\n` +
           `🔑 <b>Fatura No:</b> <code>#${invoiceId}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `⚡ <i>Ödemeniz otomatik olarak tanımlanmıştır. İyi kullanımlar dileriz!</i>`;
+          `⚡ <i>Ödemeniz otomatik olarak tanımlanmıştır. Hemen numara kiralayabilirsiniz!</i>`;
 
         try {
           await sendTelegramDirectMessage(telegramId, messageText);
@@ -73,6 +101,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // CryptoBot sunucusuna başarılı yanıt dön (aksi halde tekrar dener)
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("CryptoBot webhook processing error:", err);

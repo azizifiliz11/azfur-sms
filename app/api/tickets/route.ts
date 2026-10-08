@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       tickets,
-      supportTelegramUsername: settings.supportTelegramUsername || "azfursms_admin",
-      supportTelegramUsernames: settings.supportTelegramUsernames || [settings.supportTelegramUsername || "azfursms_admin"],
+      supportTelegramUsername: settings.supportTelegramUsername || "",
+      supportTelegramUsernames: settings.supportTelegramUsernames || [],
     });
   } catch (err: any) {
     console.error("Tickets GET error:", err);

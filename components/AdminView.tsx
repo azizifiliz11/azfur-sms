@@ -110,8 +110,8 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [ticketFilter, setTicketFilter] = useState<"ALL" | "OPEN" | "ANSWERED" | "CLOSED">("ALL");
 
   // Support Telegram Usernames states
-  const [supportTelegramUsername, setSupportTelegramUsername] = useState<string>("azfursms_admin");
-  const [supportTelegramUsernames, setSupportTelegramUsernames] = useState<string[]>(["azfursms_admin"]);
+  const [supportTelegramUsername, setSupportTelegramUsername] = useState<string>("");
+  const [supportTelegramUsernames, setSupportTelegramUsernames] = useState<string[]>([]);
   const [newSupportUsername, setNewSupportUsername] = useState<string>("");
   const [savingSupportUser, setSavingSupportUser] = useState<boolean>(false);
 
@@ -160,12 +160,15 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           setCryptoBotToken(st.settings.cryptoSettings.cryptoBotToken || "");
           setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
-        if (st.settings?.supportTelegramUsernames && Array.isArray(st.settings.supportTelegramUsernames) && st.settings.supportTelegramUsernames.length > 0) {
+        if (st.settings?.supportTelegramUsernames && Array.isArray(st.settings.supportTelegramUsernames)) {
           setSupportTelegramUsernames(st.settings.supportTelegramUsernames);
-          setSupportTelegramUsername(st.settings.supportTelegramUsernames[0]);
+          setSupportTelegramUsername(st.settings.supportTelegramUsernames[0] || "");
         } else if (st.settings?.supportTelegramUsername) {
           setSupportTelegramUsername(st.settings.supportTelegramUsername);
           setSupportTelegramUsernames([st.settings.supportTelegramUsername]);
+        } else {
+          setSupportTelegramUsernames([]);
+          setSupportTelegramUsername("");
         }
         if (st.settings?.customStickerFileId !== undefined) {
           setCustomStickerFileId(st.settings.customStickerFileId || "");

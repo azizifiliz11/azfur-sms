@@ -41,8 +41,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
     cryptoBotToken: "",
     autoVerifyEnabled: true,
   },
-  supportTelegramUsername: "azfursms_admin",
-  supportTelegramUsernames: ["azfursms_admin"],
+  supportTelegramUsername: "",
+  supportTelegramUsernames: [],
   customStickerFileId: "",
 };
 
@@ -142,11 +142,11 @@ function loadDb(): DatabaseSchema {
     if (!data.settings.lastTcmbRate) data.settings.lastTcmbRate = 49.20;
     if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
     if (!data.settings.cryptoSettings) data.settings.cryptoSettings = DEFAULT_SETTINGS.cryptoSettings;
-    if (!data.settings.supportTelegramUsername) data.settings.supportTelegramUsername = DEFAULT_SETTINGS.supportTelegramUsername;
-    if (!data.settings.supportTelegramUsernames || !Array.isArray(data.settings.supportTelegramUsernames) || data.settings.supportTelegramUsernames.length === 0) {
+    if (data.settings.supportTelegramUsername === undefined) data.settings.supportTelegramUsername = "";
+    if (data.settings.supportTelegramUsernames === undefined || !Array.isArray(data.settings.supportTelegramUsernames)) {
       data.settings.supportTelegramUsernames = data.settings.supportTelegramUsername
         ? [data.settings.supportTelegramUsername]
-        : ["azfursms_admin"];
+        : [];
     }
     if (!data.users) data.users = {};
     if (data.users["100001"]) {

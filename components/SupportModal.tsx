@@ -38,8 +38,8 @@ export function SupportModal({
   const [activeTab, setActiveTab] = useState<"list" | "create" | "detail">("list");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
-  const [supportUsername, setSupportUsername] = useState<string>("azfursms_admin");
-  const [supportUsernames, setSupportUsernames] = useState<string[]>(["azfursms_admin"]);
+  const [supportUsername, setSupportUsername] = useState<string>("");
+  const [supportUsernames, setSupportUsernames] = useState<string[]>([]);
 
   // Create form state
   const [subject, setSubject] = useState("");
@@ -61,12 +61,15 @@ export function SupportModal({
       const data = await res.json();
       if (data.success) {
         setTickets(data.tickets || []);
-        if (data.supportTelegramUsernames && Array.isArray(data.supportTelegramUsernames) && data.supportTelegramUsernames.length > 0) {
+        if (data.supportTelegramUsernames && Array.isArray(data.supportTelegramUsernames)) {
           setSupportUsernames(data.supportTelegramUsernames);
-          setSupportUsername(data.supportTelegramUsernames[0]);
+          setSupportUsername(data.supportTelegramUsernames[0] || "");
         } else if (data.supportTelegramUsername) {
           setSupportUsername(data.supportTelegramUsername);
           setSupportUsernames([data.supportTelegramUsername]);
+        } else {
+          setSupportUsernames([]);
+          setSupportUsername("");
         }
       }
     } catch (e) {

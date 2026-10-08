@@ -236,12 +236,14 @@ export function getTelegramBot(): Bot | null {
 
       const { appUrl } = getAppUrls();
       const settings = db.getSettings();
-      const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0
+      const rawList = settings.supportTelegramUsernames !== undefined
         ? settings.supportTelegramUsernames
-        : [settings.supportTelegramUsername || "azfursms_admin"];
+        : (settings.supportTelegramUsername ? [settings.supportTelegramUsername] : []);
       const supportUsernames = rawList.map((u) => u.replace(/^@/, "").trim()).filter(Boolean);
 
-      const supportAdminsText = supportUsernames.map((u) => `👑 <b>Yetkili:</b> @${u}`).join("\n");
+      const supportAdminsText = supportUsernames.length > 0
+        ? supportUsernames.map((u) => `👑 <b>Yetkili:</b> @${u}`).join("\n")
+        : `💬 <i>Canlı destek için lütfen Mini App üzerinden destek talebi açınız.</i>`;
 
       const kb = new InlineKeyboard();
       for (const u of supportUsernames) {
@@ -1111,12 +1113,14 @@ export function getTelegramBot(): Bot | null {
         await sendAnimatedVisual(ctx, "🎯");
 
         const settings = db.getSettings();
-        const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0
+        const rawList = settings.supportTelegramUsernames !== undefined
           ? settings.supportTelegramUsernames
-          : [settings.supportTelegramUsername || "azfursms_admin"];
+          : (settings.supportTelegramUsername ? [settings.supportTelegramUsername] : []);
         const supportUsernames = rawList.map((u) => u.replace(/^@/, "").trim()).filter(Boolean);
 
-        const supportAdminsText = supportUsernames.map((u) => `👑 <b>Canlı Destek:</b> @${u}`).join("\n");
+        const supportAdminsText = supportUsernames.length > 0
+          ? supportUsernames.map((u) => `👑 <b>Canlı Destek:</b> @${u}`).join("\n")
+          : `💬 <i>Canlı destek için lütfen Mini App üzerinden bilet açınız.</i>`;
 
         const text =
           `🆘 <b>AZFUR SMS DESTEK MERKEZİ</b>\n` +

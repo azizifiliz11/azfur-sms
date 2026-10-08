@@ -44,18 +44,80 @@ function getAppUrls() {
   };
 }
 
+// ==========================================
+// DECORATION PACK (https://t.me/addemoji/Decoration_Pack)
+// ==========================================
+interface DecorationEmojiItem {
+  file_id: string;
+  custom_emoji_id?: string;
+  emoji: string;
+}
+
+let decorationPackStickers: DecorationEmojiItem[] = [];
+let hasFetchedDecorationPack = false;
+
+export async function ensureDecorationPack(bot: Bot): Promise<DecorationEmojiItem[]> {
+  if (hasFetchedDecorationPack && decorationPackStickers.length > 0) {
+    return decorationPackStickers;
+  }
+  try {
+    const set = await bot.api.getStickerSet("Decoration_Pack");
+    if (set && set.stickers && set.stickers.length > 0) {
+      decorationPackStickers = set.stickers.map((s: any) => ({
+        file_id: s.file_id,
+        custom_emoji_id: s.custom_emoji_id,
+        emoji: s.emoji || "✨",
+      }));
+      hasFetchedDecorationPack = true;
+      return decorationPackStickers;
+    }
+  } catch (err: any) {
+    // Pack fetch hatası durumunda sessizce devam et
+  }
+  return [];
+}
+
+function getDecorationSticker(preferredEmojis: string[] = []): string | null {
+  if (decorationPackStickers.length === 0) return null;
+  if (preferredEmojis.length > 0) {
+    const matched = decorationPackStickers.find((s) => preferredEmojis.includes(s.emoji));
+    if (matched) return matched.file_id;
+  }
+  const idx = Math.floor(Math.random() * decorationPackStickers.length);
+  return decorationPackStickers[idx].file_id;
+}
+
+function decoEmoji(fallback: string, preferredEmoji?: string): string {
+  if (decorationPackStickers.length === 0) return fallback;
+  const target = preferredEmoji
+    ? decorationPackStickers.find((s) => s.emoji === preferredEmoji)
+    : decorationPackStickers.find((s) => s.emoji === fallback) || decorationPackStickers[0];
+
+  if (target && target.custom_emoji_id) {
+    return `<tg-emoji emoji-id="${target.custom_emoji_id}">${fallback}</tg-emoji>`;
+  }
+  return fallback;
+}
+
 function buildMainMenuText(user: User, firstName: string, activeCount: number): string {
   const safeName = (firstName || "Kullanıcı").replace(/[<>&]/g, "");
+  const zap = decoEmoji("⚡");
+  const star = decoEmoji("✨");
+  const fire = decoEmoji("🔥");
+  const money = decoEmoji("💰");
+  const box = decoEmoji("📦");
+  const hand = decoEmoji("👋");
+
   return (
-    `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n` +
+    `${zap} ━━━━━━━━━━━━━━━━━━━━ ${zap}\n` +
     `       💠 <b>AZFUR SMS ONAY</b> 💠\n` +
-    `✨ <i>Sanal Numara & Hızlı SMS Servisi</i> ✨\n` +
-    `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n\n` +
-    `👋 <b>Hoş Geldiniz, ${safeName}!</b>\n\n` +
-    `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
+    `${star} <i>Sanal Numara & Hızlı SMS Servisi</i> ${star}\n` +
+    `${zap} ━━━━━━━━━━━━━━━━━━━━ ${zap}\n\n` +
+    `${hand} <b>Hoş Geldiniz, ${safeName}!</b>\n\n` +
+    `${money} <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>\n` +
-    `📦 <b>Bekleyen Aktif Onay:</b> <code>${activeCount} adet</code>\n\n` +
-    `🔥 <i>WhatsApp, Telegram, ChatGPT ve yüzlerce servis için tek dokunuşla sanal numara kiralayın.</i>\n\n` +
+    `${box} <b>Bekleyen Aktif Onay:</b> <code>${activeCount} adet</code>\n\n` +
+    `${fire} <i>WhatsApp, Telegram, ChatGPT ve yüzlerce servis için tek dokunuşla sanal numara kiralayın.</i>\n\n` +
     `👇 <b>Hemen işlem yapmak için aşağıdaki butonları kullanın:</b>`
   );
 }
@@ -143,10 +205,18 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      // Animasyonlu karşılama sticker'ı / dice gönder
+      // Decoration_Pack hareketli sticker / animasyon gönder
       try {
-        await ctx.replyWithDice("🎯");
-      } catch (e) {}
+        if (botInstance) await ensureDecorationPack(botInstance);
+        const stickerId = getDecorationSticker(["✨", "⭐", "🎉", "🔥", "👑", "💎"]);
+        if (stickerId) {
+          await ctx.replyWithSticker(stickerId);
+        } else {
+          await ctx.replyWithDice("🎯");
+        }
+      } catch (e) {
+        await ctx.replyWithDice("🎯").catch(() => {});
+      }
 
       // Fotoğraflı şık karşılama kartı dene
       if (bannerUrl.startsWith("https://")) {
@@ -201,8 +271,16 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       try {
-        await ctx.replyWithDice("🎰");
-      } catch (e) {}
+        if (botInstance) await ensureDecorationPack(botInstance);
+        const stickerId = getDecorationSticker(["💰", "💳", "💎", "💸", "✨"]);
+        if (stickerId) {
+          await ctx.replyWithSticker(stickerId);
+        } else {
+          await ctx.replyWithDice("🎰");
+        }
+      } catch (e) {
+        await ctx.replyWithDice("🎰").catch(() => {});
+      }
 
       await db.syncFromCloud();
       const user = await db.getOrCreateUser(from.id, {
@@ -226,8 +304,16 @@ export function getTelegramBot(): Bot | null {
     // /yardim Komutu
     botInstance.command("yardim", async (ctx) => {
       try {
-        await ctx.replyWithDice("🎯");
-      } catch (e) {}
+        if (botInstance) await ensureDecorationPack(botInstance);
+        const stickerId = getDecorationSticker(["🆘", "🛡️", "💬", "👑", "✨"]);
+        if (stickerId) {
+          await ctx.replyWithSticker(stickerId);
+        } else {
+          await ctx.replyWithDice("🎯");
+        }
+      } catch (e) {
+        await ctx.replyWithDice("🎯").catch(() => {});
+      }
 
       const { appUrl } = getAppUrls();
       const settings = db.getSettings();
@@ -531,8 +617,16 @@ export function getTelegramBot(): Bot | null {
         await db.saveActivation(order);
 
         try {
-          await ctx.replyWithDice("🎯");
-        } catch (e) {}
+          if (botInstance) await ensureDecorationPack(botInstance);
+          const stickerId = getDecorationSticker(["🎉", "✅", "⚡", "🔥"]);
+          if (stickerId) {
+            await ctx.replyWithSticker(stickerId);
+          } else {
+            await ctx.replyWithDice("🎯");
+          }
+        } catch (e) {
+          await ctx.replyWithDice("🎯").catch(() => {});
+        }
 
         const text =
           `🎉 <b>NUMARANIZ BAŞARIYLA ALINDI!</b>\n` +
@@ -581,8 +675,16 @@ export function getTelegramBot(): Bot | null {
           });
 
           try {
-            await ctx.replyWithDice("🎰");
-          } catch (e) {}
+            if (botInstance) await ensureDecorationPack(botInstance);
+            const stickerId = getDecorationSticker(["🔔", "🎉", "💎", "🔥"]);
+            if (stickerId) {
+              await ctx.replyWithSticker(stickerId);
+            } else {
+              await ctx.replyWithDice("🎰");
+            }
+          } catch (e) {
+            await ctx.replyWithDice("🎰").catch(() => {});
+          }
 
           const text =
             `🔔 <b>SMS KODUNUZ GELDİ!</b>\n` +
@@ -777,8 +879,16 @@ export function getTelegramBot(): Bot | null {
       // --- BAKİYE YÜKLEME MENÜSÜ ---
       if (data === "btn_deposit_menu") {
         try {
-          await ctx.replyWithDice("🎰");
-        } catch (e) {}
+          if (botInstance) await ensureDecorationPack(botInstance);
+          const stickerId = getDecorationSticker(["💰", "💳", "💎", "💸", "✨"]);
+          if (stickerId) {
+            await ctx.replyWithSticker(stickerId);
+          } else {
+            await ctx.replyWithDice("🎰");
+          }
+        } catch (e) {
+          await ctx.replyWithDice("🎰").catch(() => {});
+        }
         const text =
           `💳 <b>BAKİYE YÜKLEME YÖNTEMLERİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -890,8 +1000,16 @@ export function getTelegramBot(): Bot | null {
       // --- YARDIM VE DESTEK ---
       if (data === "btn_help_info") {
         try {
-          await ctx.replyWithDice("🎯");
-        } catch (e) {}
+          if (botInstance) await ensureDecorationPack(botInstance);
+          const stickerId = getDecorationSticker(["🆘", "🛡️", "💬", "👑", "✨"]);
+          if (stickerId) {
+            await ctx.replyWithSticker(stickerId);
+          } else {
+            await ctx.replyWithDice("🎯");
+          }
+        } catch (e) {
+          await ctx.replyWithDice("🎯").catch(() => {});
+        }
 
         const settings = db.getSettings();
         const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0

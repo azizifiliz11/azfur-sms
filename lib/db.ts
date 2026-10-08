@@ -48,11 +48,17 @@ const DEFAULT_KV_TOKEN = "gQAAAAAAAz5-AQIgcDE2MDdmNGQ1YzQ1ZmY0NTI0YmFiN2Y1NTlhZD
 const KV_URL =
   process.env.KV_REST_API_URL ||
   process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.STORAGE_REST_API_URL ||
+  process.env.STORAGE_URL ||
+  process.env.UPSTASH_REDIS_URL ||
   DEFAULT_KV_URL;
 
 const KV_TOKEN =
   process.env.KV_REST_API_TOKEN ||
   process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.STORAGE_REST_API_TOKEN ||
+  process.env.STORAGE_TOKEN ||
+  process.env.UPSTASH_REDIS_TOKEN ||
   DEFAULT_KV_TOKEN;
 
 const KV_KEY = "azfur_sms_db_v1";

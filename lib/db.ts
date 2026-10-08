@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { User, ActivationOrder, SystemSettings, DepositRequest } from "./types";
+import { User, ActivationOrder, SystemSettings, DepositRequest, Ticket, TicketMessage, TicketStatus } from "./types";
 import { CONFIG } from "./config";
 
 interface DatabaseSchema {
@@ -8,6 +8,7 @@ interface DatabaseSchema {
   users: Record<string, User>;
   activations: Record<string, ActivationOrder>;
   deposits: DepositRequest[];
+  tickets: Record<string, Ticket>;
 }
 
 const SEED_DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     cryptoBotToken: "",
     autoVerifyEnabled: true,
   },
+  supportTelegramUsername: "azfursms_admin",
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
@@ -124,6 +126,7 @@ function loadDb(): DatabaseSchema {
       },
       activations: {},
       deposits: [],
+      tickets: {},
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
     return initialData;
@@ -137,12 +140,14 @@ function loadDb(): DatabaseSchema {
     if (!data.settings.lastTcmbRate) data.settings.lastTcmbRate = 49.20;
     if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
     if (!data.settings.cryptoSettings) data.settings.cryptoSettings = DEFAULT_SETTINGS.cryptoSettings;
+    if (!data.settings.supportTelegramUsername) data.settings.supportTelegramUsername = DEFAULT_SETTINGS.supportTelegramUsername;
     if (!data.users) data.users = {};
     if (data.users["100001"]) {
       delete data.users["100001"];
     }
     if (!data.activations) data.activations = {};
     if (!data.deposits) data.deposits = [];
+    if (!data.tickets) data.tickets = {};
     return data;
   } catch (err) {
     console.error("Error reading db.json, returning empty defaults:", err);
@@ -151,6 +156,7 @@ function loadDb(): DatabaseSchema {
       users: {},
       activations: {},
       deposits: [],
+      tickets: {},
     };
   }
 }
@@ -507,5 +513,68 @@ export const db = {
     return (data.deposits || []).some(
       (d) => d.txid && d.txid.trim().toLowerCase() === clean && d.status === "APPROVED"
     );
+  },
+
+  getAllTickets(): Ticket[] {
+    const data = loadDb();
+    return Object.values(data.tickets || {}).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  },
+
+  getUserTickets(telegramId: number | string): Ticket[] {
+    const data = loadDb();
+    const id = Number(telegramId);
+    return Object.values(data.tickets || {})
+      .filter((t) => t.telegramId === id)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  },
+
+  getTicket(id: string): Ticket | null {
+    const data = loadDb();
+    return (data.tickets && data.tickets[id]) || null;
+  },
+
+  async createTicket(ticket: Ticket): Promise<Ticket> {
+    const data = loadDb();
+    if (!data.tickets) data.tickets = {};
+    data.tickets[ticket.id] = ticket;
+    await saveDb(data);
+    return ticket;
+  },
+
+  async addTicketReply(
+    ticketId: string,
+    message: TicketMessage,
+    newStatus?: TicketStatus
+  ): Promise<Ticket | null> {
+    const data = loadDb();
+    if (!data.tickets || !data.tickets[ticketId]) return null;
+    const ticket = data.tickets[ticketId];
+    ticket.messages.push(message);
+    ticket.updatedAt = message.createdAt;
+    if (newStatus) {
+      ticket.status = newStatus;
+    }
+    await saveDb(data);
+    return ticket;
+  },
+
+  async updateTicketStatus(ticketId: string, status: TicketStatus): Promise<Ticket | null> {
+    const data = loadDb();
+    if (!data.tickets || !data.tickets[ticketId]) return null;
+    const ticket = data.tickets[ticketId];
+    ticket.status = status;
+    ticket.updatedAt = new Date().toISOString();
+    await saveDb(data);
+    return ticket;
+  },
+
+  async deleteTicket(ticketId: string): Promise<boolean> {
+    const data = loadDb();
+    if (!data.tickets || !data.tickets[ticketId]) return false;
+    delete data.tickets[ticketId];
+    await saveDb(data);
+    return true;
   },
 };

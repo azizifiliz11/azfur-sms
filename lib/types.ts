@@ -95,6 +95,7 @@ export interface SystemSettings {
   serviceCustomMargins: Record<string, { marginPercent?: number; fixedFee?: number }>;
   bankInfo?: BankInfo;
   cryptoSettings?: CryptoSettings;
+  supportTelegramUsername?: string;
 }
 
 export interface DepositRequest {
@@ -107,4 +108,29 @@ export interface DepositRequest {
   referenceCode: string;
   txid?: string;
   createdAt: string;
+}
+
+export type TicketStatus = 'OPEN' | 'ANSWERED' | 'CLOSED';
+export type TicketCategory = 'BALANCE' | 'SMS_NUMBER' | 'GENERAL' | 'OTHER';
+
+export interface TicketMessage {
+  id: string;
+  sender: 'user' | 'admin';
+  senderName: string;
+  senderId: number | string;
+  text: string;
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  telegramId: number;
+  username?: string;
+  userFirstName?: string;
+  subject: string;
+  category: TicketCategory;
+  status: TicketStatus;
+  messages: TicketMessage[];
+  createdAt: string;
+  updatedAt: string;
 }

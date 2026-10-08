@@ -7,9 +7,10 @@ import { Header } from "@/components/Header";
 import { RentPanel } from "@/components/RentPanel";
 import { ActiveNumbers } from "@/components/ActiveNumbers";
 import { DepositModal } from "@/components/DepositModal";
+import { SupportModal } from "@/components/SupportModal";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
-import { Shield, Zap } from "lucide-react";
+import { Shield, Zap, Headphones } from "lucide-react";
 
 function HomeContent() {
   const { isReady, user: tgUser } = useTelegram();
@@ -23,6 +24,7 @@ function HomeContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [catalogLoading, setCatalogLoading] = useState<boolean>(false);
   const [depositModalOpen, setDepositModalOpen] = useState<boolean>(false);
+  const [supportModalOpen, setSupportModalOpen] = useState<boolean>(false);
   const [adminViewActive, setAdminViewActive] = useState<boolean>(false);
 
   const activeCountryIdRef = React.useRef<number>(62);
@@ -221,6 +223,7 @@ function HomeContent() {
       <Header
         user={currentUser}
         onOpenDeposit={() => setDepositModalOpen(true)}
+        onOpenSupport={() => setSupportModalOpen(true)}
         onRefreshBalance={handleRefreshAll}
         isAdmin={isAdmin}
         onToggleAdminView={() => setAdminViewActive(!adminViewActive)}
@@ -232,6 +235,44 @@ function HomeContent() {
           <AdminView onBackToApp={() => setAdminViewActive(false)} />
         ) : (
           <>
+            {/* Canlı Sistem & Güvenlik Banner'ı */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-blue-950/40 border border-emerald-500/20 p-3.5 shadow-lg shadow-emerald-950/20">
+              <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  <span className="text-xs font-bold text-white tracking-wide">
+                    AzFur Canlı SMS Altyapısı
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSupportModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+                >
+                  <Headphones className="w-3 h-3" />
+                  <span>Destek & Ticket</span>
+                </button>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-3 gap-1.5 pt-2 border-t border-white/[0.06] text-center">
+                <div className="p-1 rounded-lg bg-black/30">
+                  <span className="text-[10px] text-zinc-400 block font-medium">Teslimat</span>
+                  <span className="text-xs font-bold text-emerald-400 font-mono">5 - 30 Sn</span>
+                </div>
+                <div className="p-1 rounded-lg bg-black/30">
+                  <span className="text-[10px] text-zinc-400 block font-medium">Garanti</span>
+                  <span className="text-xs font-bold text-blue-400">%100 İade</span>
+                </div>
+                <div className="p-1 rounded-lg bg-black/30">
+                  <span className="text-[10px] text-zinc-400 block font-medium">Destek</span>
+                  <span className="text-xs font-bold text-purple-400">7/24 Aktif</span>
+                </div>
+              </div>
+            </div>
+
             {/* Aktif Numaralar (Varsa en üstte göster) */}
             {activeOrders.length > 0 && (
               <ActiveNumbers
@@ -255,11 +296,21 @@ function HomeContent() {
               isCatalogLoading={catalogLoading}
             />
 
-            {/* Alt Bilgi & Hızlı İpuçları */}
-            <div className="pt-4 border-t border-white/[0.06] text-center space-y-1.5 text-zinc-500 text-[11px]">
-              <div className="flex items-center justify-center gap-1.5 text-zinc-400">
-                <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                <span>%100 Güvenli & 15 Dakika İade Garantili</span>
+            {/* Alt Bilgi & Canlı Destek Butonu */}
+            <div className="pt-4 border-t border-white/[0.06] text-center space-y-2 text-zinc-500 text-[11px]">
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center gap-1.5 text-zinc-400">
+                  <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>%100 İade Garantili</span>
+                </div>
+                <span className="text-zinc-600">•</span>
+                <button
+                  onClick={() => setSupportModalOpen(true)}
+                  className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-semibold active:scale-95 transition-all"
+                >
+                  <Headphones className="w-3.5 h-3.5" />
+                  <span>Destek & Ticket Aç</span>
+                </button>
               </div>
               <p>
                 SMS onay kodunuz gelmediği takdirde tek tıkla iptal edip bakiyenizi anında iade alabilirsiniz.
@@ -275,6 +326,15 @@ function HomeContent() {
         onClose={() => setDepositModalOpen(false)}
         telegramId={tgUser?.id || currentUser?.telegramId || 0}
         onSuccess={() => initUser()}
+      />
+
+      {/* Destek & Ticket Modalı */}
+      <SupportModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        telegramId={tgUser?.id || currentUser?.telegramId || 0}
+        userFirstName={tgUser?.first_name || currentUser?.firstName || "Kullanıcı"}
+        username={tgUser?.username || currentUser?.username}
       />
     </div>
   );

@@ -143,6 +143,11 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
+      // Animasyonlu karşılama sticker'ı / dice gönder
+      try {
+        await ctx.replyWithDice("🎯");
+      } catch (e) {}
+
       // Fotoğraflı şık karşılama kartı dene
       if (bannerUrl.startsWith("https://")) {
         try {
@@ -195,6 +200,10 @@ export function getTelegramBot(): Bot | null {
     botInstance.command("bakiye", async (ctx) => {
       const from = ctx.from;
       if (!from) return;
+      try {
+        await ctx.replyWithDice("🎰");
+      } catch (e) {}
+
       await db.syncFromCloud();
       const user = await db.getOrCreateUser(from.id, {
         username: from.username,
@@ -216,14 +225,28 @@ export function getTelegramBot(): Bot | null {
 
     // /yardim Komutu
     botInstance.command("yardim", async (ctx) => {
+      try {
+        await ctx.replyWithDice("🎯");
+      } catch (e) {}
+
+      const { appUrl } = getAppUrls();
+      const settings = db.getSettings();
+      const supportUsername = (settings.supportTelegramUsername || "azfursms_admin").replace(/^@/, "");
+
       const kb = new InlineKeyboard()
+        .url(`💬 Yöneticiye Yaz (@${supportUsername})`, `https://t.me/${supportUsername}`)
+        .row()
+        .webApp("🎫 Mini App Destek Talebi Aç", appUrl)
+        .row()
         .text("🛒 Numara Satın Al", "btn_buy_menu")
         .text("💳 Bakiye Yükle", "btn_deposit_menu")
         .row()
         .text("🔙 Ana Menü", "btn_main_menu");
 
       await ctx.reply(
-        `🆘 <b>AzFur SMS Bilgi & Yardım</b>\n\n` +
+        `🆘 <b>AzFur SMS Destek & Bilgi</b>\n\n` +
+          `👑 <b>Yetkili Yönetici:</b> @${supportUsername}\n` +
+          `💬 <i>Her türlü bakiye, sipariş ve teknik konuda doğrudan yöneticimizle görüşebilirsiniz.</i>\n\n` +
           `• <b>Hızlı Doğrulama:</b> SMS kodları 5-30 saniye içinde bot ekranınıza iletilir.\n` +
           `• <b>%100 İade Garantisi:</b> SMS kodu gelmeyen kiralamaları ücretsiz iptal edebilir, bakiyenizi anında iade alabilirsiniz.\n` +
           `• <b>7/24 Bakiye:</b> Banka Havale/EFT ve Kripto ile kesintisiz yükleme yapabilirsiniz.`,
@@ -501,6 +524,10 @@ export function getTelegramBot(): Bot | null {
 
         await db.saveActivation(order);
 
+        try {
+          await ctx.replyWithDice("🎯");
+        } catch (e) {}
+
         const text =
           `🎉 <b>NUMARANIZ BAŞARIYLA ALINDI!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -546,6 +573,10 @@ export function getTelegramBot(): Bot | null {
             status: "RECEIVED",
             smsCode: statusResult.code,
           });
+
+          try {
+            await ctx.replyWithDice("🎰");
+          } catch (e) {}
 
           const text =
             `🔔 <b>SMS KODUNUZ GELDİ!</b>\n` +
@@ -739,6 +770,9 @@ export function getTelegramBot(): Bot | null {
 
       // --- BAKİYE YÜKLEME MENÜSÜ ---
       if (data === "btn_deposit_menu") {
+        try {
+          await ctx.replyWithDice("🎰");
+        } catch (e) {}
         const text =
           `💳 <b>BAKİYE YÜKLEME YÖNTEMLERİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -849,8 +883,18 @@ export function getTelegramBot(): Bot | null {
 
       // --- YARDIM VE DESTEK ---
       if (data === "btn_help_info") {
+        try {
+          await ctx.replyWithDice("🎯");
+        } catch (e) {}
+
+        const settings = db.getSettings();
+        const supportUsername = (settings.supportTelegramUsername || "azfursms_admin").replace(/^@/, "");
+
         const text =
           `🆘 <b>AZFUR SMS DESTEK MERKEZİ</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👑 <b>Canlı Destek Yöneticisi:</b> @${supportUsername}\n` +
+          `💬 <i>Tüm bakiye, numara veya teknik konular için doğrudan yöneticimizle iletişime geçebilirsiniz.</i>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `❓ <b>Numara nasıl alınır?</b>\n` +
           `'Numara Satın Al' butonuna dokunun, servisinizi ve ülkenizi seçin. Numaranız 1 saniye içinde üretilir.\n\n` +
@@ -861,13 +905,16 @@ export function getTelegramBot(): Bot | null {
           `⚡ <b>7/24 Kesintisiz Hizmet:</b> Otomatik sistemimiz günün her saati aktiftir.`;
 
         const kb = new InlineKeyboard()
-          .webApp("🚀 Web Mini App'i Aç", appUrl)
+          .url(`💬 Yöneticiye Yaz (@${supportUsername})`, `https://t.me/${supportUsername}`)
+          .row()
+          .webApp("🎫 Mini App Destek Talebi Aç", appUrl)
           .row()
           .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
         return;
       }
+
 
       // --- YÖNETİCİ MENÜSÜ ---
       if (data === "btn_admin_menu") {

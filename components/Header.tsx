@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { User, Wallet, Plus, ShieldCheck, RefreshCw } from "lucide-react";
+import { User, Wallet, Plus, ShieldCheck, RefreshCw, Headphones } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 
 interface HeaderProps {
@@ -13,6 +13,7 @@ interface HeaderProps {
     role?: string;
   } | null;
   onOpenDeposit: () => void;
+  onOpenSupport?: () => void;
   onRefreshBalance: () => void;
   isAdmin?: boolean;
   onToggleAdminView?: () => void;
@@ -22,6 +23,7 @@ interface HeaderProps {
 export function Header({
   user,
   onOpenDeposit,
+  onOpenSupport,
   onRefreshBalance,
   isAdmin = false,
   onToggleAdminView,
@@ -100,6 +102,21 @@ export function Header({
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
             <span>Yükle</span>
           </button>
+
+          {/* Support / Ticket Button */}
+          {onOpenSupport && (
+            <button
+              onClick={() => {
+                haptic.impact("light");
+                onOpenSupport();
+              }}
+              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-blue-400 border border-white/10 hover:border-blue-500/40 active:scale-95 transition-all relative"
+              title="Destek & Ticket"
+            >
+              <Headphones className="w-4 h-4" />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            </button>
+          )}
 
           {/* Admin Switcher */}
           {isAdmin && onToggleAdminView && (

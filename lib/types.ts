@@ -97,6 +97,7 @@ export interface SystemSettings {
   cryptoSettings?: CryptoSettings;
   supportTelegramUsername?: string;
   supportTelegramUsernames?: string[];
+  customStickerFileId?: string;
 }
 
 export interface DepositRequest {

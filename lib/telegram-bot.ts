@@ -45,79 +45,36 @@ function getAppUrls() {
 }
 
 // ==========================================
-// DECORATION PACK (https://t.me/addemoji/Decoration_Pack)
+// ANİMASYONLU GÖRSEL VE STİCKER MOTORU
 // ==========================================
-interface DecorationEmojiItem {
-  file_id: string;
-  custom_emoji_id?: string;
-  emoji: string;
-}
-
-let decorationPackStickers: DecorationEmojiItem[] = [];
-let hasFetchedDecorationPack = false;
-
-export async function ensureDecorationPack(bot: Bot): Promise<DecorationEmojiItem[]> {
-  if (hasFetchedDecorationPack && decorationPackStickers.length > 0) {
-    return decorationPackStickers;
-  }
+async function sendAnimatedVisual(ctx: any, fallbackDice: "🎯" | "🎰" = "🎯") {
   try {
-    const set = await bot.api.getStickerSet("Decoration_Pack");
-    if (set && set.stickers && set.stickers.length > 0) {
-      decorationPackStickers = set.stickers.map((s: any) => ({
-        file_id: s.file_id,
-        custom_emoji_id: s.custom_emoji_id,
-        emoji: s.emoji || "✨",
-      }));
-      hasFetchedDecorationPack = true;
-      return decorationPackStickers;
+    const settings = db.getSettings();
+    if (settings.customStickerFileId) {
+      await ctx.replyWithSticker(settings.customStickerFileId);
+      return;
     }
-  } catch (err: any) {
-    // Pack fetch hatası durumunda sessizce devam et
-  }
-  return [];
-}
+  } catch (e) {}
 
-function getDecorationSticker(preferredEmojis: string[] = []): string | null {
-  if (decorationPackStickers.length === 0) return null;
-  if (preferredEmojis.length > 0) {
-    const matched = decorationPackStickers.find((s) => preferredEmojis.includes(s.emoji));
-    if (matched) return matched.file_id;
-  }
-  const idx = Math.floor(Math.random() * decorationPackStickers.length);
-  return decorationPackStickers[idx].file_id;
-}
-
-function decoEmoji(fallback: string, preferredEmoji?: string): string {
-  if (decorationPackStickers.length === 0) return fallback;
-  const target = preferredEmoji
-    ? decorationPackStickers.find((s) => s.emoji === preferredEmoji)
-    : decorationPackStickers.find((s) => s.emoji === fallback) || decorationPackStickers[0];
-
-  if (target && target.custom_emoji_id) {
-    return `<tg-emoji emoji-id="${target.custom_emoji_id}">${fallback}</tg-emoji>`;
-  }
-  return fallback;
+  // Fallback: Telegram yerel 3D animasyonlu zar/rulet/dart
+  try {
+    await ctx.replyWithDice(fallbackDice);
+  } catch (e) {}
 }
 
 function buildMainMenuText(user: User, firstName: string, activeCount: number): string {
   const safeName = (firstName || "Kullanıcı").replace(/[<>&]/g, "");
-  const zap = decoEmoji("⚡");
-  const star = decoEmoji("✨");
-  const fire = decoEmoji("🔥");
-  const money = decoEmoji("💰");
-  const box = decoEmoji("📦");
-  const hand = decoEmoji("👋");
 
   return (
-    `${zap} ━━━━━━━━━━━━━━━━━━━━ ${zap}\n` +
+    `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n` +
     `       💠 <b>AZFUR SMS ONAY</b> 💠\n` +
-    `${star} <i>Sanal Numara & Hızlı SMS Servisi</i> ${star}\n` +
-    `${zap} ━━━━━━━━━━━━━━━━━━━━ ${zap}\n\n` +
-    `${hand} <b>Hoş Geldiniz, ${safeName}!</b>\n\n` +
-    `${money} <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
+    `✨ <i>Sanal Numara & Hızlı SMS Servisi</i> ✨\n` +
+    `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n\n` +
+    `👋 <b>Hoş Geldiniz, ${safeName}!</b>\n\n` +
+    `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>\n` +
-    `${box} <b>Bekleyen Aktif Onay:</b> <code>${activeCount} adet</code>\n\n` +
-    `${fire} <i>WhatsApp, Telegram, ChatGPT ve yüzlerce servis için tek dokunuşla sanal numara kiralayın.</i>\n\n` +
+    `📦 <b>Bekleyen Aktif Onay:</b> <code>${activeCount} adet</code>\n\n` +
+    `🔥 <i>WhatsApp, Telegram, ChatGPT ve yüzlerce servis için tek dokunuşla sanal numara kiralayın.</i>\n\n` +
     `👇 <b>Hemen işlem yapmak için aşağıdaki butonları kullanın:</b>`
   );
 }
@@ -205,18 +162,8 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      // Decoration_Pack hareketli sticker / animasyon gönder
-      try {
-        if (botInstance) await ensureDecorationPack(botInstance);
-        const stickerId = getDecorationSticker(["✨", "⭐", "🎉", "🔥", "👑", "💎"]);
-        if (stickerId) {
-          await ctx.replyWithSticker(stickerId);
-        } else {
-          await ctx.replyWithDice("🎯");
-        }
-      } catch (e) {
-        await ctx.replyWithDice("🎯").catch(() => {});
-      }
+      // Hareketli sticker / 3D animasyon gönder
+      await sendAnimatedVisual(ctx, "🎯");
 
       // Fotoğraflı şık karşılama kartı dene
       if (bannerUrl.startsWith("https://")) {
@@ -270,17 +217,7 @@ export function getTelegramBot(): Bot | null {
     botInstance.command("bakiye", async (ctx) => {
       const from = ctx.from;
       if (!from) return;
-      try {
-        if (botInstance) await ensureDecorationPack(botInstance);
-        const stickerId = getDecorationSticker(["💰", "💳", "💎", "💸", "✨"]);
-        if (stickerId) {
-          await ctx.replyWithSticker(stickerId);
-        } else {
-          await ctx.replyWithDice("🎰");
-        }
-      } catch (e) {
-        await ctx.replyWithDice("🎰").catch(() => {});
-      }
+      await sendAnimatedVisual(ctx, "🎰");
 
       await db.syncFromCloud();
       const user = await db.getOrCreateUser(from.id, {
@@ -303,17 +240,7 @@ export function getTelegramBot(): Bot | null {
 
     // /yardim Komutu
     botInstance.command("yardim", async (ctx) => {
-      try {
-        if (botInstance) await ensureDecorationPack(botInstance);
-        const stickerId = getDecorationSticker(["🆘", "🛡️", "💬", "👑", "✨"]);
-        if (stickerId) {
-          await ctx.replyWithSticker(stickerId);
-        } else {
-          await ctx.replyWithDice("🎯");
-        }
-      } catch (e) {
-        await ctx.replyWithDice("🎯").catch(() => {});
-      }
+      await sendAnimatedVisual(ctx, "🎯");
 
       const { appUrl } = getAppUrls();
       const settings = db.getSettings();
@@ -344,6 +271,84 @@ export function getTelegramBot(): Bot | null {
           `• <b>7/24 Bakiye:</b> Banka Havale/EFT ve Kripto ile kesintisiz yükleme yapabilirsiniz.`,
         { parse_mode: "HTML", reply_markup: kb }
       );
+    });
+
+    // ==========================================
+    // 1.5. YÖNETİCİ HAREKETLİ STİCKER YAKALAYICI
+    // ==========================================
+    botInstance.on("message:sticker", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      const user = db.getUser(from.id);
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
+        String(from.id) === "6824921456";
+
+      if (!isAdmin) return;
+
+      const sticker = ctx.message.sticker;
+      if (sticker) {
+        const fileId = sticker.file_id;
+        const setName = sticker.set_name;
+        const isAnimated = Boolean(sticker.is_animated || sticker.is_video);
+
+        await db.syncFromCloud();
+        await db.updateSettings({
+          customStickerFileId: fileId,
+        });
+
+        await ctx.reply(
+          `✨ <b>Yeni Hareketli Görsel / Sticker Başarıyla Tanımlandı!</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `📁 <b>Paket Adı:</b> <code>${setName || "Özel / Bireysel"}</code>\n` +
+          `🎬 <b>Tür:</b> ${isAnimated ? "Canlı Animasyonlu (.tgs / .webm) 🚀" : "Sticker"}\n` +
+          `🔑 <b>File ID:</b> <code>${fileId}</code>\n\n` +
+          `✅ <i>Bot artık /start, /bakiye, /yardim ve sipariş durumlarında bu animasyonu canlı oynatacaktır! Dilediğiniz zaman bota başka bir sticker atarak değiştirebilirsiniz.</i>`,
+          { parse_mode: "HTML" }
+        );
+      }
+    });
+
+    // /teststicker Komutu
+    botInstance.command("teststicker", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      const user = db.getUser(from.id);
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
+        String(from.id) === "6824921456";
+      if (!isAdmin) return;
+
+      const settings = db.getSettings();
+      if (!settings.customStickerFileId) {
+        await ctx.reply("⚠️ Henüz kayıtlı özel bir sticker yok. Telegram 3D animasyon (🎯) test ediliyor:");
+        await ctx.replyWithDice("🎯");
+        return;
+      }
+      try {
+        await ctx.replyWithSticker(settings.customStickerFileId);
+        await ctx.reply(`✅ Kayıtlı hareketli sticker başarıyla gönderildi!\n🔑 File ID: <code>${settings.customStickerFileId}</code>`, { parse_mode: "HTML" });
+      } catch (err: any) {
+        await ctx.reply(`❌ Sticker gönderilirken hata oluştu: ${err?.message || "Bilinmeyen hata"}`);
+      }
+    });
+
+    // /removesticker Komutu
+    botInstance.command("removesticker", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      const user = db.getUser(from.id);
+      const isAdmin =
+        user?.role === "admin" ||
+        String(from.id) === String(CONFIG.ADMIN_TELEGRAM_ID) ||
+        String(from.id) === "6824921456";
+      if (!isAdmin) return;
+
+      await db.syncFromCloud();
+      await db.updateSettings({ customStickerFileId: "" });
+      await ctx.reply("🗑️ Özel sticker kaldırıldı. Bot varsayılan Telegram 3D animasyonlarına (🎯 / 🎰) döndü.");
     });
 
     // ==========================================
@@ -616,17 +621,7 @@ export function getTelegramBot(): Bot | null {
 
         await db.saveActivation(order);
 
-        try {
-          if (botInstance) await ensureDecorationPack(botInstance);
-          const stickerId = getDecorationSticker(["🎉", "✅", "⚡", "🔥"]);
-          if (stickerId) {
-            await ctx.replyWithSticker(stickerId);
-          } else {
-            await ctx.replyWithDice("🎯");
-          }
-        } catch (e) {
-          await ctx.replyWithDice("🎯").catch(() => {});
-        }
+        await sendAnimatedVisual(ctx, "🎯");
 
         const text =
           `🎉 <b>NUMARANIZ BAŞARIYLA ALINDI!</b>\n` +
@@ -674,17 +669,7 @@ export function getTelegramBot(): Bot | null {
             smsCode: statusResult.code,
           });
 
-          try {
-            if (botInstance) await ensureDecorationPack(botInstance);
-            const stickerId = getDecorationSticker(["🔔", "🎉", "💎", "🔥"]);
-            if (stickerId) {
-              await ctx.replyWithSticker(stickerId);
-            } else {
-              await ctx.replyWithDice("🎰");
-            }
-          } catch (e) {
-            await ctx.replyWithDice("🎰").catch(() => {});
-          }
+          await sendAnimatedVisual(ctx, "🎰");
 
           const text =
             `🔔 <b>SMS KODUNUZ GELDİ!</b>\n` +
@@ -878,17 +863,7 @@ export function getTelegramBot(): Bot | null {
 
       // --- BAKİYE YÜKLEME MENÜSÜ ---
       if (data === "btn_deposit_menu") {
-        try {
-          if (botInstance) await ensureDecorationPack(botInstance);
-          const stickerId = getDecorationSticker(["💰", "💳", "💎", "💸", "✨"]);
-          if (stickerId) {
-            await ctx.replyWithSticker(stickerId);
-          } else {
-            await ctx.replyWithDice("🎰");
-          }
-        } catch (e) {
-          await ctx.replyWithDice("🎰").catch(() => {});
-        }
+        await sendAnimatedVisual(ctx, "🎰");
         const text =
           `💳 <b>BAKİYE YÜKLEME YÖNTEMLERİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -999,17 +974,7 @@ export function getTelegramBot(): Bot | null {
 
       // --- YARDIM VE DESTEK ---
       if (data === "btn_help_info") {
-        try {
-          if (botInstance) await ensureDecorationPack(botInstance);
-          const stickerId = getDecorationSticker(["🆘", "🛡️", "💬", "👑", "✨"]);
-          if (stickerId) {
-            await ctx.replyWithSticker(stickerId);
-          } else {
-            await ctx.replyWithDice("🎯");
-          }
-        } catch (e) {
-          await ctx.replyWithDice("🎯").catch(() => {});
-        }
+        await sendAnimatedVisual(ctx, "🎯");
 
         const settings = db.getSettings();
         const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0

@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   },
   supportTelegramUsername: "azfursms_admin",
   supportTelegramUsernames: ["azfursms_admin"],
+  customStickerFileId: "",
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";

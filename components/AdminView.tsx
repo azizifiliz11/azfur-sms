@@ -34,6 +34,8 @@ import {
   LifeBuoy,
   Clock,
   X,
+  Sparkles,
+  Save,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -113,6 +115,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [newSupportUsername, setNewSupportUsername] = useState<string>("");
   const [savingSupportUser, setSavingSupportUser] = useState<boolean>(false);
 
+  // Custom Animated Sticker state
+  const [customStickerFileId, setCustomStickerFileId] = useState<string>("");
+  const [savingSticker, setSavingSticker] = useState<boolean>(false);
+
   const fetchAllData = async () => {
     setRefreshing(true);
     try {
@@ -160,6 +166,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         } else if (st.settings?.supportTelegramUsername) {
           setSupportTelegramUsername(st.settings.supportTelegramUsername);
           setSupportTelegramUsernames([st.settings.supportTelegramUsername]);
+        }
+        if (st.settings?.customStickerFileId !== undefined) {
+          setCustomStickerFileId(st.settings.customStickerFileId || "");
         }
       }
       if (us.success) {
@@ -583,6 +592,35 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     const updated = supportTelegramUsernames.filter((u) => u !== targetUser);
     setSupportTelegramUsernames(updated);
     await persistSupportUsers(updated);
+  };
+
+  // Bot Hareketli Sticker Kaydet
+  const handleSaveSticker = async (newVal?: string) => {
+    const fileIdToSave = newVal !== undefined ? newVal : customStickerFileId;
+    setSavingSticker(true);
+    haptic.impact("medium");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customStickerFileId: fileIdToSave.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg(fileIdToSave ? "Hareketli sticker başarıyla kaydedildi!" : "Sticker kaldırıldı, 3D animasyonlar aktif.");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSavingSticker(false);
+    }
   };
 
   // Destek Talebine Yanıt Ver
@@ -1575,6 +1613,82 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               <p className="text-[10px] text-zinc-500">
                 Eklenen tüm hesaplar botun yardım mesajında ve Mini App destek penceresinde buton olarak yer alır.
               </p>
+            </div>
+          </Card>
+
+          {/* BOT HAREKETLİ STİCKER / ANİMASYON YÖNETİMİ */}
+          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Telegram Bot Hareketli Sticker & Animasyon</span>
+                    {customStickerFileId ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                        Özel Sticker Aktif
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-mono">
+                        3D Animasyon (🎯 / 🎰)
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Botta /start, /bakiye, /yardim ve siparişlerde gösterilen animasyonlu görseli yönetin.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-2">
+              <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span>💡 En Pratik Tanımlama Yöntemi:</span>
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                Telegram&apos;da bota yönetici hesabınızdan <b>herhangi bir hareketli veya video sticker</b> göndermeniz yeterlidir! Bot gönderdiğiniz sticker&apos;ı otomatik olarak yakalar ve anında aktif eder.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Sticker File ID (Manuel Giriş veya Değiştirme)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customStickerFileId}
+                  onChange={(e) => setCustomStickerFileId(e.target.value)}
+                  placeholder="Örn: CAACAgIAAxkBAAE..."
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={() => handleSaveSticker()}
+                  disabled={savingSticker}
+                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                >
+                  {savingSticker ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>Kaydet</span>
+                </button>
+              </div>
+              {customStickerFileId && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[220px]">
+                    ID: {customStickerFileId}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setCustomStickerFileId("");
+                      handleSaveSticker("");
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors"
+                  >
+                    Sticker&apos;ı Kaldır (Varsayılan 3D Animasyona Dön)
+                  </button>
+                </div>
+              )}
             </div>
           </Card>
         </div>

@@ -81,6 +81,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Özel işlem: @CryptoBot API Token Test Et
+    if (body.action === "test_cryptobot_token") {
+      const { testCryptoBotToken } = await import("@/lib/cryptobot");
+      const testToken = (body.token || db.getSettings().cryptoSettings?.cryptoBotToken || "").trim();
+      const testRes = await testCryptoBotToken(testToken);
+      if (testRes.success && testRes.app) {
+        return NextResponse.json({
+          success: true,
+          message: `Bağlantı Başarılı! Uygulama: ${testRes.app.name} (@${testRes.app.payment_processing_bot_username})`,
+          app: testRes.app,
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        error: testRes.error || "CryptoBot API Token doğrulanamadı.",
+      });
+    }
+
     const updated = await db.updateSettings(body);
     if (body.heroSmsApiKey !== undefined) {
       heroSms.clearCache();

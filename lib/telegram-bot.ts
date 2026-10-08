@@ -1049,15 +1049,151 @@ export function getTelegramBot(): Bot | null {
           `Lütfen ödeme yapmak istediğiniz yöntemi seçiniz:`;
 
         const kb = new InlineKeyboard()
+          .text("🤖 @CryptoBot ile Hızlı Yükle (USDT, TON, TRX)", "btn_dep_cbot")
+          .row()
           .text("🏦 Banka Havale / EFT / FAST", "btn_dep_bank")
           .row()
-          .text("💎 Kripto (TRX / USDT TRC-20)", "btn_dep_crypto")
+          .text("💎 TRON Cüzdanı (USDT TRC-20 / TRX)", "btn_dep_crypto")
           .row()
           .webApp("🚀 Mini App İle Yükle", appUrl)
           .row()
           .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- @CRYPTOBOT MENÜSÜ & TUTAR SEÇİMİ ---
+      if (data === "btn_dep_cbot") {
+        const text =
+          `🤖 <b>@CryptoBot İLE ANINDA BAKİYE YÜKLE</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `⚡ <b>1-Tıkla Ödeme:</b> USDT, TON, TRX, BTC, ETH, LTC ve daha fazlası ile Telegram'dan ayrılmadan anında ödeme yapın.\n` +
+          `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
+          `Yüklemek istediğiniz tutarı seçin 👇`;
+
+        const kb = new InlineKeyboard()
+          .text("₺50", "cbot_pay:50")
+          .text("₺100", "cbot_pay:100")
+          .text("₺250", "cbot_pay:250")
+          .row()
+          .text("₺500", "cbot_pay:500")
+          .text("₺1000", "cbot_pay:1000")
+          .row()
+          .webApp("✍️ Özel Tutarla Yükle (Mini App)", appUrl)
+          .row()
+          .text("🔙 Ödeme Menüsü", "btn_deposit_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- @CRYPTOBOT FATURA OLUŞTURMA ---
+      if (data.startsWith("cbot_pay:")) {
+        const amt = parseFloat(data.split(":")[1]) || 100;
+        const depositId = `dep_cbot_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+        const { createCryptoBotInvoice, getCryptoBotToken } = await import("./cryptobot");
+        const token = getCryptoBotToken();
+
+        if (!token) {
+          await editOrReply(
+            ctx,
+            `⚠️ <b>@CryptoBot Entegrasyonu Henüz Yapılandırılmadı</b>\n\nLütfen yöneticiyle iletişime geçiniz veya Banka Havalesi / TRON Cüzdanı yöntemini kullanınız.`,
+            new InlineKeyboard().text("🔙 Ödeme Yöntemleri", "btn_deposit_menu")
+          );
+          return;
+        }
+
+        const invResult = await createCryptoBotInvoice({
+          telegramId: Number(from.id),
+          amountTry: amt,
+          depositId,
+          description: `AzFur SMS ${amt} ₺ Bakiye Yükleme`,
+        });
+
+        if (!invResult.success || !invResult.invoice) {
+          await editOrReply(
+            ctx,
+            `❌ <b>Fatura Oluşturulamadı</b>\n\n${invResult.error || "CryptoBot servisine bağlanılamadı."}`,
+            new InlineKeyboard().text("🔙 Geri Dön", "btn_dep_cbot")
+          );
+          return;
+        }
+
+        // Pending deposit kaydı oluştur
+        await db.addDeposit({
+          id: depositId,
+          telegramId: Number(from.id),
+          username: from.username && !from.username.startsWith("user_") ? from.username : "",
+          amount: amt,
+          method: "CryptoBot",
+          status: "PENDING",
+          referenceCode: `CBOT-${invResult.invoice.invoice_id}`,
+          txid: String(invResult.invoice.invoice_id),
+          createdAt: new Date().toISOString(),
+        });
+
+        const payUrl = invResult.invoice.bot_invoice_url;
+        const text =
+          `🧾 <b>@CryptoBot ÖDEME FATURANIZ HAZIR!</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💰 <b>Yüklenecek Bakiye:</b> <code>${amt.toFixed(2)} ₺</code>\n` +
+          `💵 <b>Tutar:</b> <code>$${invResult.invoice.amount} USD</code>\n` +
+          `🆔 <b>Fatura No:</b> <code>#${invResult.invoice.invoice_id}</code>\n` +
+          `🪙 <b>Kabul Edilen:</b> USDT, TON, TRX, BTC, ETH, LTC, BNB, USDC\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👇 <b>Ödemeyi tamamlamak için aşağıdaki butona dokunun:</b>\n` +
+          `<i>(Ödemeniz onaylandığı anda bakiyeniz hesabınıza otomatik yüklenecektir)</i>`;
+
+        const kb = new InlineKeyboard()
+          .url("⚡ Faturayı Öde (@CryptoBot)", payUrl)
+          .row()
+          .text("🔄 Ödemeyi Kontrol Et", `cbot_chk:${invResult.invoice.invoice_id}:${amt}`)
+          .row()
+          .text("🔙 Ödeme Menüsü", "btn_deposit_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- @CRYPTOBOT MANUEL DURUM KONTROLÜ ---
+      if (data.startsWith("cbot_chk:")) {
+        const parts = data.split(":");
+        const invoiceId = parts[1];
+        const amt = parseFloat(parts[2]) || 0;
+
+        const { getCryptoBotInvoice } = await import("./cryptobot");
+        const invRes = await getCryptoBotInvoice(invoiceId);
+
+        if (invRes.success && invRes.invoice?.status === "paid") {
+          const deposits = db.getDeposits();
+          const dep = deposits.find((d) => d.txid === invoiceId);
+          if (dep && dep.status !== "APPROVED") {
+            await db.updateUserBalance(from.id, amt);
+            await db.updateDepositStatus(dep.id, "APPROVED");
+          }
+
+          const updatedUser = db.getUser(from.id);
+          await editOrReply(
+            ctx,
+            `🎉 <b>ÖDEMENİZ ONAYLANDI!</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💰 <b>Yüklenen Tutar:</b> <code>+${amt.toFixed(2)} ₺</code>\n` +
+            `💳 <b>Yeni Bakiyeniz:</b> <code>${(updatedUser?.balance || 0).toFixed(2)} ₺</code>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `<i>Keyifli alışverişler dileriz!</i>`,
+            new InlineKeyboard().text("🛒 Hemen Numara Al", "btn_buy_menu").row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+
+        try {
+          await ctx.answerCallbackQuery({
+            text: "⏳ Fatura henüz ödenmedi veya ağ onayı bekleniyor. Lütfen Telegram'da ödemeyi tamamlayınız.",
+            show_alert: true,
+          });
+        } catch (e) {}
         return;
       }
 

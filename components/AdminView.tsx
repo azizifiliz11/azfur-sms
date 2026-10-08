@@ -1188,7 +1188,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Banka & Kripto
+          Kripto & Ayarlar
         </button>
         <button
           onClick={() => {
@@ -1770,106 +1770,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         </div>
       )}
 
-      {/* TAB: BANK & IBAN MANAGEMENT */}
+      {/* TAB: CRYPTO WALLET & INTEGRATION SETTINGS */}
       {activeTab === "bank" && (
         <div className="space-y-4">
-          <Card className="p-4 space-y-4 border-blue-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
-                  <Landmark className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Havale / EFT Banka Bilgileri</h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Kullanıcılar bakiye yükleme ekranında bu bilgileri görür ve IBAN&apos;ı kopyalayabilir
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Banka Adı</label>
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Örn: Ziraat Bankası, Garanti BBVA"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Alıcı / Hesap Sahibi</label>
-                <input
-                  type="text"
-                  value={accountHolder}
-                  onChange={(e) => setAccountHolder(e.target.value)}
-                  placeholder="Örn: AzFur SMS / Ad Soyad"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">IBAN Numarası</label>
-                <input
-                  type="text"
-                  value={iban}
-                  onChange={(e) => setIban(e.target.value)}
-                  placeholder="Örn: TR00 0000 0000 0000 0000 0000 00"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Açıklama / Havale Notu</label>
-                <input
-                  type="text"
-                  value={descriptionNote}
-                  onChange={(e) => setDescriptionNote(e.target.value)}
-                  placeholder="Örn: Açıklama alanına Telegram ID'nizi yazmayı unutmayınız."
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Canlı Önizleme Kartı */}
-            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 space-y-2 text-xs">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
-                Kullanıcı Ekranında Nasıl Görünür?
-              </span>
-              <div className="flex justify-between">
-                <span className="text-zinc-400">Banka:</span>
-                <span className="font-semibold text-white">{bankName || "Banka belirtilmedi"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-400">Alıcı:</span>
-                <span className="font-semibold text-white">{accountHolder || "Alıcı belirtilmedi"}</span>
-              </div>
-              <div className="p-2 rounded-lg bg-zinc-900 border border-white/10 font-mono text-emerald-400 text-[11px] font-bold">
-                {iban || "TR..."}
-              </div>
-              <p className="text-[11px] text-amber-400">💡 {descriptionNote}</p>
-            </div>
-
-            <button
-              onClick={handleSaveBankInfo}
-              disabled={savingBank}
-              className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {savingBank ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Kaydediliyor...</span>
-                </>
-              ) : (
-                <span>Banka ve IBAN Bilgilerini Kaydet</span>
-              )}
-            </button>
-          </Card>
-
-          {/* Otomatik Kripto (TRX & USDT) Cüzdan Ayarları */}
+          {/* Otomatik Kripto (TRX & USDT & CryptoBot) Cüzdan Ayarları */}
           <Card className="p-4 space-y-4 border-emerald-500/30">
             <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">

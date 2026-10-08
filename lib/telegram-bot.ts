@@ -304,7 +304,7 @@ export function getTelegramBot(): Bot | null {
           `💬 <i>Her türlü bakiye, sipariş ve teknik konuda yöneticilerimizle doğrudan görüşebilirsiniz.</i>\n\n` +
           `• <b>Hızlı Doğrulama:</b> SMS kodları 5-30 saniye içinde bot ekranınıza iletilir.\n` +
           `• <b>%100 İade Garantisi:</b> SMS kodu gelmeyen kiralamaları ücretsiz iptal edebilir, bakiyenizi anında iade alabilirsiniz.\n` +
-          `• <b>7/24 Bakiye:</b> Banka Havale/EFT ve Kripto ile kesintisiz yükleme yapabilirsiniz.`,
+          `• <b>7/24 Bakiye:</b> Telegram @CryptoBot ve TRON ağı ile anında bakiye yükleyebilirsiniz.`,
         { parse_mode: "HTML", reply_markup: kb }
       );
     });
@@ -1051,8 +1051,6 @@ export function getTelegramBot(): Bot | null {
         const kb = new InlineKeyboard()
           .text("🤖 @CryptoBot ile Hızlı Yükle (USDT, TON, TRX)", "btn_dep_cbot")
           .row()
-          .text("🏦 Banka Havale / EFT / FAST", "btn_dep_bank")
-          .row()
           .text("💎 TRON Cüzdanı (USDT TRC-20 / TRX)", "btn_dep_crypto")
           .row()
           .webApp("🚀 Mini App İle Yükle", appUrl)
@@ -1194,38 +1192,6 @@ export function getTelegramBot(): Bot | null {
             show_alert: true,
           });
         } catch (e) {}
-        return;
-      }
-
-      // --- BANKA BİLGİLERİ ---
-      if (data === "btn_dep_bank") {
-        const settings = db.getSettings();
-        const bank = settings.bankInfo || {
-          bankName: "Ziraat Bankası",
-          accountHolder: "AzFur SMS",
-          iban: "TR00 0000 0000 0000 0000 00",
-          descriptionNote: "Açıklama alanına Telegram ID'nizi yazınız.",
-        };
-
-        const text =
-          `🏦 <b>BANKA HAVALE / EFT / FAST BİLGİLERİ</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `🏦 <b>Banka:</b> ${bank.bankName}\n` +
-          `👤 <b>Alıcı:</b> ${bank.accountHolder}\n\n` +
-          `💳 <b>IBAN (Kopyalamak için dokunun):</b>\n` +
-          `<code>${bank.iban}</code>\n\n` +
-          `📝 <b>AÇIKLAMA KODUNUZ (ÇOK ÖNEMLİ):</b>\n` +
-          `<code>${from.id}</code>\n` +
-          `<i>(Havale yaparken açıklama kısmına SADECE yukarıdaki Telegram ID'nizi yazınız)</i>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `⚡ <i>Ödemeniz hesaba geçtiğinde bakiyeniz yöneticimiz tarafından anında onaylanacaktır.</i>`;
-
-        const kb = new InlineKeyboard()
-          .text("💳 Diğer Ödeme Yolları", "btn_deposit_menu")
-          .row()
-          .text("🔙 Ana Menü", "btn_main_menu");
-
-        await editOrReply(ctx, text, kb);
         return;
       }
 

@@ -41,9 +41,9 @@ function HomeContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telegramId: tgUser.id,
-          username: tgUser.username,
-          firstName: tgUser.first_name,
-          lastName: tgUser.last_name,
+          username: tgUser.username ? tgUser.username.replace(/^@/, "").trim() : "",
+          firstName: tgUser.first_name ? tgUser.first_name.trim() : "",
+          lastName: tgUser.last_name ? tgUser.last_name.trim() : "",
         }),
       });
       const data = await res.json();
@@ -333,8 +333,16 @@ function HomeContent() {
         isOpen={supportModalOpen}
         onClose={() => setSupportModalOpen(false)}
         telegramId={tgUser?.id || currentUser?.telegramId || 0}
-        userFirstName={tgUser?.first_name || currentUser?.firstName || "Kullanıcı"}
-        username={tgUser?.username || currentUser?.username}
+        userFirstName={
+          tgUser?.first_name ||
+          (currentUser?.firstName && currentUser.firstName !== "Kullanıcı" && currentUser.firstName !== "Misafir"
+            ? currentUser.firstName
+            : "Kullanıcı")
+        }
+        username={
+          tgUser?.username ||
+          (currentUser?.username && !currentUser.username.startsWith("user_") ? currentUser.username : "")
+        }
       />
     </div>
   );

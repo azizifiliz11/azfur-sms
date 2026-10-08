@@ -1921,30 +1921,56 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                     {/* Üst Kısım: Kullanıcı Bilgisi & Rozetler */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-xs text-white truncate">
-                            {u.firstName} {u.lastName || ""}
-                          </span>
+                        {(() => {
+                          const hasRealName =
+                            u.firstName &&
+                            u.firstName !== "Kullanıcı" &&
+                            u.firstName !== "Misafir" &&
+                            u.firstName !== "Telegram Kullanıcısı";
+                          const fullName = hasRealName ? `${u.firstName} ${u.lastName || ""}`.trim() : "";
+                          const hasRealUsername = Boolean(u.username && !u.username.startsWith("user_") && u.username.trim() !== "");
+                          const displayTitle = fullName || (hasRealUsername ? `@${u.username}` : `Kullanıcı #${u.telegramId}`);
 
-                          {/* Rozetler */}
-                          {u.isBanned ? (
-                            <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
-                              ⛔ BANLI
-                            </span>
-                          ) : u.role === "admin" ? (
-                            <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-bold">
-                              👑 ADMIN
-                            </span>
-                          ) : (
-                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-semibold">
-                              ✓ AKTİF
-                            </span>
-                          )}
-                        </div>
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-xs text-white truncate">
+                                  {displayTitle}
+                                </span>
 
-                        <div className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate">
-                          ID: <span className="text-zinc-200">{u.telegramId}</span> • @{u.username || "kullanıcı adı yok"}
-                        </div>
+                                {/* Rozetler */}
+                                {u.isBanned ? (
+                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
+                                    ⛔ BANLI
+                                  </span>
+                                ) : u.role === "admin" ? (
+                                  <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-bold">
+                                    👑 ADMIN
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-semibold">
+                                    ✓ AKTİF
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate flex items-center gap-1.5 flex-wrap">
+                                <span>ID: <span className="text-zinc-200">{u.telegramId}</span></span>
+                                {hasRealUsername ? (
+                                  <>
+                                    <span className="text-zinc-600">•</span>
+                                    <span className="text-emerald-400 font-semibold">@{u.username}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-zinc-600">•</span>
+                                    <span className="text-zinc-500 text-[10px] bg-white/[0.04] px-1.5 py-0.5 rounded">kullanıcı adı yok</span>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Bakiye & Harcama */}
@@ -2048,7 +2074,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-bold text-xs text-white">
-                        {dep.username || `Kullanıcı ${dep.telegramId}`}
+                        {dep.username && !dep.username.startsWith("user_")
+                          ? `@${dep.username.replace(/^@/, "")}`
+                          : `Kullanıcı #${dep.telegramId}`}
                       </span>
                       <p className="text-[11px] font-mono text-zinc-400">
                         {dep.method} • {dep.referenceCode}
@@ -2166,11 +2194,18 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   className="w-full bg-[#181a24] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="">-- Kullanıcı Seçiniz --</option>
-                  {users.map((u) => (
-                    <option key={u.telegramId} value={u.telegramId}>
-                      {u.firstName || "İsimsiz"} (@{u.username || "yok"}) - ID: {u.telegramId} (Bakiye: ₺{u.balance})
-                    </option>
-                  ))}
+                  {users.map((u) => {
+                    const uName = u.username && !u.username.startsWith("user_") ? `@${u.username}` : "kullanıcı adı yok";
+                    const fName =
+                      u.firstName && u.firstName !== "Kullanıcı" && u.firstName !== "Misafir" && u.firstName !== "Telegram Kullanıcısı"
+                        ? u.firstName
+                        : `Kullanıcı #${u.telegramId}`;
+                    return (
+                      <option key={u.telegramId} value={u.telegramId}>
+                        {fName} ({uName}) - ID: {u.telegramId} (Bakiye: ₺{u.balance.toFixed(2)})
+                      </option>
+                    );
+                  })}
                 </select>
                 <input
                   type="text"
@@ -2362,21 +2397,38 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
 
                       <div>
                         <h4 className="text-xs font-bold text-white">{t.subject}</h4>
-                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
-                          <span>👤 {t.userFirstName || "Kullanıcı"}</span>
-                          <span>•</span>
-                          <span className="font-mono">@{t.username || "yok"}</span>
-                          <span>•</span>
-                          <span className="font-mono text-zinc-500">ID: {t.telegramId}</span>
-                          {userObj && (
-                            <>
+                        {(() => {
+                          const tUserRealName =
+                            userObj?.firstName && userObj.firstName !== "Kullanıcı" && userObj.firstName !== "Misafir"
+                              ? `${userObj.firstName} ${userObj.lastName || ""}`.trim()
+                              : t.userFirstName && t.userFirstName !== "Kullanıcı" && t.userFirstName !== "Misafir"
+                              ? t.userFirstName
+                              : `Kullanıcı #${t.telegramId}`;
+                          const tUsername =
+                            userObj?.username && !userObj.username.startsWith("user_")
+                              ? `@${userObj.username}`
+                              : t.username && !t.username.startsWith("user_")
+                              ? `@${t.username}`
+                              : "kullanıcı adı yok";
+
+                          return (
+                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
+                              <span>👤 {tUserRealName}</span>
                               <span>•</span>
-                              <span className="font-mono text-emerald-400 font-semibold">
-                                ₺{userObj.balance.toFixed(2)}
-                              </span>
-                            </>
-                          )}
-                        </div>
+                              <span className="font-mono">{tUsername}</span>
+                              <span>•</span>
+                              <span className="font-mono text-zinc-500">ID: {t.telegramId}</span>
+                              {userObj && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono text-emerald-400 font-semibold">
+                                    ₺{userObj.balance.toFixed(2)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-zinc-300">

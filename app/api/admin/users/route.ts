@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { fetchTelegramUserInfo } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,6 +9,47 @@ export async function GET() {
   try {
     await db.syncFromCloud();
     const users = db.getAllUsers();
+
+    // Otomatik profil iyileştirme: İsmi 'Kullanıcı' kalan veya 'user_...' takma adı olanları Telegram'dan gerçek isimleriyle güncelle
+    let dbUpdated = false;
+    for (const u of users) {
+      if (u.username && u.username.startsWith("user_")) {
+        u.username = "";
+        dbUpdated = true;
+      }
+      const isPlaceholderName =
+        !u.firstName ||
+        u.firstName === "Kullanıcı" ||
+        u.firstName === "Misafir" ||
+        u.firstName === "Telegram Kullanıcısı";
+
+      if (isPlaceholderName || !u.username) {
+        try {
+          const tgProfile = await fetchTelegramUserInfo(u.telegramId);
+          if (tgProfile) {
+            if (tgProfile.firstName && u.firstName !== tgProfile.firstName) {
+              u.firstName = tgProfile.firstName;
+              dbUpdated = true;
+            }
+            if (tgProfile.lastName && u.lastName !== tgProfile.lastName) {
+              u.lastName = tgProfile.lastName;
+              dbUpdated = true;
+            }
+            if (tgProfile.username && u.username !== tgProfile.username) {
+              u.username = tgProfile.username;
+              dbUpdated = true;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (dbUpdated) {
+      for (const u of users) {
+        await db.saveUser(u);
+      }
+    }
+
     return NextResponse.json(
       { success: true, users },
       {

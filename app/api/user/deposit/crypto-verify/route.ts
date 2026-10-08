@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     const deposit: DepositRequest = {
       id: `dep_crypto_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       telegramId: Number(telegramId),
-      username: user?.username || `user_${telegramId}`,
+      username: (user?.username && !user.username.startsWith("user_")) ? user.username : "",
       amount: creditedAmount,
       method: cryptoType === "USDT_TRC20" ? "USDT_TRC20" : "TRX",
       status: "APPROVED",

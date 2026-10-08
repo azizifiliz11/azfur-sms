@@ -18,7 +18,12 @@ export function useTelegram() {
   const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const checkTelegram = () => {
       const tg = window.Telegram?.WebApp;
       if (tg) {
         try {
@@ -35,6 +40,9 @@ export function useTelegram() {
           if (tg.initDataUnsafe?.user) {
             setTgUser(tg.initDataUnsafe.user);
             setIsTelegram(true);
+            if (tg.initData) setInitData(tg.initData);
+            setIsReady(true);
+            return true;
           }
           if (tg.initData) {
             setInitData(tg.initData);
@@ -43,15 +51,20 @@ export function useTelegram() {
           console.warn("Telegram WebApp init warning:", e);
         }
       }
+      return false;
+    };
 
-      // Tarayıcıdan açıldığında demo kullanıcı oluşturma (yalnızca gerçek Telegram oturumları)
-      if (!window.Telegram?.WebApp?.initDataUnsafe?.user) {
-        setTgUser(null);
-        setIsTelegram(false);
+    if (checkTelegram()) return;
+
+    const interval = setInterval(() => {
+      attempts++;
+      if (checkTelegram() || attempts >= maxAttempts) {
+        clearInterval(interval);
+        setIsReady(true);
       }
+    }, 50);
 
-      setIsReady(true);
-    }
+    return () => clearInterval(interval);
   }, []);
 
   return {

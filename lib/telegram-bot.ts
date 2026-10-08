@@ -125,12 +125,54 @@ async function editOrReply(ctx: any, text: string, keyboard: InlineKeyboard) {
   }
 }
 
+export async function fetchTelegramUserInfo(
+  telegramId: number | string
+): Promise<{ firstName?: string; lastName?: string; username?: string } | null> {
+  if (!CONFIG.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${telegramId}`
+    );
+    const data = await res.json();
+    if (data.ok && data.result) {
+      return {
+        firstName: data.result.first_name || undefined,
+        lastName: data.result.last_name || undefined,
+        username: data.result.username ? data.result.username.replace(/^@/, "").trim() : undefined,
+      };
+    }
+  } catch (err) {
+    // getChat may fail if user never contacted bot or blocked
+  }
+  return null;
+}
+
 export function getTelegramBot(): Bot | null {
   if (!CONFIG.TELEGRAM_BOT_TOKEN) {
     return null;
   }
   if (!botInstance) {
     botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN);
+
+    // ==========================================
+    // 0. GLOBAL KULLANICI PROFİL SENKRONİZASYON MİDDLEWARE
+    // ==========================================
+    botInstance.use(async (ctx, next) => {
+      const from = ctx.from;
+      if (from && from.id) {
+        try {
+          await db.syncFromCloud();
+          await db.syncTelegramUserProfile(from.id, {
+            username: from.username,
+            firstName: from.first_name,
+            lastName: from.last_name,
+          });
+        } catch (e) {
+          console.warn("Global user sync error:", e);
+        }
+      }
+      await next();
+    });
 
     // ==========================================
     // 1. /start VE /menu KOMUTLARI

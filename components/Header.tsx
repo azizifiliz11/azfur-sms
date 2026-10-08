@@ -43,7 +43,30 @@ export function Header({
     setTimeout(() => setRefreshing(false), 800);
   };
 
-  const initials = user?.firstName ? user.firstName.slice(0, 2).toUpperCase() : "US";
+  const hasRealFirstName =
+    user?.firstName &&
+    user.firstName !== "Kullanıcı" &&
+    user.firstName !== "Misafir" &&
+    user.firstName !== "Telegram Kullanıcısı";
+
+  const cleanUsername =
+    user?.username && !user.username.startsWith("user_")
+      ? user.username.trim()
+      : "";
+
+  const displayName = hasRealFirstName
+    ? user.firstName
+    : cleanUsername
+    ? `@${cleanUsername}`
+    : user?.telegramId
+    ? `Kullanıcı #${user.telegramId}`
+    : "Misafir";
+
+  const initials = hasRealFirstName
+    ? user.firstName.slice(0, 2).toUpperCase()
+    : cleanUsername
+    ? cleanUsername.slice(0, 2).toUpperCase()
+    : "AZ";
 
   return (
     <header className="sticky top-0 z-30 w-full bg-[#090a0f]/80 backdrop-blur-xl border-b border-white/[0.06] px-4 py-3">
@@ -62,7 +85,7 @@ export function Header({
               </span>
               <span className="text-zinc-600">•</span>
               <h2 className="text-xs font-semibold text-white truncate leading-none">
-                {user?.firstName || "Misafir"}
+                {displayName}
               </h2>
               {isAdmin && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -71,7 +94,7 @@ export function Header({
               )}
             </div>
             <p className="text-[11px] text-zinc-400 truncate mt-0.5 font-mono">
-              @{user?.username || `id_${user?.telegramId || "0"}`}
+              {cleanUsername ? `@${cleanUsername}` : `ID: ${user?.telegramId || "0"}`}
             </p>
           </div>
         </div>

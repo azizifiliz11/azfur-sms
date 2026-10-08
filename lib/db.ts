@@ -236,6 +236,81 @@ export const db = {
     );
   },
 
+  async syncTelegramUserProfile(
+    telegramId: number | string,
+    profile: { username?: string; firstName?: string; lastName?: string }
+  ): Promise<User> {
+    const data = loadDb();
+    const cleanId = String(telegramId).trim();
+    const isAdmin =
+      cleanId === String(data.settings.adminTelegramId).trim() ||
+      cleanId === "6824921456";
+
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    const cleanUsername = profile.username
+      ? profile.username.replace(/^@/, "").trim()
+      : "";
+    const cleanFirst = profile.firstName ? profile.firstName.trim() : "";
+    const cleanLast = profile.lastName ? profile.lastName.trim() : undefined;
+
+    let user: User;
+
+    if (!foundKey || !data.users[foundKey]) {
+      user = {
+        telegramId: Number(cleanId),
+        username: cleanUsername,
+        firstName: cleanFirst || `Telegram Kullanıcısı`,
+        lastName: cleanLast,
+        balance: isAdmin ? 500.0 : 0.0,
+        spent: 0,
+        role: isAdmin ? "admin" : "user",
+        isBanned: false,
+        createdAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
+      data.users[cleanId] = user;
+    } else {
+      user = data.users[foundKey];
+      user.lastActiveAt = new Date().toISOString();
+
+      if (cleanUsername) {
+        user.username = cleanUsername;
+      } else if (user.username && user.username.startsWith("user_")) {
+        user.username = "";
+      }
+
+      if (cleanFirst) {
+        user.firstName = cleanFirst;
+      }
+
+      if (cleanLast !== undefined) {
+        user.lastName = cleanLast;
+      }
+
+      if (isAdmin && user.role !== "admin") {
+        user.role = "admin";
+      }
+    }
+
+    await saveDb(data);
+    return user;
+  },
+
+  async saveUser(user: User): Promise<void> {
+    const data = loadDb();
+    const cleanId = String(user.telegramId).trim();
+    if (user.username && user.username.startsWith("user_")) {
+      user.username = "";
+    }
+    data.users[cleanId] = user;
+    await saveDb(data);
+  },
+
   async getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
@@ -249,12 +324,18 @@ export const db = {
         String(data.users[k]?.telegramId).trim() === cleanId
     );
 
+    const cleanUsername = defaults?.username
+      ? defaults.username.replace(/^@/, "").trim()
+      : "";
+    const cleanFirst = defaults?.firstName ? defaults.firstName.trim() : "";
+    const cleanLast = defaults?.lastName ? defaults.lastName.trim() : undefined;
+
     if (!foundKey || !data.users[foundKey]) {
       const newUser: User = {
         telegramId: Number(cleanId),
-        username: defaults?.username || `user_${cleanId}`,
-        firstName: defaults?.firstName || `Kullanıcı`,
-        lastName: defaults?.lastName,
+        username: cleanUsername,
+        firstName: cleanFirst || `Telegram Kullanıcısı`,
+        lastName: cleanLast,
         balance: isAdmin ? 500.0 : (defaults?.balance ?? 0.0),
         spent: defaults?.spent || 0,
         role: isAdmin ? "admin" : (defaults?.role || "user"),
@@ -268,9 +349,21 @@ export const db = {
     } else {
       const user = data.users[foundKey];
       user.lastActiveAt = new Date().toISOString();
-      if (defaults?.username) user.username = defaults.username;
-      if (defaults?.firstName) user.firstName = defaults.firstName;
-      if (defaults?.lastName) user.lastName = defaults.lastName;
+
+      if (cleanUsername) {
+        user.username = cleanUsername;
+      } else if (user.username && user.username.startsWith("user_")) {
+        user.username = "";
+      }
+
+      if (cleanFirst) {
+        user.firstName = cleanFirst;
+      }
+
+      if (cleanLast !== undefined) {
+        user.lastName = cleanLast;
+      }
+
       if (defaults?.balance !== undefined) user.balance = defaults.balance;
       if (isAdmin && user.role !== "admin") {
         user.role = "admin";
@@ -319,11 +412,16 @@ export const db = {
         cleanId === String(data.settings.adminTelegramId).trim() ||
         cleanId === "6824921456";
 
+      const cleanUsername = userData?.username
+        ? userData.username.replace(/^@/, "").trim()
+        : "";
+      const cleanFirst = userData?.firstName?.trim() || "";
+
       user = {
         telegramId: Number(cleanId),
-        username: userData?.username || `user_${cleanId}`,
-        firstName: userData?.firstName || `Kullanıcı`,
-        lastName: userData?.lastName,
+        username: cleanUsername,
+        firstName: cleanFirst || `Telegram Kullanıcısı`,
+        lastName: userData?.lastName?.trim(),
         balance: initialBal,
         spent: userData?.spent || 0,
         role: (userData?.role as "admin" | "user") || (isAdmin ? "admin" : "user"),
@@ -332,6 +430,19 @@ export const db = {
         lastActiveAt: new Date().toISOString(),
       };
       data.users[cleanId] = user;
+    } else {
+      if (user.username && user.username.startsWith("user_")) {
+        user.username = "";
+      }
+      if (userData?.username) {
+        user.username = userData.username.replace(/^@/, "").trim();
+      }
+      if (userData?.firstName) {
+        user.firstName = userData.firstName.trim();
+      }
+      if (userData?.lastName) {
+        user.lastName = userData.lastName.trim();
+      }
     }
 
     user.balance = Math.max(0, Number((user.balance + delta).toFixed(2)));
@@ -435,7 +546,12 @@ export const db = {
 
   getAllUsers(): User[] {
     const data = loadDb();
-    return Object.values(data.users);
+    return Object.values(data.users).map((u) => {
+      if (u.username && u.username.startsWith("user_")) {
+        return { ...u, username: "" };
+      }
+      return u;
+    });
   },
 
   getActivation(id: string): ActivationOrder | null {

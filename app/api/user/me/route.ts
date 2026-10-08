@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
+import { fetchTelegramUserInfo } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,10 +16,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Telegram ID gerekli" }, { status: 400 });
     }
 
+    const cleanUsername = username ? String(username).replace(/^@/, "").trim() : "";
+    const cleanFirstName = firstName ? String(firstName).trim() : "";
+    const cleanLastName = lastName ? String(lastName).trim() : undefined;
+
     const user = await db.getOrCreateUser(telegramId, {
-      username,
-      firstName,
-      lastName,
+      username: cleanUsername,
+      firstName: cleanFirstName,
+      lastName: cleanLastName,
     });
 
     const activeOrders = db.getActiveOrders(telegramId);
@@ -58,6 +63,43 @@ export async function GET(req: NextRequest) {
     let user = db.getUser(telegramId);
     if (!user) {
       user = await db.getOrCreateUser(telegramId);
+    }
+
+    // Otomatik profil iyileştirme
+    if (
+      user &&
+      (!user.firstName ||
+        user.firstName === "Kullanıcı" ||
+        user.firstName === "Misafir" ||
+        user.firstName === "Telegram Kullanıcısı" ||
+        !user.username ||
+        user.username.startsWith("user_"))
+    ) {
+      let changed = false;
+      if (user.username && user.username.startsWith("user_")) {
+        user.username = "";
+        changed = true;
+      }
+      try {
+        const tgProfile = await fetchTelegramUserInfo(telegramId);
+        if (tgProfile) {
+          if (tgProfile.firstName && user.firstName !== tgProfile.firstName) {
+            user.firstName = tgProfile.firstName;
+            changed = true;
+          }
+          if (tgProfile.lastName && user.lastName !== tgProfile.lastName) {
+            user.lastName = tgProfile.lastName;
+            changed = true;
+          }
+          if (tgProfile.username && user.username !== tgProfile.username) {
+            user.username = tgProfile.username;
+            changed = true;
+          }
+        }
+      } catch (e) {}
+      if (changed) {
+        await db.saveUser(user);
+      }
     }
 
     return NextResponse.json(

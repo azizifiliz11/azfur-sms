@@ -792,28 +792,49 @@ export function getTelegramBot(): Bot | null {
         const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
 
         const hasEnoughBalance = user.balance >= finalPriceTry;
+        const remainingBalance = Math.max(0, user.balance - finalPriceTry);
 
         const text =
-          `🛒 <b>SİPARİŞ ONAYI</b>\n` +
+          `🛒 <b>NUMARA SATIN ALMA ONAYI</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `📱 <b>Servis:</b> ${serviceObj.icon} ${serviceObj.name}\n` +
           `🌍 <b>Ülke:</b> ${countryObj.flag} ${countryObj.name}\n` +
-          `💵 <b>Tutar:</b> <code>${finalPriceTry.toFixed(2)} ₺</code>\n` +
+          `💵 <b>Numara Tutarı:</b> <code>${finalPriceTry.toFixed(2)} ₺</code>\n` +
           `💳 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
+          `📊 <b>İşlem Sonrası Kalan:</b> <code>${remainingBalance.toFixed(2)} ₺</code>\n` +
+          `⏱️ <b>Kullanım Süresi:</b> 15 Dakika (Tek Kullanımlık)\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           (hasEnoughBalance
-            ? `<i>💡 Onayladığınızda numaranız anında verilecek ve SMS bekleme süresi başlayacaktır. SMS gelmezse %100 ücretsiz iptal edebilirsiniz.</i>`
+            ? `❓ <b>Bu numarayı satın almak istiyor musunuz?</b>\n\n` +
+              `<i>💡 15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 kesintisiz iade alabilirsiniz.</i>`
             : `⚠️ <b>Yetersiz Bakiye!</b> Bu işlem için en az <code>${finalPriceTry.toFixed(2)} ₺</code> gereklidir. Lütfen bakiye yükleyin.`);
 
         const kb = new InlineKeyboard();
         if (hasEnoughBalance) {
-          kb.text("✅ Onayla ve Numarayı Al", `buy_exec:${serviceCode}:${countryId}`).row();
+          kb.text(`✅ Evet, Satın Al (${finalPriceTry.toFixed(2)} ₺)`, `buy_exec:${serviceCode}:${countryId}`).row();
+          kb.text("❌ Hayır, İptal Et", `buy_cancel:${serviceCode}`).row();
         } else {
-          kb.text("💳 Bakiye Yükle", "btn_deposit_menu").row();
+          kb.text("💳 Hemen Bakiye Yükle", "btn_deposit_menu").row();
+          kb.text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`).row();
         }
-        kb.text("🔙 Geri Dön", `svc_sel:${serviceCode}`).text("🔙 Ana Menü", "btn_main_menu");
+        kb.text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- SİPARİŞİ İPTAL ET ---
+      if (data.startsWith("buy_cancel:")) {
+        const serviceCode = data.split(":")[1];
+        await editOrReply(
+          ctx,
+          `❌ <b>Satın Alma İptal Edildi</b>\n\nBakiyenizden herhangi bir ücret düşülmedi. İstediğiniz zaman farklı bir servis veya ülke seçebilirsiniz.`,
+          new InlineKeyboard()
+            .text("🔄 Başka Ülke Seç", `svc_sel:${serviceCode}`)
+            .row()
+            .text("🛒 Farklı Servis Seç", "btn_buy_menu")
+            .text("🔙 Ana Menü", "btn_main_menu")
+        );
         return;
       }
 

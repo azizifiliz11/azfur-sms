@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Flame,
   CheckCircle2,
+  HelpCircle,
 } from "lucide-react";
 import { Country, ServiceItem, CalculatedCatalogItem } from "@/lib/types";
 import { haptic } from "@/lib/haptic";
@@ -58,6 +59,7 @@ export function RentPanel({
   const [countryModalTab, setCountryModalTab] = useState<"all" | "favorites">("all");
   const [ordering, setOrdering] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState<boolean>(false);
 
   // Sıralama ve Filtre Durumları (Anlık 0ms tepki)
   const [sortMode, setSortMode] = useState<SortMode>("popular");
@@ -264,7 +266,8 @@ export function RentPanel({
     setErrorMsg(null);
   };
 
-  const handlePurchase = async () => {
+  // 1. Satın almayı başlat ve onay modalını aç
+  const handleStartPurchase = () => {
     if (!selectedItem || !selectedCountry) return;
 
     if (selectedItem.stock === 0) {
@@ -273,15 +276,24 @@ export function RentPanel({
       return;
     }
 
-    if (userBalance < selectedItem.calculatedPriceTry) {
+    if (userBalance < finalPriceWithDiscount) {
       haptic.error();
       setErrorMsg(
-        `Yetersiz Bakiye! Bu numara ₺${selectedItem.calculatedPriceTry.toFixed(
+        `Yetersiz Bakiye! Bu numara ₺${finalPriceWithDiscount.toFixed(
           2
         )} tutarındadır. Mevcut bakiyeniz ₺${userBalance.toFixed(2)}.`
       );
       return;
     }
+
+    setErrorMsg(null);
+    haptic.impact("medium");
+    setConfirmModalOpen(true);
+  };
+
+  // 2. Kullanıcı onayladığında numarayı tahsis et
+  const handleExecutePurchase = async () => {
+    if (!selectedItem || !selectedCountry) return;
 
     setOrdering(true);
     setErrorMsg(null);
@@ -301,14 +313,17 @@ export function RentPanel({
       const data = await res.json();
       if (data.success && data.order) {
         haptic.success();
+        setConfirmModalOpen(false);
         onOrderSuccess(data.order);
       } else {
         haptic.error();
         setErrorMsg(data.error || "Numara alınamadı.");
+        setConfirmModalOpen(false);
       }
     } catch (e: any) {
       haptic.error();
       setErrorMsg("Bağlantı hatası oluştu, lütfen tekrar deneyin.");
+      setConfirmModalOpen(false);
     } finally {
       setOrdering(false);
     }
@@ -714,9 +729,9 @@ export function RentPanel({
             </div>
           )}
 
-          {/* Satın Al Butonu */}
+          {/* Satın Al Butonu (Onay Modalı Açar) */}
           <button
-            onClick={handlePurchase}
+            onClick={handleStartPurchase}
             disabled={ordering || isCatalogLoading || !selectedItem || selectedItem.stock === 0}
             className="w-full mt-3.5 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -732,7 +747,7 @@ export function RentPanel({
             ) : (
               <>
                 <Zap className="w-4 h-4 fill-black" />
-                <span>Numara Satın Al (₺{selectedItem.calculatedPriceTry.toFixed(2)})</span>
+                <span>Numara Satın Al (₺{finalPriceWithDiscount.toFixed(2)})</span>
               </>
             )}
           </button>
@@ -855,6 +870,139 @@ export function RentPanel({
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Satın Alma Onay Modalı (Sorulu Onay) */}
+      {confirmModalOpen && selectedItem && selectedCountry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-[#12141e] border border-emerald-500/30 rounded-3xl p-5 shadow-2xl space-y-4">
+            {/* Modal Başlık */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <HelpCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Satın Alma Onayı</h3>
+                  <p className="text-[10px] text-zinc-400">İşlem Özeti ve Onay</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !ordering && setConfirmModalOpen(false)}
+                disabled={ordering}
+                className="text-xs text-zinc-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Soru Metni */}
+            <div className="text-center py-1">
+              <span className="text-2xl block mb-1">🛒</span>
+              <p className="text-sm font-bold text-white">
+                Bu numarayı satın almak istiyor musunuz?
+              </p>
+            </div>
+
+            {/* Sipariş Detay Kartı */}
+            <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Servis Platformu:</span>
+                <span className="font-semibold text-white truncate max-w-[55%]">
+                  {selectedItem.serviceName}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Hedef Ülke:</span>
+                <span className="font-semibold text-white flex items-center gap-1.5">
+                  <span>{selectedCountry.flag || "🌐"}</span>
+                  <span>{selectedCountry.eng}</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Tahsis Süresi:</span>
+                <span className="font-mono text-zinc-300">15 Dakika (Tek Kullanımlık)</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Tahmini Kalite:</span>
+                <span className="font-mono text-emerald-400 font-bold">
+                  %{getItemQuality(selectedItem)} Başarı
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between">
+                <span className="text-zinc-400">Numara Tutarı:</span>
+                <div className="text-right">
+                  {activeDiscount ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="line-through text-zinc-500 font-mono text-[11px]">
+                        ₺{selectedItem.calculatedPriceTry.toFixed(2)}
+                      </span>
+                      <span className="font-bold text-emerald-400 font-mono text-sm">
+                        ₺{finalPriceWithDiscount.toFixed(2)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-bold text-emerald-400 font-mono text-sm">
+                      ₺{finalPriceWithDiscount.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-500">Mevcut Bakiyeniz:</span>
+                <span className="font-mono text-zinc-400">₺{userBalance.toFixed(2)}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-500">İşlem Sonrası Kalan:</span>
+                <span className="font-mono text-zinc-300 font-semibold">
+                  ₺{Math.max(0, userBalance - finalPriceWithDiscount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Garanti Bilgisi */}
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 flex items-start gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+              <span>
+                15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 iade alabilirsiniz.
+              </span>
+            </div>
+
+            {/* Butonlar */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => setConfirmModalOpen(false)}
+                disabled={ordering}
+                className="w-full py-3 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs active:scale-95 transition-all disabled:opacity-50"
+              >
+                ❌ Vazgeç
+              </button>
+
+              <button
+                onClick={handleExecutePurchase}
+                disabled={ordering}
+                className="w-full py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {ordering ? (
+                  <>
+                    <span className="animate-spin w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full" />
+                    <span>Alınıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>✅ Evet, Satın Al</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

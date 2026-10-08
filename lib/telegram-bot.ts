@@ -727,25 +727,52 @@ export function getTelegramBot(): Bot | null {
 
         const text =
           `🌍 <b>${serviceObj.icon} ${serviceObj.name} İÇİN ÜLKE SEÇİN</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
           `Numara almak istediğiniz ülkeyi seçin 👇`;
 
         const kb = new InlineKeyboard();
 
+        const formatBtn = (c: { flag: string; name: string }, p: number) => {
+          const withDec = `${c.flag} ${c.name} ${p.toFixed(1)}₺`;
+          if (withDec.length <= 15) return withDec;
+          return `${c.flag} ${c.name} ${Math.round(p)}₺`;
+        };
+
         // Popüler ülkelerin fiyatlarını çek
         try {
           const prices = await heroSms.getPrices();
-          for (const c of POPULAR_COUNTRIES) {
-            const cost = prices[String(c.id)]?.[serviceCode]?.cost || 0.15;
-            const p = pricingEngine.calculatePrice(cost, serviceCode, undefined, c.id).finalPriceTry;
-            // Fiyatların tam ve net okunabilmesi için tekli uzun buton düzeni:
-            kb.text(`${c.flag} ${c.name} • ${p.toFixed(1)}₺`, `buy_confirm:${serviceCode}:${c.id}`).row();
+          for (let i = 0; i < POPULAR_COUNTRIES.length; i += 2) {
+            const c1 = POPULAR_COUNTRIES[i];
+            const c2 = POPULAR_COUNTRIES[i + 1];
+
+            const cost1 = prices[String(c1.id)]?.[serviceCode]?.cost || 0.15;
+            const p1 = pricingEngine.calculatePrice(cost1, serviceCode, undefined, c1.id).finalPriceTry;
+
+            if (c2) {
+              const cost2 = prices[String(c2.id)]?.[serviceCode]?.cost || 0.15;
+              const p2 = pricingEngine.calculatePrice(cost2, serviceCode, undefined, c2.id).finalPriceTry;
+              kb.text(formatBtn(c1, p1), `buy_confirm:${serviceCode}:${c1.id}`).text(
+                formatBtn(c2, p2),
+                `buy_confirm:${serviceCode}:${c2.id}`
+              ).row();
+            } else {
+              kb.text(`${c1.flag} ${c1.name} • ${p1.toFixed(1)}₺`, `buy_confirm:${serviceCode}:${c1.id}`).row();
+            }
           }
         } catch (e) {
           // Fallback standart fiyat gösterimi
-          for (const c of POPULAR_COUNTRIES) {
-            kb.text(`${c.flag} ${c.name} Seç`, `buy_confirm:${serviceCode}:${c.id}`).row();
+          for (let i = 0; i < POPULAR_COUNTRIES.length; i += 2) {
+            const c1 = POPULAR_COUNTRIES[i];
+            const c2 = POPULAR_COUNTRIES[i + 1];
+            if (c2) {
+              kb.text(`${c1.flag} ${c1.name}`, `buy_confirm:${serviceCode}:${c1.id}`).text(
+                `${c2.flag} ${c2.name}`,
+                `buy_confirm:${serviceCode}:${c2.id}`
+              ).row();
+            } else {
+              kb.text(`${c1.flag} ${c1.name}`, `buy_confirm:${serviceCode}:${c1.id}`).row();
+            }
           }
         }
 

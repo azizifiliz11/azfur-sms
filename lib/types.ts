@@ -96,6 +96,7 @@ export interface SystemSettings {
   bankInfo?: BankInfo;
   cryptoSettings?: CryptoSettings;
   supportTelegramUsername?: string;
+  supportTelegramUsernames?: string[];
 }
 
 export interface DepositRequest {

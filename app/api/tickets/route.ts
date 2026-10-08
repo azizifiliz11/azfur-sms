@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       success: true,
       tickets,
       supportTelegramUsername: settings.supportTelegramUsername || "azfursms_admin",
+      supportTelegramUsernames: settings.supportTelegramUsernames || [settings.supportTelegramUsername || "azfursms_admin"],
     });
   } catch (err: any) {
     console.error("Tickets GET error:", err);

@@ -42,6 +42,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     autoVerifyEnabled: true,
   },
   supportTelegramUsername: "azfursms_admin",
+  supportTelegramUsernames: ["azfursms_admin"],
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
@@ -141,6 +142,11 @@ function loadDb(): DatabaseSchema {
     if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
     if (!data.settings.cryptoSettings) data.settings.cryptoSettings = DEFAULT_SETTINGS.cryptoSettings;
     if (!data.settings.supportTelegramUsername) data.settings.supportTelegramUsername = DEFAULT_SETTINGS.supportTelegramUsername;
+    if (!data.settings.supportTelegramUsernames || !Array.isArray(data.settings.supportTelegramUsernames) || data.settings.supportTelegramUsernames.length === 0) {
+      data.settings.supportTelegramUsernames = data.settings.supportTelegramUsername
+        ? [data.settings.supportTelegramUsername]
+        : ["azfursms_admin"];
+    }
     if (!data.users) data.users = {};
     if (data.users["100001"]) {
       delete data.users["100001"];

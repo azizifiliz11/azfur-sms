@@ -107,8 +107,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [sendingTicketReply, setSendingTicketReply] = useState<boolean>(false);
   const [ticketFilter, setTicketFilter] = useState<"ALL" | "OPEN" | "ANSWERED" | "CLOSED">("ALL");
 
-  // Support Telegram Username states
+  // Support Telegram Usernames states
   const [supportTelegramUsername, setSupportTelegramUsername] = useState<string>("azfursms_admin");
+  const [supportTelegramUsernames, setSupportTelegramUsernames] = useState<string[]>(["azfursms_admin"]);
+  const [newSupportUsername, setNewSupportUsername] = useState<string>("");
   const [savingSupportUser, setSavingSupportUser] = useState<boolean>(false);
 
   const fetchAllData = async () => {
@@ -152,8 +154,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           setCryptoBotToken(st.settings.cryptoSettings.cryptoBotToken || "");
           setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
-        if (st.settings?.supportTelegramUsername) {
+        if (st.settings?.supportTelegramUsernames && Array.isArray(st.settings.supportTelegramUsernames) && st.settings.supportTelegramUsernames.length > 0) {
+          setSupportTelegramUsernames(st.settings.supportTelegramUsernames);
+          setSupportTelegramUsername(st.settings.supportTelegramUsernames[0]);
+        } else if (st.settings?.supportTelegramUsername) {
           setSupportTelegramUsername(st.settings.supportTelegramUsername);
+          setSupportTelegramUsernames([st.settings.supportTelegramUsername]);
         }
       }
       if (us.success) {
@@ -521,23 +527,23 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     }
   };
 
-  // Destek Telegram Kullanıcı Adı Kaydet
-  const handleSaveSupportUser = async () => {
+  // Destek Kullanıcı Listesini Kaydet
+  const persistSupportUsers = async (list: string[]) => {
     setSavingSupportUser(true);
     haptic.impact("medium");
     try {
-      const cleanUser = supportTelegramUsername.trim().replace(/^@/, "");
       const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          supportTelegramUsername: cleanUser,
+          supportTelegramUsernames: list,
+          supportTelegramUsername: list[0] || "",
         }),
       });
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setToastMsg(`Destek kullanıcı adı (@${cleanUser}) kaydedildi!`);
+        setToastMsg("Destek kullanıcı adları başarıyla güncellendi!");
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
       } else {
@@ -550,6 +556,33 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     } finally {
       setSavingSupportUser(false);
     }
+  };
+
+  // Yeni Kullanıcı Adı Ekle
+  const handleAddSupportUser = async () => {
+    const clean = newSupportUsername.trim().replace(/^@/, "");
+    if (!clean) {
+      alert("Lütfen bir kullanıcı adı giriniz.");
+      return;
+    }
+    if (supportTelegramUsernames.includes(clean)) {
+      alert(`@${clean} zaten listede mevcut.`);
+      return;
+    }
+    const updated = [...supportTelegramUsernames, clean];
+    setSupportTelegramUsernames(updated);
+    setNewSupportUsername("");
+    await persistSupportUsers(updated);
+  };
+
+  // Kullanıcı Adı Sil
+  const handleDeleteSupportUser = async (targetUser: string) => {
+    if (!confirm(`@${targetUser} kullanıcısını destek listesinden silmek istediğinize emin misiniz?`)) {
+      return;
+    }
+    const updated = supportTelegramUsernames.filter((u) => u !== targetUser);
+    setSupportTelegramUsernames(updated);
+    await persistSupportUsers(updated);
   };
 
   // Destek Talebine Yanıt Ver
@@ -1436,46 +1469,112 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   <Headphones className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Canlı Destek & Yönetici Kullanıcı Adı</h3>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Canlı Destek & Yönetici Kullanıcı Adları</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                      {supportTelegramUsernames.length} Hesap
+                    </span>
+                  </h3>
                   <p className="text-[11px] text-zinc-400">
-                    Telegram botundaki &apos;Yardım & Destek&apos; mesajında ve Mini App panelinde bu kullanıcı adı gösterilir
+                    Bot ve Mini App yardım menülerinde gösterilir. İstediğiniz kadar yönetici ekleyip silebilirsiniz.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Yönetici Telegram Kullanıcı Adı</label>
-                <div className="relative">
+            {/* Mevcut Ekli Kullanıcı Adları Listesi */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Aktif Destek Hesapları ({supportTelegramUsernames.length})
+              </label>
+
+              {supportTelegramUsernames.length === 0 ? (
+                <div className="p-3 rounded-xl bg-zinc-900 border border-white/5 text-center text-xs text-zinc-500">
+                  Henüz destek hesabı eklenmedi. Aşağıdan ekleyebilirsiniz.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {supportTelegramUsernames.map((user, idx) => (
+                    <div
+                      key={user}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 hover:border-purple-500/30 transition-all"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <span className="font-mono text-xs font-bold text-purple-300">
+                            @{user}
+                          </span>
+                          <span className="ml-2 text-[10px] text-zinc-500">
+                            (t.me/{user})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={`https://t.me/${user}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 hover:text-white transition-colors"
+                        >
+                          Test Et ↗
+                        </a>
+                        <button
+                          onClick={() => handleDeleteSupportUser(user)}
+                          disabled={savingSupportUser}
+                          className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                          title="Bu hesabı sil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Yeni Kullanıcı Adı Ekleme Alanı */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Yeni Destek / Yönetici Hesabı Ekle
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono">@</span>
                   <input
                     type="text"
-                    value={supportTelegramUsername.replace(/^@/, "")}
-                    onChange={(e) => setSupportTelegramUsername(e.target.value.replace(/^@/, ""))}
-                    placeholder="Örn: azfur_admin veya mehmet123"
+                    value={newSupportUsername}
+                    onChange={(e) => setNewSupportUsername(e.target.value.replace(/^@/, ""))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddSupportUser();
+                      }
+                    }}
+                    placeholder="Örn: azfur_admin veya mehmet_destek"
                     className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-xs font-mono text-purple-300 font-bold focus:outline-none focus:border-purple-500"
                   />
                 </div>
-                <p className="text-[10px] text-zinc-500">
-                  Kullanıcılar botta veya uygulamada &apos;Yöneticiye Yaz&apos; butonuna bastıklarında doğrudan t.me/{supportTelegramUsername.replace(/^@/, "")} adresine yönlendirilir.
-                </p>
+                <button
+                  onClick={handleAddSupportUser}
+                  disabled={savingSupportUser || !newSupportUsername.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                >
+                  {savingSupportUser ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  )}
+                  <span>Ekle</span>
+                </button>
               </div>
-
-              <button
-                onClick={handleSaveSupportUser}
-                disabled={savingSupportUser}
-                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {savingSupportUser ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Kaydediliyor...</span>
-                  </>
-                ) : (
-                  <span>Destek Kullanıcı Adını Kaydet</span>
-                )}
-              </button>
+              <p className="text-[10px] text-zinc-500">
+                Eklenen tüm hesaplar botun yardım mesajında ve Mini App destek penceresinde buton olarak yer alır.
+              </p>
             </div>
           </Card>
         </div>

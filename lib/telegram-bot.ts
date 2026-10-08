@@ -231,12 +231,18 @@ export function getTelegramBot(): Bot | null {
 
       const { appUrl } = getAppUrls();
       const settings = db.getSettings();
-      const supportUsername = (settings.supportTelegramUsername || "azfursms_admin").replace(/^@/, "");
+      const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0
+        ? settings.supportTelegramUsernames
+        : [settings.supportTelegramUsername || "azfursms_admin"];
+      const supportUsernames = rawList.map((u) => u.replace(/^@/, "").trim()).filter(Boolean);
 
-      const kb = new InlineKeyboard()
-        .url(`💬 Yöneticiye Yaz (@${supportUsername})`, `https://t.me/${supportUsername}`)
-        .row()
-        .webApp("🎫 Mini App Destek Talebi Aç", appUrl)
+      const supportAdminsText = supportUsernames.map((u) => `👑 <b>Yetkili:</b> @${u}`).join("\n");
+
+      const kb = new InlineKeyboard();
+      for (const u of supportUsernames) {
+        kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
+      }
+      kb.webApp("🎫 Mini App Destek Talebi Aç", appUrl)
         .row()
         .text("🛒 Numara Satın Al", "btn_buy_menu")
         .text("💳 Bakiye Yükle", "btn_deposit_menu")
@@ -245,8 +251,8 @@ export function getTelegramBot(): Bot | null {
 
       await ctx.reply(
         `🆘 <b>AzFur SMS Destek & Bilgi</b>\n\n` +
-          `👑 <b>Yetkili Yönetici:</b> @${supportUsername}\n` +
-          `💬 <i>Her türlü bakiye, sipariş ve teknik konuda doğrudan yöneticimizle görüşebilirsiniz.</i>\n\n` +
+          `${supportAdminsText}\n` +
+          `💬 <i>Her türlü bakiye, sipariş ve teknik konuda yöneticilerimizle doğrudan görüşebilirsiniz.</i>\n\n` +
           `• <b>Hızlı Doğrulama:</b> SMS kodları 5-30 saniye içinde bot ekranınıza iletilir.\n` +
           `• <b>%100 İade Garantisi:</b> SMS kodu gelmeyen kiralamaları ücretsiz iptal edebilir, bakiyenizi anında iade alabilirsiniz.\n` +
           `• <b>7/24 Bakiye:</b> Banka Havale/EFT ve Kripto ile kesintisiz yükleme yapabilirsiniz.`,
@@ -888,13 +894,18 @@ export function getTelegramBot(): Bot | null {
         } catch (e) {}
 
         const settings = db.getSettings();
-        const supportUsername = (settings.supportTelegramUsername || "azfursms_admin").replace(/^@/, "");
+        const rawList = settings.supportTelegramUsernames && settings.supportTelegramUsernames.length > 0
+          ? settings.supportTelegramUsernames
+          : [settings.supportTelegramUsername || "azfursms_admin"];
+        const supportUsernames = rawList.map((u) => u.replace(/^@/, "").trim()).filter(Boolean);
+
+        const supportAdminsText = supportUsernames.map((u) => `👑 <b>Canlı Destek:</b> @${u}`).join("\n");
 
         const text =
           `🆘 <b>AZFUR SMS DESTEK MERKEZİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `👑 <b>Canlı Destek Yöneticisi:</b> @${supportUsername}\n` +
-          `💬 <i>Tüm bakiye, numara veya teknik konular için doğrudan yöneticimizle iletişime geçebilirsiniz.</i>\n` +
+          `${supportAdminsText}\n` +
+          `💬 <i>Tüm bakiye, numara veya teknik konular için doğrudan yöneticilerimizle iletişime geçebilirsiniz.</i>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `❓ <b>Numara nasıl alınır?</b>\n` +
           `'Numara Satın Al' butonuna dokunun, servisinizi ve ülkenizi seçin. Numaranız 1 saniye içinde üretilir.\n\n` +
@@ -904,10 +915,11 @@ export function getTelegramBot(): Bot | null {
           `'İptal Et & İade Al' butonuna bastığınız anda paranız %100 eksiksiz bakiyenize geri döner.\n\n` +
           `⚡ <b>7/24 Kesintisiz Hizmet:</b> Otomatik sistemimiz günün her saati aktiftir.`;
 
-        const kb = new InlineKeyboard()
-          .url(`💬 Yöneticiye Yaz (@${supportUsername})`, `https://t.me/${supportUsername}`)
-          .row()
-          .webApp("🎫 Mini App Destek Talebi Aç", appUrl)
+        const kb = new InlineKeyboard();
+        for (const u of supportUsernames) {
+          kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
+        }
+        kb.webApp("🎫 Mini App Destek Talebi Aç", appUrl)
           .row()
           .text("🔙 Ana Menü", "btn_main_menu");
 

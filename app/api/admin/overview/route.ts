@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     await db.syncFromCloud();
     const body = await req.json();
     if (body.action === "reset_stats") {
-      const res = db.resetStats();
+      const res = await db.resetStats();
       return NextResponse.json({
         success: true,
         message: "Tüm sipariş ve ciro istatistikleri başarıyla sıfırlandı.",

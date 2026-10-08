@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Geçersiz parametreler" }, { status: 400 });
     }
 
-    const updated = db.updateDepositStatus(depositId, status);
+    const updated = await db.updateDepositStatus(depositId, status);
     if (!updated) {
       return NextResponse.json({ success: false, error: "Talep bulunamadı" }, { status: 404 });
     }

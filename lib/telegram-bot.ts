@@ -16,7 +16,8 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      const user = db.getOrCreateUser(from.id, {
+      await db.syncFromCloud();
+      const user = await db.getOrCreateUser(from.id, {
         username: from.username,
         firstName: from.first_name,
         lastName: from.last_name,
@@ -95,7 +96,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       await db.syncFromCloud();
-      const user = db.getOrCreateUser(from.id, {
+      const user = await db.getOrCreateUser(from.id, {
         username: from.username,
         firstName: from.first_name,
         lastName: from.last_name,
@@ -124,7 +125,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       await db.syncFromCloud();
-      const user = db.getOrCreateUser(from.id, {
+      const user = await db.getOrCreateUser(from.id, {
         username: from.username,
         firstName: from.first_name,
         lastName: from.last_name,

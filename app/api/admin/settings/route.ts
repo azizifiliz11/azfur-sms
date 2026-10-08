@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const updated = db.updateSettings(body);
+    const updated = await db.updateSettings(body);
 
     return NextResponse.json({
       success: true,

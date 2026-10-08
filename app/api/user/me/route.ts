@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Telegram ID gerekli" }, { status: 400 });
     }
 
-    const user = db.getOrCreateUser(telegramId, {
+    const user = await db.getOrCreateUser(telegramId, {
       username,
       firstName,
       lastName,
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
     let user = db.getUser(telegramId);
     if (!user) {
-      user = db.getOrCreateUser(telegramId);
+      user = await db.getOrCreateUser(telegramId);
     }
 
     return NextResponse.json(

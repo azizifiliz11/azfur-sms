@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
+    await db.syncFromCloud();
     const settings = db.getSettings();
     return NextResponse.json(
       {
@@ -38,6 +39,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const { telegramId, amount, method, referenceCode, txid } = await req.json();
 
     if (!telegramId || !amount || !method) {
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    db.addDeposit(deposit);
+    await db.addDeposit(deposit);
 
     return NextResponse.json({
       success: true,

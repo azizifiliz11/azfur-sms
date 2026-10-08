@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Eksik parametreler" }, { status: 400 });
     }
 
+    await db.syncFromCloud();
     const order = db.getActivation(activationId);
     if (!order) {
       return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
@@ -23,10 +24,10 @@ export async function POST(req: NextRequest) {
     await heroSms.setStatus(activationId, 8);
 
     // Kullanıcıya ücreti geri iade et
-    const updatedUser = db.updateUserBalance(telegramId, order.chargedPrice);
+    const updatedUser = await db.updateUserBalance(telegramId, order.chargedPrice);
 
     // Durumu güncelle
-    const updatedOrder = db.updateActivation(activationId, {
+    const updatedOrder = await db.updateActivation(activationId, {
       status: "CANCELLED",
     });
 

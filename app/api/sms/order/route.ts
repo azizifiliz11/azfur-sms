@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await db.syncFromCloud();
     // 1. Kullanıcıyı ve bakiyesini kontrol et
-    const user = db.getOrCreateUser(telegramId);
+    const user = await db.getOrCreateUser(telegramId);
 
     if (user.isBanned) {
       return NextResponse.json(
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Kullanıcının bakiyesinden ücreti düş
-    db.updateUserBalance(telegramId, -finalPriceTry);
+    await db.updateUserBalance(telegramId, -finalPriceTry);
 
     // 7. Aktivasyon siparişini kaydet
     const now = Date.now();
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
       notifiedBot: false,
     };
 
-    db.saveActivation(order);
+    await db.saveActivation(order);
 
     return NextResponse.json({
       success: true,

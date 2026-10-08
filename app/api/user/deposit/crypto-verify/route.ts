@@ -8,6 +8,7 @@ export const revalidate = 0;
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const { telegramId, txid, cryptoType, amountTry } = await req.json();
 
     if (!telegramId || !txid) {
@@ -130,10 +131,10 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    db.addDeposit(deposit);
+    await db.addDeposit(deposit);
 
     // 8. Kullanıcı bakiyesine ANINDA ekle
-    const updatedUser = db.updateUserBalance(telegramId, creditedAmount);
+    const updatedUser = await db.updateUserBalance(telegramId, creditedAmount);
 
     // 9. Telegram botundan kullanıcıya bildirim gönder
     try {

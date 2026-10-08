@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     if (action === "sync_users") {
       const { clientUsers } = body;
       if (Array.isArray(clientUsers)) {
-        db.mergeUsers(clientUsers);
+        await db.mergeUsers(clientUsers);
       }
       return NextResponse.json({
         success: true,
@@ -47,14 +47,14 @@ export async function POST(req: NextRequest) {
 
     // 1. Kullanıcı Silme
     if (action === "delete_user") {
-      db.deleteUser(telegramId);
+      await db.deleteUser(telegramId);
       return NextResponse.json({ success: true, message: "Kullanıcı başarıyla silindi" });
     }
 
     // 2. Ban / Engel Durumu Değiştirme
     if (action === "toggle_ban") {
       const { isBanned } = body;
-      const updated = db.toggleUserBan(telegramId, isBanned, userData);
+      const updated = await db.toggleUserBan(telegramId, isBanned, userData);
       return NextResponse.json({
         success: true,
         message: isBanned ? "Kullanıcı başarıyla engellendi (banlandı)" : "Kullanıcının engeli kaldırıldı",
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     // 3. Admin Rolü Verme / Kaldırma
     if (action === "toggle_role") {
       const { role } = body;
-      const updated = db.updateUserRole(telegramId, role === "admin" ? "admin" : "user", userData);
+      const updated = await db.updateUserRole(telegramId, role === "admin" ? "admin" : "user", userData);
       return NextResponse.json({
         success: true,
         message: role === "admin" ? "Kullanıcıya admin yetkisi verildi" : "Admin yetkisi kaldırıldı",
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Geçersiz tutar" }, { status: 400 });
       }
 
-      const updatedUser = db.updateUserBalance(telegramId, numDelta, userData);
+      const updatedUser = await db.updateUserBalance(telegramId, numDelta, userData);
 
       return NextResponse.json(
         {

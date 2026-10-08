@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Aktivasyon ID gerekli" }, { status: 400 });
     }
 
+    await db.syncFromCloud();
     const order = db.getActivation(activationId);
     if (!order) {
       return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     // Hero-SMS status=6 (tamamla)
     await heroSms.setStatus(activationId, 6);
 
-    const updatedOrder = db.updateActivation(activationId, {
+    const updatedOrder = await db.updateActivation(activationId, {
       status: "COMPLETED",
     });
 

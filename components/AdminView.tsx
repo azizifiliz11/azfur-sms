@@ -93,9 +93,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Balance edit modal state
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [balanceDelta, setBalanceDelta] = useState<string>("50");
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   const fetchAllData = async () => {
-    setLoading(true);
+    setRefreshing(true);
     try {
       const [ovRes, setRes, uRes, depRes] = await Promise.all([
         fetch("/api/admin/overview", { cache: "no-store" }),
@@ -135,41 +136,17 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         }
       }
       if (us.success) {
-        let serverUsers = us.users || [];
+        setUsers(us.users || []);
         try {
-          const cachedRaw = localStorage.getItem("azfur_admin_users");
-          const cachedUsers: any[] = cachedRaw ? JSON.parse(cachedRaw) : [];
-
-          // Eğer server soğuk başlayıp sadece admin döndüyse ama tarayıcıda kullanıcılar varsa:
-          if (serverUsers.length <= 1 && cachedUsers.length > 1) {
-            // Sunucuya kullanıcıları geri yükle (sync)
-            fetch("/api/admin/users", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "sync_users", clientUsers: cachedUsers }),
-            })
-              .then((r) => r.json())
-              .then((synced) => {
-                if (synced.success && synced.users) {
-                  setUsers(synced.users);
-                  try {
-                    localStorage.setItem("azfur_admin_users", JSON.stringify(synced.users));
-                  } catch {}
-                }
-              })
-              .catch(() => {});
-            serverUsers = cachedUsers;
-          } else if (serverUsers.length > 0) {
-            localStorage.setItem("azfur_admin_users", JSON.stringify(serverUsers));
-          }
+          localStorage.removeItem("azfur_admin_users");
         } catch {}
-        setUsers(serverUsers);
       }
       if (dep.success) setDeposits(dep.deposits);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -319,13 +296,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     // Anında modalı kapat ve kullanıcı listesinde optimistik güncelle (0 gecikme)
     const targetId = editingUser.telegramId;
     const optimisticNewBalance = Math.max(0, Number((editingUser.balance + delta).toFixed(2)));
-    setUsers((prev) => {
-      const updated = prev.map((u) => (u.telegramId === targetId ? { ...u, balance: optimisticNewBalance } : u));
-      try {
-        localStorage.setItem("azfur_admin_users", JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    setUsers((prev) =>
+      prev.map((u) => (u.telegramId === targetId ? { ...u, balance: optimisticNewBalance } : u))
+    );
     setEditingUser(null);
 
     try {
@@ -352,13 +325,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       if (data.success) {
         haptic.success();
         if (data.user) {
-          setUsers((prev) => {
-            const next = prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u));
-            try {
-              localStorage.setItem("azfur_admin_users", JSON.stringify(next));
-            } catch {}
-            return next;
-          });
+          setUsers((prev) =>
+            prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u))
+          );
         }
         setToastMsg(`Bakiye güncellendi: ${isAdd ? "+" : "-"}₺${amount.toFixed(2)} (Yeni: ₺${data.user?.balance?.toFixed(2) || optimisticNewBalance.toFixed(2)})`);
         setTimeout(() => setToastMsg(null), 3000);
@@ -559,13 +528,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setUsers((prev) => {
-          const next = prev.map((u) => (u.telegramId === user.telegramId ? { ...u, isBanned: nextBanStatus } : u));
-          try {
-            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
-          } catch {}
-          return next;
-        });
+        setUsers((prev) =>
+          prev.map((u) => (u.telegramId === user.telegramId ? { ...u, isBanned: nextBanStatus } : u))
+        );
         setToastMsg(data.message);
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
@@ -610,13 +575,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setUsers((prev) => {
-          const next = prev.map((u) => (u.telegramId === user.telegramId ? { ...u, role: nextRole } : u));
-          try {
-            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
-          } catch {}
-          return next;
-        });
+        setUsers((prev) =>
+          prev.map((u) => (u.telegramId === user.telegramId ? { ...u, role: nextRole } : u))
+        );
         setToastMsg(data.message);
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
@@ -656,13 +617,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setUsers((prev) => {
-          const next = prev.filter((u) => u.telegramId !== user.telegramId);
-          try {
-            localStorage.setItem("azfur_admin_users", JSON.stringify(next));
-          } catch {}
-          return next;
-        });
+        setUsers((prev) => prev.filter((u) => u.telegramId !== user.telegramId));
         setToastMsg("Kullanıcı başarıyla silindi");
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
@@ -715,10 +670,11 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               haptic.impact("light");
               fetchAllData();
             }}
-            className="p-2 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
+            disabled={refreshing}
+            className="p-2 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white transition-colors disabled:opacity-50"
             title="Yenile"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-emerald-400" : ""}`} />
           </button>
           {onBackToApp && (
             <button

@@ -42,8 +42,19 @@ const DEFAULT_SETTINGS: SystemSettings = {
   },
 };
 
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const DEFAULT_KV_URL = "https://workable-midge-212606.upstash.io";
+const DEFAULT_KV_TOKEN = "gQAAAAAAAz5-AQIgcDE2MDdmNGQ1YzQ1ZmY0NTI0YmFiN2Y1NTlhZDVkYTg5Mw";
+
+const KV_URL =
+  process.env.KV_REST_API_URL ||
+  process.env.UPSTASH_REDIS_REST_URL ||
+  DEFAULT_KV_URL;
+
+const KV_TOKEN =
+  process.env.KV_REST_API_TOKEN ||
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  DEFAULT_KV_TOKEN;
+
 const KV_KEY = "azfur_sms_db_v1";
 
 function ensureDbDirectory() {
@@ -57,17 +68,18 @@ function ensureDbDirectory() {
   }
 }
 
-async function saveToCloudKv(data: DatabaseSchema) {
+async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
   if (!KV_URL || !KV_TOKEN) return;
   try {
     const raw = JSON.stringify(data);
-    await fetch(`${KV_URL}/set/${KV_KEY}`, {
+    await fetch(KV_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${KV_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify([raw]),
+      body: JSON.stringify(["SET", KV_KEY, raw]),
+      cache: "no-store",
     });
   } catch (err) {
     console.error("[Cloud KV Save Error]:", err);
@@ -137,7 +149,7 @@ function loadDb(): DatabaseSchema {
   }
 }
 
-function saveDb(data: DatabaseSchema) {
+async function saveDb(data: DatabaseSchema): Promise<void> {
   ensureDbDirectory();
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
@@ -145,16 +157,21 @@ function saveDb(data: DatabaseSchema) {
     console.error("Error writing db.json:", err);
   }
   if (KV_URL && KV_TOKEN) {
-    saveToCloudKv(data).catch(() => {});
+    await saveToCloudKv(data);
   }
 }
 
 export const db = {
-  async syncFromCloud(): Promise<void> {
-    if (!KV_URL || !KV_TOKEN) return;
+  async syncFromCloud(): Promise<DatabaseSchema> {
+    if (!KV_URL || !KV_TOKEN) return loadDb();
     try {
-      const res = await fetch(`${KV_URL}/get/${KV_KEY}`, {
-        headers: { Authorization: `Bearer ${KV_TOKEN}` },
+      const res = await fetch(KV_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${KV_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["GET", KV_KEY]),
         cache: "no-store",
       });
       const json = await res.json();
@@ -162,20 +179,15 @@ export const db = {
         const cloudData: DatabaseSchema =
           typeof json.result === "string" ? JSON.parse(json.result) : json.result;
         if (cloudData && (cloudData.users || cloudData.settings)) {
-          const localData = loadDb();
-          const merged: DatabaseSchema = {
-            settings: { ...cloudData.settings, ...localData.settings },
-            users: { ...cloudData.users, ...localData.users },
-            activations: { ...cloudData.activations, ...localData.activations },
-            deposits: Array.isArray(cloudData.deposits) ? cloudData.deposits : localData.deposits,
-          };
           ensureDbDirectory();
-          fs.writeFileSync(DB_PATH, JSON.stringify(merged, null, 2), "utf8");
+          fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
+          return cloudData;
         }
       }
     } catch (err) {
       console.error("[Cloud KV Sync Error]:", err);
     }
+    return loadDb();
   },
 
   getSettings(): SystemSettings {
@@ -183,10 +195,10 @@ export const db = {
     return data.settings;
   },
 
-  updateSettings(partial: Partial<SystemSettings>): SystemSettings {
+  async updateSettings(partial: Partial<SystemSettings>): Promise<SystemSettings> {
     const data = loadDb();
     data.settings = { ...data.settings, ...partial };
-    saveDb(data);
+    await saveDb(data);
     return data.settings;
   },
 
@@ -201,7 +213,7 @@ export const db = {
     );
   },
 
-  getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): User {
+  async getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
     const isAdmin =
@@ -228,7 +240,7 @@ export const db = {
         lastActiveAt: new Date().toISOString(),
       };
       data.users[cleanId] = newUser;
-      saveDb(data);
+      await saveDb(data);
       return newUser;
     } else {
       const user = data.users[foundKey];
@@ -240,12 +252,12 @@ export const db = {
       if (isAdmin && user.role !== "admin") {
         user.role = "admin";
       }
-      saveDb(data);
+      await saveDb(data);
       return user;
     }
   },
 
-  resetStats(): { activationsReset: number; depositsReset: number } {
+  async resetStats(): Promise<{ activationsReset: number; depositsReset: number }> {
     const data = loadDb();
     const actCount = Object.keys(data.activations || {}).length;
     const depCount = (data.deposits || []).length;
@@ -254,15 +266,15 @@ export const db = {
     for (const key of Object.keys(data.users)) {
       data.users[key].spent = 0;
     }
-    saveDb(data);
+    await saveDb(data);
     return { activationsReset: actCount, depositsReset: depCount };
   },
 
-  updateUserBalance(
+  async updateUserBalance(
     telegramId: number | string,
     delta: number,
     userData?: Partial<User>
-  ): User {
+  ): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
 
@@ -275,7 +287,6 @@ export const db = {
     let user = foundKey ? data.users[foundKey] : null;
 
     if (!user) {
-      // Container'da henüz yoksa, istemciden gelen kullanıcı bilgisiyle oluştur (asla 404 dönme!)
       const initialBal =
         userData?.balance !== undefined && !isNaN(Number(userData.balance))
           ? Number(userData.balance)
@@ -305,15 +316,15 @@ export const db = {
       user.spent = Number(((user.spent || 0) + Math.abs(delta)).toFixed(2));
     }
     user.lastActiveAt = new Date().toISOString();
-    saveDb(data);
+    await saveDb(data);
     return user;
   },
 
-  updateUserRole(
+  async updateUserRole(
     telegramId: number | string,
     role: "admin" | "user",
     userData?: Partial<User>
-  ): User {
+  ): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
     let foundKey = Object.keys(data.users).find(
@@ -324,19 +335,19 @@ export const db = {
 
     let user = foundKey ? data.users[foundKey] : null;
     if (!user) {
-      user = this.getOrCreateUser(cleanId, { ...userData, role });
+      user = await this.getOrCreateUser(cleanId, { ...userData, role });
     } else {
       user.role = role;
-      saveDb(data);
+      await saveDb(data);
     }
     return user;
   },
 
-  toggleUserBan(
+  async toggleUserBan(
     telegramId: number | string,
     isBanned: boolean,
     userData?: Partial<User>
-  ): User {
+  ): Promise<User> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
     let foundKey = Object.keys(data.users).find(
@@ -347,15 +358,15 @@ export const db = {
 
     let user = foundKey ? data.users[foundKey] : null;
     if (!user) {
-      user = this.getOrCreateUser(cleanId, { ...userData, isBanned });
+      user = await this.getOrCreateUser(cleanId, { ...userData, isBanned });
     } else {
       user.isBanned = isBanned;
-      saveDb(data);
+      await saveDb(data);
     }
     return user;
   },
 
-  deleteUser(telegramId: number | string): boolean {
+  async deleteUser(telegramId: number | string): Promise<boolean> {
     const data = loadDb();
     const cleanId = String(telegramId).trim();
     let foundKey = Object.keys(data.users).find(
@@ -365,12 +376,12 @@ export const db = {
     );
     if (foundKey) {
       delete data.users[foundKey];
-      saveDb(data);
+      await saveDb(data);
     }
     return true;
   },
 
-  mergeUsers(incomingUsers: User[]): void {
+  async mergeUsers(incomingUsers: User[]): Promise<void> {
     const data = loadDb();
     let changed = false;
     for (const u of incomingUsers) {
@@ -395,7 +406,7 @@ export const db = {
       }
     }
     if (changed) {
-      saveDb(data);
+      await saveDb(data);
     }
   },
 
@@ -432,24 +443,24 @@ export const db = {
     return Object.values(data.activations).sort((a, b) => b.createdAt - a.createdAt);
   },
 
-  saveActivation(order: ActivationOrder) {
+  async saveActivation(order: ActivationOrder): Promise<void> {
     const data = loadDb();
     data.activations[order.id] = order;
-    saveDb(data);
+    await saveDb(data);
   },
 
-  updateActivation(id: string, updates: Partial<ActivationOrder>): ActivationOrder | null {
+  async updateActivation(id: string, updates: Partial<ActivationOrder>): Promise<ActivationOrder | null> {
     const data = loadDb();
     if (!data.activations[id]) return null;
     data.activations[id] = { ...data.activations[id], ...updates };
-    saveDb(data);
+    await saveDb(data);
     return data.activations[id];
   },
 
-  addDeposit(deposit: DepositRequest) {
+  async addDeposit(deposit: DepositRequest): Promise<void> {
     const data = loadDb();
     data.deposits.unshift(deposit);
-    saveDb(data);
+    await saveDb(data);
   },
 
   getDeposits(): DepositRequest[] {
@@ -457,7 +468,7 @@ export const db = {
     return data.deposits;
   },
 
-  updateDepositStatus(id: string, status: "APPROVED" | "REJECTED"): DepositRequest | null {
+  async updateDepositStatus(id: string, status: "APPROVED" | "REJECTED"): Promise<DepositRequest | null> {
     const data = loadDb();
     const dep = data.deposits.find((d) => d.id === id);
     if (!dep) return null;
@@ -474,13 +485,13 @@ export const db = {
           (data.users[foundKey].balance + dep.amount).toFixed(2)
         );
       } else {
-        this.getOrCreateUser(cleanId, {
+        await this.getOrCreateUser(cleanId, {
           username: dep.username,
           balance: dep.amount,
         });
       }
     }
-    saveDb(data);
+    await saveDb(data);
     return dep;
   },
 

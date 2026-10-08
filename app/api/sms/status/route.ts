@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Aktivasyon ID gerekli" }, { status: 400 });
     }
 
+    await db.syncFromCloud();
     const order = db.getActivation(id);
     if (!order) {
       return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
@@ -20,8 +21,8 @@ export async function GET(req: NextRequest) {
     // Süre dolmuş mu?
     if (Date.now() > order.expiresAt && order.status === "WAIT_CODE") {
       // Otomatik süre dolumu ve iade
-      db.updateUserBalance(order.telegramId, order.chargedPrice);
-      const updated = db.updateActivation(id, { status: "TIMEOUT" });
+      await db.updateUserBalance(order.telegramId, order.chargedPrice);
+      const updated = await db.updateActivation(id, { status: "TIMEOUT" });
       await heroSms.setStatus(id, 8);
       return NextResponse.json({ success: true, order: updated, message: "Süre doldu, ücret iade edildi" });
     }
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     if (statusResult.status === "RECEIVED" && statusResult.code) {
       const code = statusResult.code;
-      const updated = db.updateActivation(id, {
+      const updated = await db.updateActivation(id, {
         status: "RECEIVED",
         smsCode: code,
       });
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
           updated.phoneNumber,
           code
         );
-        db.updateActivation(id, { notifiedBot: true });
+        await db.updateActivation(id, { notifiedBot: true });
       }
 
       return NextResponse.json({
@@ -60,8 +61,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (statusResult.status === "CANCELLED") {
-      db.updateUserBalance(order.telegramId, order.chargedPrice);
-      const updated = db.updateActivation(id, { status: "CANCELLED" });
+      await db.updateUserBalance(order.telegramId, order.chargedPrice);
+      const updated = await db.updateActivation(id, { status: "CANCELLED" });
       return NextResponse.json({ success: true, order: updated, message: "Aktivasyon iptal edildi" });
     }
 

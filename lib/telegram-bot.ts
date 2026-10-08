@@ -29,10 +29,8 @@ const POPULAR_COUNTRIES = [
   { id: 0, name: "Rusya", flag: "🇷🇺" },
   { id: 48, name: "Hollanda", flag: "🇳🇱" },
   { id: 73, name: "Brezilya", flag: "🇧🇷" },
-  { id: 78, name: "Fransa", flag: "🇫🇷" },
   { id: 6, name: "Endonezya", flag: "🇮🇩" },
   { id: 2, name: "Kazakistan", flag: "🇰🇿" },
-  { id: 1, name: "Ukrayna", flag: "🇺🇦" },
 ];
 
 function getAppUrls() {
@@ -727,8 +725,13 @@ export function getTelegramBot(): Bot | null {
             icon: "📱",
           };
 
+        const text =
+          `🌍 <b>${serviceObj.icon} ${serviceObj.name} İÇİN ÜLKE SEÇİN</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💰 <b>Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
+          `Numara almak istediğiniz ülkeyi seçin 👇`;
+
         const kb = new InlineKeyboard();
-        const priceLines: string[] = [];
 
         // Popüler ülkelerin fiyatlarını çek
         try {
@@ -736,24 +739,15 @@ export function getTelegramBot(): Bot | null {
           for (const c of POPULAR_COUNTRIES) {
             const cost = prices[String(c.id)]?.[serviceCode]?.cost || 0.15;
             const p = pricingEngine.calculatePrice(cost, serviceCode, undefined, c.id).finalPriceTry;
-            const priceStr = `${p.toFixed(2)} ₺`;
-            priceLines.push(`• ${c.flag} <b>${c.name}:</b> <code>${priceStr}</code>`);
-            // Mobil cihazlarda asla kırpılmayan tam genişlikte buton (1 satıra 1 ülke):
-            kb.text(`${c.flag} ${c.name}  —  ${priceStr}`, `buy_confirm:${serviceCode}:${c.id}`).row();
+            // Fiyatların tam ve net okunabilmesi için tekli uzun buton düzeni:
+            kb.text(`${c.flag} ${c.name} • ${p.toFixed(1)}₺`, `buy_confirm:${serviceCode}:${c.id}`).row();
           }
         } catch (e) {
           // Fallback standart fiyat gösterimi
-          for (const c of POPULAR_COUNTRIES.slice(0, 8)) {
+          for (const c of POPULAR_COUNTRIES) {
             kb.text(`${c.flag} ${c.name} Seç`, `buy_confirm:${serviceCode}:${c.id}`).row();
           }
         }
-
-        const text =
-          `🌍 <b>${serviceObj.icon} ${serviceObj.name} İÇİN ÜLKE VE FİYATLAR</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `💰 <b>Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
-          (priceLines.length > 0 ? priceLines.join("\n") + "\n\n" : "") +
-          `Numara almak istediğiniz ülkeye dokunun 👇`;
 
         kb.text("🔙 Servis Listesi", "btn_buy_menu").text("🔙 Ana Menü", "btn_main_menu");
 

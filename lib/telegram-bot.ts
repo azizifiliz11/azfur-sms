@@ -95,6 +95,9 @@ async function sendAnimatedVisual(ctx: any, _fallbackDice?: string) {
 
 function buildMainMenuText(user: User, firstName: string, activeCount: number): string {
   const safeName = (firstName || "Kullanıcı").replace(/[<>&]/g, "");
+  const vipLine = user.isVip
+    ? `⭐ <b>Üyelik Durumu:</b> <b>VIP Üye (%${user.vipDiscountPercent || 15} Özel İndirim)</b>\n`
+    : `💎 <b>Üyelik:</b> Standart Üye\n`;
 
   return (
     `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n` +
@@ -102,6 +105,7 @@ function buildMainMenuText(user: User, firstName: string, activeCount: number): 
     `✨ <i>Sanal Numara & Hızlı SMS Servisi</i> ✨\n` +
     `⚡ ━━━━━━━━━━━━━━━━━━━━ ⚡\n\n` +
     `👋 <b>Hoş Geldiniz, ${safeName}!</b>\n\n` +
+    vipLine +
     `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>\n` +
     `📦 <b>Bekleyen Aktif Onay:</b> <code>${activeCount} adet</code>\n\n` +
@@ -858,11 +862,11 @@ export function getTelegramBot(): Bot | null {
             const c2 = POPULAR_COUNTRIES[i + 1];
 
             const cost1 = prices[String(c1.id)]?.[serviceCode]?.cost || 0.15;
-            const p1 = pricingEngine.calculatePrice(cost1, serviceCode, undefined, c1.id).finalPriceTry;
+            const p1 = pricingEngine.calculatePrice(cost1, serviceCode, undefined, c1.id, user).finalPriceTry;
 
             if (c2) {
               const cost2 = prices[String(c2.id)]?.[serviceCode]?.cost || 0.15;
-              const p2 = pricingEngine.calculatePrice(cost2, serviceCode, undefined, c2.id).finalPriceTry;
+              const p2 = pricingEngine.calculatePrice(cost2, serviceCode, undefined, c2.id, user).finalPriceTry;
               kb.text(formatBtn(c1, p1), `buy_confirm:${serviceCode}:${c1.id}`).text(
                 formatBtn(c2, p2),
                 `buy_confirm:${serviceCode}:${c2.id}`
@@ -914,14 +918,19 @@ export function getTelegramBot(): Bot | null {
 
         const prices = await heroSms.getPrices(countryId);
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
-        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
+        const calcRes = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId, user);
+        const finalPriceTry = calcRes.finalPriceTry;
+
+        const priceDisplay = calcRes.isVipDiscountApplied && calcRes.originalPriceBeforeVip
+          ? `<s>${calcRes.originalPriceBeforeVip.toFixed(2)} ₺</s> ➡️ <b>${finalPriceTry.toFixed(2)} ₺</b> (⭐ VIP %${calcRes.vipDiscountPercent} İndirim)`
+          : `<code>${finalPriceTry.toFixed(2)} ₺</code>`;
 
         const text =
           `🛒 <b>NUMARA SATIN ALMA ONAYI</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `📱 <b>Servis:</b> ${serviceObj.icon} ${serviceObj.name}\n` +
           `🌍 <b>Ülke:</b> ${countryObj.flag} ${countryObj.name}\n` +
-          `💵 <b>Numara Tutarı:</b> <code>${finalPriceTry.toFixed(2)} ₺</code>\n` +
+          `💵 <b>Numara Tutarı:</b> ${priceDisplay}\n` +
           `💳 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
           `⏱️ <b>Kullanım Süresi:</b> 15 Dakika (Tek Kullanımlık)\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
@@ -985,7 +994,8 @@ export function getTelegramBot(): Bot | null {
 
         const prices = await heroSms.getPrices(countryId);
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
-        const { finalPriceTry } = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId);
+        const calcRes = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId, user);
+        const finalPriceTry = calcRes.finalPriceTry;
 
         if (user.balance < finalPriceTry) {
           await editOrReply(
@@ -1042,6 +1052,17 @@ export function getTelegramBot(): Bot | null {
         };
 
         await db.saveActivation(order);
+
+        // Sistem log kaydı oluştur
+        db.addLog({
+          category: "ORDER",
+          level: "SUCCESS",
+          action: "ORDER_CREATED",
+          details: `${order.countryFlag} ${order.serviceName} (${order.phoneNumber}) numarası ${order.chargedPrice.toFixed(2)} ₺ karşılığında satın alındı.`,
+          telegramId: Number(from.id),
+          username: from.username,
+          metadata: { orderId: order.id, phoneNumber: order.phoneNumber, price: order.chargedPrice },
+        }).catch(() => {});
 
         await sendAnimatedVisual(ctx, "🎯");
 
@@ -1156,6 +1177,16 @@ export function getTelegramBot(): Bot | null {
         // Ücreti iade et
         const updatedUser = await db.updateUserBalance(from.id, order.chargedPrice);
         await db.updateActivation(orderId, { status: "CANCELLED" });
+
+        db.addLog({
+          category: "ORDER",
+          level: "INFO",
+          action: "ORDER_REFUNDED",
+          details: `${order.countryFlag} ${order.serviceName} (${order.phoneNumber}) siparişi iptal edildi, ${order.chargedPrice.toFixed(2)} ₺ bakiye iade edildi.`,
+          telegramId: Number(from.id),
+          username: from.username,
+          metadata: { orderId: order.id, phoneNumber: order.phoneNumber, refundAmount: order.chargedPrice },
+        }).catch(() => {});
 
         const text =
           `✅ <b>NUMARA BAŞARIYLA İPTAL EDİLDİ</b>\n` +
@@ -1507,17 +1538,27 @@ export function getTelegramBot(): Bot | null {
       // --- PROFİLİM ---
       if (data === "btn_my_profile") {
         const activations = db.getUserActivations(from.id);
+        const vipStatusText = user.isVip
+          ? `⭐ <b>VIP Üye (%${user.vipDiscountPercent || 15} Özel İndirim)</b>`
+          : `🟢 Standart Üye`;
+
+        const vipPerks = user.isVip
+          ? `\n🌟 <b>VIP Ayrıcalığınız:</b> Tüm sanal numara alımlarında <b>%${user.vipDiscountPercent || 15}</b> indirimli fiyat uygulanmaktadır.`
+          : `\n💡 <i>VIP üye olmak ve tüm numaralarda indirim kazanmak için yöneticimizle iletişime geçin veya tek seferde 500 ₺ yükleyin!</i>`;
+
         const text =
           `👤 <b>KULLANICI PROFİLİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `🆔 <b>Telegram ID:</b> <code>${from.id}</code>\n` +
           `👤 <b>Kullanıcı Adı:</b> @${from.username || "Yok"}\n` +
           `✨ <b>İsim:</b> ${(from.first_name || "").replace(/[<>&]/g, "")}\n` +
+          `💎 <b>Üyelik Durumu:</b> ${vipStatusText}\n` +
           `💰 <b>Kullanılabilir Bakiye:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
           `💸 <b>Toplam Harcama:</b> <code>${user.spent.toFixed(2)} ₺</code>\n` +
           `📦 <b>Toplam Sipariş:</b> <code>${activations.length} adet</code>\n` +
-          `🛡️ <b>Hesap Statüsü:</b> ${user.isBanned ? "🔴 Yasaklı (Banlı)" : user.role === "admin" ? "👑 Yönetici" : "🟢 Standart Üye"}\n` +
-          `━━━━━━━━━━━━━━━━━━━━`;
+          `🛡️ <b>Hesap Statüsü:</b> ${user.isBanned ? "🔴 Yasaklı (Banlı)" : user.role === "admin" ? "👑 Yönetici" : "🟢 Aktif"}\n` +
+          `━━━━━━━━━━━━━━━━━━━━` +
+          vipPerks;
 
         const kb = new InlineKeyboard()
           .text("💳 Bakiye Yükle", "btn_deposit_menu")

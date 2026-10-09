@@ -11,6 +11,8 @@ interface HeaderProps {
     balance: number;
     telegramId: number;
     role?: string;
+    isVip?: boolean;
+    vipDiscountPercent?: number;
   } | null;
   onOpenDeposit: () => void;
   onOpenSupport?: () => void;
@@ -81,7 +83,7 @@ export function Header({
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs font-black text-emerald-400 tracking-tight flex items-center gap-0.5">
                 ⚡ AzFur
               </span>
@@ -89,6 +91,11 @@ export function Header({
               <h2 className="text-xs font-semibold text-white truncate leading-none">
                 {displayName}
               </h2>
+              {user?.isVip && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20 animate-pulse">
+                  ⭐ VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
+                </span>
+              )}
               {isAdmin && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   ADMIN

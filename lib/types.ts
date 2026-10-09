@@ -63,6 +63,12 @@ export interface User {
   spent: number;
   role: 'user' | 'admin';
   isBanned?: boolean;
+  // VIP Üyelik Sistemi
+  isVip?: boolean;
+  vipSince?: string;
+  vipExpiresAt?: string | null;
+  vipDiscountPercent?: number; // Özel indirim oranı (örn: 15 -> %15)
+  vipNote?: string;
   activeDiscount?: {
     code: string;
     type: 'DISCOUNT_PERCENT' | 'DISCOUNT_FIXED';
@@ -103,6 +109,7 @@ export interface CryptoSettings {
   trxAddress?: string; // TRX cüzdan adresi
   apironeAccount?: string; // Apirone Account ID (apr-...)
   apironeTransferKey?: string; // Apirone Transfer Key
+  callbackUrl?: string; // İsteğe bağlı özel Webhook Callback URL
   oxapayApiKey?: string; // OxaPay Merchant API Key (Geriye dönük uyumluluk)
   cryptoBotToken?: string; // Geriye dönük uyumluluk
   autoVerifyEnabled?: boolean; // Apirone ile anında otomatik doğrulama
@@ -146,6 +153,11 @@ export interface SystemSettings {
   useBannerPhoto?: boolean; // false = Ultra Hızlı Metin Modu (~30ms), true = Fotoğraflı Kart
   bannerFileId?: string; // Telegram CDN görsel ID'si
   backupSettings?: BackupSettings; // Otomatik yedekleme yapılandırması
+  vipSettings?: {
+    defaultDiscountPercent: number; // Varsayılan VIP indirim yüzdesi (örn: 15 -> %15)
+    autoVipOnDepositAmount?: number; // Otomatik VIP olma eşiği (örn: 500 ₺)
+    enabled: boolean;
+  };
 }
 
 export interface BackupStats {
@@ -210,3 +222,30 @@ export interface Ticket {
   createdAt: string;
   updatedAt: string;
 }
+
+export type LogCategory =
+  | 'AUTH'
+  | 'DEPOSIT'
+  | 'ORDER'
+  | 'USER'
+  | 'ADMIN'
+  | 'SECURITY'
+  | 'SETTINGS'
+  | 'BACKUP'
+  | 'SYSTEM';
+
+export type LogLevel = 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR';
+
+export interface SystemLog {
+  id: string;
+  timestamp: string; // ISO format
+  category: LogCategory;
+  level: LogLevel;
+  action: string;
+  details: string;
+  telegramId?: number;
+  username?: string;
+  ip?: string;
+  metadata?: Record<string, any>;
+}
+

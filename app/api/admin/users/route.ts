@@ -154,6 +154,14 @@ export async function POST(req: NextRequest) {
     if (action === "toggle_role") {
       const { role } = body;
       const updated = await db.updateUserRole(telegramId, role === "admin" ? "admin" : "user", userData);
+      await db.addLog({
+        category: "ADMIN",
+        level: "WARN",
+        action: "ROLE_CHANGED",
+        details: `${updated.firstName} (@${updated.username || telegramId}) rolü '${role}' olarak güncellendi.`,
+        telegramId: Number(telegramId),
+        username: updated.username,
+      });
       return NextResponse.json({
         success: true,
         message: role === "admin" ? "Kullanıcıya admin yetkisi verildi" : "Admin yetkisi kaldırıldı",
@@ -161,7 +169,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4. Manuel Bakiye Ekleme / Düşme
+    // 4. VIP Üyelik Durumu Değiştirme
+    if (action === "toggle_vip") {
+      const { isVip, discountPercent, note } = body;
+      const updated = await db.updateUserVip(telegramId, Boolean(isVip), {
+        discountPercent: discountPercent !== undefined ? Number(discountPercent) : undefined,
+        note,
+        userData,
+      });
+
+      // Telegram üzerinden kullanıcıyı anında bilgilendir
+      if (isVip) {
+        try {
+          const vipMsg =
+            `⭐ <b>TEBRİKLER! HESABINIZ VIP STATÜSÜNE YÜKSELTİLDİ</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Yönetim tarafından hesabınıza özel <b>VIP Ayrıcalığı</b> tanımlandı.\n\n` +
+            `🎁 <b>VIP İndirim Oranı:</b> <code>%${updated.vipDiscountPercent || 15}</code>\n` +
+            `✨ Tüm numara alımlarınızda otomatik indirimli fiyatlardan yararlanacaksınız!\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+          await sendTelegramDirectMessage(telegramId, vipMsg, "HTML");
+        } catch {}
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: isVip
+          ? `Kullanıcı başarıyla VIP yapıldı (%${updated.vipDiscountPercent} indirim tanımlandı)`
+          : "Kullanıcının VIP üyeliği kaldırıldı",
+        user: updated,
+      });
+    }
+
+    // 5. Manuel Bakiye Ekleme / Düşme
     const { delta, reason } = body;
     if (delta !== undefined) {
       const numDelta = parseFloat(delta);
@@ -170,6 +210,16 @@ export async function POST(req: NextRequest) {
       }
 
       const updatedUser = await db.updateUserBalance(telegramId, numDelta, userData);
+
+      await db.addLog({
+        category: "ADMIN",
+        level: numDelta > 0 ? "SUCCESS" : "WARN",
+        action: "BALANCE_MANUAL_ADJUST",
+        details: `${updatedUser.firstName} (@${updatedUser.username || telegramId}) bakiyesine ${numDelta > 0 ? "+" : ""}${numDelta} ₺ işlendi (Yeni Bakiye: ${updatedUser.balance.toFixed(2)} ₺). Gerekçe: ${reason || "Yönetici İşlemi"}`,
+        telegramId: Number(telegramId),
+        username: updatedUser.username,
+        metadata: { delta: numDelta, reason },
+      });
 
       return NextResponse.json(
         {

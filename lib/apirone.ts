@@ -296,23 +296,43 @@ export async function createApironeInvoice(params: {
 
     const calculatedMinorAmount = Math.max(1, Math.round(cryptoPayAmount * minorUnits));
 
-    // Callback webhook URL belirle
-    const siteUrl = (
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : "") ||
-      "https://azfur-sms.vercel.app"
-    ).replace(/\/$/, "");
+    // Callback webhook URL belirle ve doğrula (Yalnızca geçerli bir public HTTPS URL yapılandırılmışsa gönderilir)
+    let candidateCallback: string | null = null;
+    try {
+      const rawUrl = (
+        settings.cryptoSettings?.callbackUrl ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_PROJECT_PRODUCTION_URL
+          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+          : "") ||
+        ""
+      ).trim();
 
-    const callbackUrl = `${siteUrl}/api/user/deposit/crypto-webhook`;
+      if (rawUrl) {
+        const urlObj = new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`);
+        const host = urlObj.hostname.toLowerCase();
+        // Apirone localhost, 127.0.0.1 veya port içeren adresleri reddeder
+        if (
+          urlObj.protocol === "https:" &&
+          host !== "localhost" &&
+          host !== "127.0.0.1" &&
+          host !== "0.0.0.0" &&
+          !host.endsWith(".local") &&
+          !urlObj.port
+        ) {
+          candidateCallback = `${urlObj.origin}/api/user/deposit/crypto-webhook`;
+        }
+      }
+    } catch {
+      candidateCallback = null;
+    }
+
     const orderId = params.orderId || `dep_${Date.now()}_${params.telegramId}`;
 
     const invoicePayload: any = {
       currency: apironeCurrency,
       amount: calculatedMinorAmount,
       lifetime: 3600, // 1 Saat geçerli
-      "callback-url": callbackUrl,
       "user-data": {
         title: "Bakiye Yukleme - AzFur SMS",
         merchant: "AzFur SMS",
@@ -323,14 +343,37 @@ export async function createApironeInvoice(params: {
       },
     };
 
-    const res = await fetch(`https://apirone.com/api/v2/accounts/${account}/invoices`, {
+    if (candidateCallback) {
+      invoicePayload["callback-url"] = candidateCallback;
+    }
+
+    let res = await fetch(`https://apirone.com/api/v2/accounts/${account}/invoices`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(invoicePayload),
       cache: "no-store",
     });
 
-    const data = await res.json();
+    let data = await res.json();
+
+    // Otomatik İyileştirme (Self-Healing): Eğer Apirone callback_url hatası verirse
+    // callback-url parametresini kaldırıp ANINDA tekrar dene.
+    if (
+      !res.ok &&
+      invoicePayload["callback-url"] &&
+      (String(data.message || "").toLowerCase().includes("calback") ||
+        String(data.message || "").toLowerCase().includes("callback") ||
+        res.status === 400)
+    ) {
+      delete invoicePayload["callback-url"];
+      res = await fetch(`https://apirone.com/api/v2/accounts/${account}/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(invoicePayload),
+        cache: "no-store",
+      });
+      data = await res.json();
+    }
 
     if (!res.ok || !data.invoice || !data.address) {
       return {

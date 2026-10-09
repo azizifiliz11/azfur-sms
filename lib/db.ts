@@ -11,6 +11,9 @@ import {
   Coupon,
   SystemBackup,
   BackupSettings,
+  SystemLog,
+  LogCategory,
+  LogLevel,
 } from "./types";
 import { CONFIG } from "./config";
 
@@ -22,6 +25,7 @@ export interface DatabaseSchema {
   tickets: Record<string, Ticket>;
   coupons?: Record<string, Coupon>;
   backups?: SystemBackup[];
+  logs?: SystemLog[];
 }
 
 const SEED_DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -55,6 +59,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     trxAddress: "",
     apironeAccount: "",
     apironeTransferKey: "",
+    callbackUrl: "",
     oxapayApiKey: "",
     cryptoBotToken: "",
     autoVerifyEnabled: true,
@@ -68,6 +73,11 @@ const DEFAULT_SETTINGS: SystemSettings = {
     autoBackupIntervalHours: 6,
     maxBackupsCount: 20,
     lastAutoBackupTime: new Date().toISOString(),
+  },
+  vipSettings: {
+    defaultDiscountPercent: 15,
+    autoVipOnDepositAmount: 500,
+    enabled: true,
   },
 };
 
@@ -190,8 +200,12 @@ function loadDb(): DatabaseSchema {
     if (!data.tickets) data.tickets = {};
     if (!data.coupons) data.coupons = {};
     if (!data.backups || !Array.isArray(data.backups)) data.backups = [];
+    if (!data.logs || !Array.isArray(data.logs)) data.logs = [];
     if (!data.settings.backupSettings) {
       data.settings.backupSettings = DEFAULT_SETTINGS.backupSettings;
+    }
+    if (!data.settings.vipSettings) {
+      data.settings.vipSettings = DEFAULT_SETTINGS.vipSettings;
     }
 
     // Silinen kullanıcılar asla geri gelmesin
@@ -861,6 +875,16 @@ export const db = {
     const data = loadDb();
     data.deposits.unshift(deposit);
     await saveDb(data);
+
+    this.addLog({
+      category: "DEPOSIT",
+      level: "INFO",
+      action: "DEPOSIT_CREATED",
+      details: `${deposit.amount} ₺ tutarında ${deposit.method} ödeme talebi oluşturuldu (${deposit.referenceCode || deposit.id}).`,
+      telegramId: Number(deposit.telegramId),
+      username: deposit.username,
+      metadata: { depositId: deposit.id, method: deposit.method, amount: deposit.amount },
+    }).catch(() => {});
   },
 
   getDeposits(): DepositRequest[] {
@@ -873,6 +897,7 @@ export const db = {
     const dep = data.deposits.find((d) => d.id === id);
     if (!dep) return null;
     dep.status = status;
+
     if (status === "APPROVED") {
       const cleanId = String(dep.telegramId).trim();
       let foundKey = Object.keys(data.users).find(
@@ -880,17 +905,62 @@ export const db = {
           String(k).trim() === cleanId ||
           String(data.users[k]?.telegramId).trim() === cleanId
       );
+
+      let targetUser: User;
       if (foundKey && data.users[foundKey]) {
-        data.users[foundKey].balance = Number(
-          (data.users[foundKey].balance + dep.amount).toFixed(2)
+        targetUser = data.users[foundKey];
+        targetUser.balance = Number(
+          (targetUser.balance + dep.amount).toFixed(2)
         );
       } else {
-        await this.getOrCreateUser(cleanId, {
+        targetUser = await this.getOrCreateUser(cleanId, {
           username: dep.username,
           balance: dep.amount,
         });
       }
+
+      // Otomatik VIP Yükseltme Kontrolü (Bakiye yükleme tutarı VIP eşiğini geçerse)
+      const vipCfg = data.settings.vipSettings;
+      if (
+        vipCfg?.enabled &&
+        vipCfg?.autoVipOnDepositAmount &&
+        dep.amount >= vipCfg.autoVipOnDepositAmount &&
+        !targetUser.isVip
+      ) {
+        targetUser.isVip = true;
+        targetUser.vipSince = new Date().toISOString();
+        targetUser.vipDiscountPercent = vipCfg.defaultDiscountPercent || 15;
+        this.addLog({
+          category: "USER",
+          level: "SUCCESS",
+          action: "AUTO_VIP_UPGRADE",
+          details: `Kullanıcı ${dep.amount} ₺ yükleme yaparak otomatik VIP statüsüne yükseltildi (İndirim: %${targetUser.vipDiscountPercent}).`,
+          telegramId: Number(cleanId),
+          username: targetUser.username,
+        }).catch(() => {});
+      }
+
+      this.addLog({
+        category: "DEPOSIT",
+        level: "SUCCESS",
+        action: "DEPOSIT_APPROVED",
+        details: `${dep.amount} ₺ tutarındaki ${dep.method} ödemesi onaylandı. Yeni bakiye: ${targetUser.balance} ₺`,
+        telegramId: Number(cleanId),
+        username: dep.username,
+        metadata: { depositId: dep.id, method: dep.method, amount: dep.amount },
+      }).catch(() => {});
+    } else {
+      this.addLog({
+        category: "DEPOSIT",
+        level: "WARN",
+        action: "DEPOSIT_REJECTED",
+        details: `${dep.amount} ₺ tutarındaki ${dep.method} ödeme talebi reddedildi.`,
+        telegramId: Number(dep.telegramId),
+        username: dep.username,
+        metadata: { depositId: dep.id, method: dep.method, amount: dep.amount },
+      }).catch(() => {});
     }
+
     await saveDb(data);
     return dep;
   },
@@ -1341,5 +1411,125 @@ export const db = {
     };
     await saveDb(data);
     return data.settings.backupSettings;
+  },
+
+  // ==========================================
+  // SİSTEM LOGLARI (AUDIT & ACTIVITY LOGS)
+  // ==========================================
+  async addLog(entry: Omit<SystemLog, "id" | "timestamp">): Promise<SystemLog> {
+    const data = loadDb();
+    if (!data.logs || !Array.isArray(data.logs)) {
+      data.logs = [];
+    }
+    const logItem: SystemLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      ...entry,
+    };
+    data.logs.unshift(logItem);
+    // En fazla 1000 adet log tut (şişmeyi önle)
+    if (data.logs.length > 1000) {
+      data.logs = data.logs.slice(0, 1000);
+    }
+    // Arka planda kaydet (UI/API akışını bloklama)
+    saveDb(data).catch(() => {});
+    return logItem;
+  },
+
+  getLogs(filter?: {
+    category?: string;
+    level?: string;
+    limit?: number;
+    search?: string;
+  }): SystemLog[] {
+    const data = loadDb();
+    let list = Array.isArray(data.logs) ? [...data.logs] : [];
+
+    if (filter?.category && filter.category !== "ALL") {
+      const cat = filter.category.toUpperCase();
+      list = list.filter((l) => l.category === cat);
+    }
+
+    if (filter?.level && filter.level !== "ALL") {
+      const lvl = filter.level.toUpperCase();
+      list = list.filter((l) => l.level === lvl);
+    }
+
+    if (filter?.search) {
+      const q = filter.search.toLowerCase().trim();
+      list = list.filter(
+        (l) =>
+          l.action.toLowerCase().includes(q) ||
+          l.details.toLowerCase().includes(q) ||
+          (l.username && l.username.toLowerCase().includes(q)) ||
+          (l.telegramId && String(l.telegramId).includes(q))
+      );
+    }
+
+    const limit = filter?.limit && filter.limit > 0 ? filter.limit : 150;
+    return list.slice(0, limit);
+  },
+
+  async clearLogs(): Promise<{ count: number }> {
+    const data = loadDb();
+    const count = (data.logs || []).length;
+    data.logs = [];
+    await saveDb(data);
+    return { count };
+  },
+
+  // ==========================================
+  // VIP ÜYELİK YÖNETİMİ
+  // ==========================================
+  async updateUserVip(
+    telegramId: number | string,
+    isVip: boolean,
+    options?: {
+      discountPercent?: number;
+      expiresAt?: string | null;
+      note?: string;
+      userData?: Partial<User>;
+    }
+  ): Promise<User> {
+    const data = loadDb();
+    const cleanId = String(telegramId).trim();
+
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    let user = foundKey ? data.users[foundKey] : null;
+    if (!user) {
+      user = await this.getOrCreateUser(cleanId, options?.userData);
+    }
+
+    const defaultDiscount = data.settings.vipSettings?.defaultDiscountPercent || 15;
+    user.isVip = isVip;
+    user.vipSince = isVip ? (user.vipSince || new Date().toISOString()) : undefined;
+    user.vipDiscountPercent = isVip
+      ? (options?.discountPercent !== undefined ? options.discountPercent : defaultDiscount)
+      : undefined;
+    user.vipExpiresAt = isVip ? (options?.expiresAt || null) : null;
+    if (options?.note !== undefined) {
+      user.vipNote = options.note;
+    }
+
+    await saveDb(data);
+
+    // Otomatik log kaydı
+    this.addLog({
+      category: "USER",
+      level: isVip ? "SUCCESS" : "INFO",
+      action: isVip ? "VIP_GRANTED" : "VIP_REVOKED",
+      details: isVip
+        ? `${user.firstName} (@${user.username || cleanId}) kullanıcısına VIP üyelik verildi (İndirim: %${user.vipDiscountPercent}).`
+        : `${user.firstName} (@${user.username || cleanId}) kullanıcısının VIP üyeliği kaldırıldı.`,
+      telegramId: Number(cleanId),
+      username: user.username,
+    }).catch(() => {});
+
+    return user;
   },
 };

@@ -1,74 +1,101 @@
 import { db } from "./db";
-import { CalculatedCatalogItem, Country, ServiceItem } from "./types";
+import { CalculatedCatalogItem, Country, ServiceItem, User } from "./types";
 import { heroSms } from "./hero-sms";
 import { tcmb } from "./tcmb";
 
 export const pricingEngine = {
   /**
-   * Maliyet üzerinden kâr marjlı satış fiyatını hesaplar
+   * Maliyet üzerinden kâr marjlı satış fiyatını hesaplar (VIP indirimini destekler)
    */
   calculatePrice(
     originalCostUsd: number,
     serviceCode: string,
     customRate?: number,
-    countryId?: number
-  ): { finalPriceTry: number; costTry: number; profitTry: number; usedRate: number; isManualPrice?: boolean } {
+    countryId?: number,
+    user?: User | null
+  ): {
+    finalPriceTry: number;
+    costTry: number;
+    profitTry: number;
+    usedRate: number;
+    isManualPrice?: boolean;
+    isVipDiscountApplied?: boolean;
+    vipDiscountPercent?: number;
+    originalPriceBeforeVip?: number;
+  } {
     const settings = db.getSettings();
     const rate = customRate || settings.exchangeRateToTry || settings.lastTcmbRate || 49.20;
     const costTry = originalCostUsd * rate;
 
-    // 1. Ülke + Servis Kombinasyonuna Özel Manuel Kural Kontrolü
-    if (countryId !== undefined) {
-      const ruleKey = `${countryId}_${serviceCode}`;
-      const rule = settings.customPriceRules?.[ruleKey];
-      if (rule) {
-        // Sabit TL Satış Fiyatı varsa doğrudan kullan
-        if (rule.fixedPriceTry !== undefined && !isNaN(Number(rule.fixedPriceTry)) && Number(rule.fixedPriceTry) > 0) {
-          const finalPriceTry = Number(Number(rule.fixedPriceTry).toFixed(2));
-          const profitTry = Number((finalPriceTry - costTry).toFixed(2));
-          return {
-            finalPriceTry,
-            costTry: Number(costTry.toFixed(2)),
-            profitTry,
-            usedRate: rate,
-            isManualPrice: true,
-          };
-        }
+    let baseFinalPriceTry: number;
+    let isManualPrice = false;
 
-        // Özel kâr yüzdesi veya sabit ek ücret varsa
-        if (rule.marginPercent !== undefined || rule.fixedFee !== undefined) {
-          const marginPercent = rule.marginPercent !== undefined ? rule.marginPercent : settings.globalMarginPercent;
-          const fixedFee = rule.fixedFee !== undefined ? rule.fixedFee : settings.globalFixedFee;
-          const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
-          const finalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
-          const profitTry = Number((finalPriceTry - costTry).toFixed(2));
-          return {
-            finalPriceTry,
-            costTry: Number(costTry.toFixed(2)),
-            profitTry,
-            usedRate: rate,
-            isManualPrice: true,
-          };
-        }
+    // 1. Ülke + Servis Kombinasyonuna Özel Manuel Kural Kontrolü
+    const ruleKey = countryId !== undefined ? `${countryId}_${serviceCode}` : "";
+    const rule = ruleKey ? settings.customPriceRules?.[ruleKey] : undefined;
+
+    if (rule) {
+      // Sabit TL Satış Fiyatı varsa doğrudan kullan
+      if (rule.fixedPriceTry !== undefined && !isNaN(Number(rule.fixedPriceTry)) && Number(rule.fixedPriceTry) > 0) {
+        baseFinalPriceTry = Number(Number(rule.fixedPriceTry).toFixed(2));
+        isManualPrice = true;
+      } else if (rule.marginPercent !== undefined || rule.fixedFee !== undefined) {
+        const marginPercent = rule.marginPercent !== undefined ? rule.marginPercent : settings.globalMarginPercent;
+        const fixedFee = rule.fixedFee !== undefined ? rule.fixedFee : settings.globalFixedFee;
+        const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
+        baseFinalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
+        isManualPrice = true;
+      } else {
+        const custom = settings.serviceCustomMargins?.[serviceCode];
+        const marginPercent = custom?.marginPercent !== undefined ? custom.marginPercent : settings.globalMarginPercent;
+        const fixedFee = custom?.fixedFee !== undefined ? custom.fixedFee : settings.globalFixedFee;
+        const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
+        baseFinalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
       }
+    } else {
+      // 2. Özel Servis Kârı Kontrolü
+      const custom = settings.serviceCustomMargins?.[serviceCode];
+      const marginPercent = custom?.marginPercent !== undefined ? custom.marginPercent : settings.globalMarginPercent;
+      const fixedFee = custom?.fixedFee !== undefined ? custom.fixedFee : settings.globalFixedFee;
+
+      const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
+      // En az 3.00 TL taban fiyat ve 2 basamak yuvarlama
+      baseFinalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
     }
 
-    // 2. Özel Servis Kârı Kontrolü
-    const custom = settings.serviceCustomMargins?.[serviceCode];
-    const marginPercent = custom?.marginPercent !== undefined ? custom.marginPercent : settings.globalMarginPercent;
-    const fixedFee = custom?.fixedFee !== undefined ? custom.fixedFee : settings.globalFixedFee;
+    // 3. VIP Üyelik İndirimi Kontrolü
+    if (user?.isVip) {
+      const vipDiscount =
+        user.vipDiscountPercent !== undefined && user.vipDiscountPercent > 0
+          ? user.vipDiscountPercent
+          : settings.vipSettings?.defaultDiscountPercent || 15;
 
-    const priceWithMargin = costTry * (1 + marginPercent / 100) + fixedFee;
-    // En az 3.00 TL taban fiyat ve 2 basamak yuvarlama
-    const finalPriceTry = Number(Math.max(3.0, Math.ceil(priceWithMargin * 10) / 10).toFixed(2));
-    const profitTry = Number((finalPriceTry - costTry).toFixed(2));
+      const discountedPrice = Number(
+        Math.max(1.0, Math.ceil(baseFinalPriceTry * (1 - vipDiscount / 100) * 10) / 10).toFixed(2)
+      );
+      const profitTry = Number((discountedPrice - costTry).toFixed(2));
+
+      return {
+        finalPriceTry: discountedPrice,
+        costTry: Number(costTry.toFixed(2)),
+        profitTry,
+        usedRate: rate,
+        isManualPrice,
+        isVipDiscountApplied: true,
+        vipDiscountPercent: vipDiscount,
+        originalPriceBeforeVip: baseFinalPriceTry,
+      };
+    }
+
+    const profitTry = Number((baseFinalPriceTry - costTry).toFixed(2));
 
     return {
-      finalPriceTry,
+      finalPriceTry: baseFinalPriceTry,
       costTry: Number(costTry.toFixed(2)),
       profitTry,
       usedRate: rate,
-      isManualPrice: false,
+      isManualPrice,
+      isVipDiscountApplied: false,
     };
   },
 

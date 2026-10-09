@@ -56,6 +56,8 @@ import {
   AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Star,
+  Filter,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -69,7 +71,7 @@ interface AdminViewProps {
 }
 
 export function AdminView({ onBackToApp }: AdminViewProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups" | "logs">("overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -216,6 +218,24 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [restoreTargetType, setRestoreTargetType] = useState<"snapshot" | "file">("snapshot");
   const [backupSecurityPin, setBackupSecurityPin] = useState<string>("2026");
 
+  // Sistem Logları (Audit Logs) Durumları
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [logCategoryFilter, setLogCategoryFilter] = useState<string>("ALL");
+  const [logLevelFilter, setLogLevelFilter] = useState<string>("ALL");
+  const [logSearchQuery, setLogSearchQuery] = useState<string>("");
+  const [clearingLogs, setClearingLogs] = useState<boolean>(false);
+
+  // VIP Üyelik Durumları & Ayarları
+  const [userVipFilter, setUserVipFilter] = useState<"all" | "vip" | "standard">("all");
+  const [vipModalOpen, setVipModalOpen] = useState<boolean>(false);
+  const [vipTargetUser, setVipTargetUser] = useState<any | null>(null);
+  const [vipDiscountInput, setVipDiscountInput] = useState<number>(15);
+  const [vipSettingsDefaultDiscount, setVipSettingsDefaultDiscount] = useState<number>(15);
+  const [vipSettingsAutoDeposit, setVipSettingsAutoDeposit] = useState<number>(500);
+  const [vipSettingsEnabled, setVipSettingsEnabled] = useState<boolean>(true);
+  const [savingVipSettings, setSavingVipSettings] = useState<boolean>(false);
+
   // Güvenli Admin Başlıkları (Dahili Admin Doğrulaması)
   const getAdminHeaders = () => {
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
@@ -326,6 +346,11 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           setCustomPriceRules(st.settings.customPriceRules);
         } else {
           setCustomPriceRules({});
+        }
+        if (st.settings?.vipSettings) {
+          setVipSettingsDefaultDiscount(st.settings.vipSettings.defaultDiscountPercent ?? 15);
+          setVipSettingsAutoDeposit(st.settings.vipSettings.autoVipOnDepositAmount ?? 500);
+          setVipSettingsEnabled(st.settings.vipSettings.enabled ?? true);
         }
       }
       if (us.success) {
@@ -1789,15 +1814,172 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
 
   // Filtrelenmiş Kullanıcı Listesi
   const filteredUsers = useMemo(() => {
-    if (!userSearchQuery.trim()) return users;
+    let list = users;
+    if (userVipFilter === "vip") {
+      list = list.filter((u) => u.isVip);
+    } else if (userVipFilter === "standard") {
+      list = list.filter((u) => !u.isVip);
+    }
+
+    if (!userSearchQuery.trim()) return list;
     const q = userSearchQuery.toLowerCase();
-    return users.filter(
+    return list.filter(
       (u) =>
         (u.firstName && u.firstName.toLowerCase().includes(q)) ||
         (u.username && u.username.toLowerCase().includes(q)) ||
         String(u.telegramId).includes(q)
     );
-  }, [users, userSearchQuery]);
+  }, [users, userSearchQuery, userVipFilter]);
+
+  // Filtrelenmiş Sistem Logları Listesi
+  const filteredLogs = useMemo(() => {
+    let list = logs;
+    if (logCategoryFilter && logCategoryFilter !== "ALL") {
+      list = list.filter((l) => l.category === logCategoryFilter);
+    }
+    if (logLevelFilter && logLevelFilter !== "ALL") {
+      list = list.filter((l) => l.level === logLevelFilter);
+    }
+    if (!logSearchQuery.trim()) return list;
+    const q = logSearchQuery.toLowerCase();
+    return list.filter(
+      (l) =>
+        (l.action && l.action.toLowerCase().includes(q)) ||
+        (l.category && l.category.toLowerCase().includes(q)) ||
+        (l.username && l.username.toLowerCase().includes(q)) ||
+        (l.telegramId && String(l.telegramId).includes(q)) ||
+        (l.details && JSON.stringify(l.details).toLowerCase().includes(q))
+    );
+  }, [logs, logCategoryFilter, logLevelFilter, logSearchQuery]);
+
+  // VIP Durumunu Değiştir / İndirim Güncelle
+  const handleToggleVip = async (u: any, customDiscount?: number, forceVipState?: boolean) => {
+    setUserActionLoadingId(u.telegramId);
+    haptic.impact("medium");
+    try {
+      const willBeVip = forceVipState !== undefined ? forceVipState : (customDiscount !== undefined ? true : !u.isVip);
+      const res = await adminFetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_vip",
+          telegramId: u.telegramId,
+          isVip: willBeVip,
+          discountPercent:
+            customDiscount !== undefined
+              ? customDiscount
+              : willBeVip
+              ? u.vipDiscountPercent || vipSettingsDefaultDiscount || 15
+              : undefined,
+          userData: u,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg(data.message || (willBeVip ? "Kullanıcı VIP yapıldı!" : "VIP kaldırıldı"));
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "İşlem başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setUserActionLoadingId(null);
+    }
+  };
+
+  // VIP Ayarlarını Kaydet
+  const handleSaveVipSettings = async () => {
+    setSavingVipSettings(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vipSettings: {
+            defaultDiscountPercent: Number(vipSettingsDefaultDiscount),
+            autoVipOnDepositAmount: Number(vipSettingsAutoDeposit),
+            enabled: vipSettingsEnabled,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("VIP üyelik ayarları başarıyla güncellendi!");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt başarısız");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setSavingVipSettings(false);
+    }
+  };
+
+  // Sistem Loglarını Getir
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const params = new URLSearchParams();
+      if (logCategoryFilter && logCategoryFilter !== "ALL") params.set("category", logCategoryFilter);
+      if (logLevelFilter && logLevelFilter !== "ALL") params.set("level", logLevelFilter);
+      if (logSearchQuery.trim()) params.set("search", logSearchQuery.trim());
+      params.set("limit", "250");
+
+      const res = await adminFetch(`/api/admin/logs?${params.toString()}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.logs)) {
+        setLogs(data.logs);
+      }
+    } catch (e) {
+      console.error("Fetch logs error:", e);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "logs") {
+      fetchLogs();
+    }
+  }, [activeTab, logCategoryFilter, logLevelFilter]);
+
+  // Sistem Loglarını Temizle
+  const handleClearLogs = async () => {
+    if (!confirm("Tüm sistem loglarını kalıcı olarak temizlemek istediğinize emin misiniz?")) {
+      return;
+    }
+    setClearingLogs(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/logs", { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("Sistem logları başarıyla temizlendi!");
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchLogs();
+      } else {
+        haptic.error();
+        alert(data.error || "Loglar silinemedi");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    } finally {
+      setClearingLogs(false);
+    }
+  };
 
   // Yükleme Durumu
   if (loading) {
@@ -1860,7 +2042,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-10 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
         <button
           onClick={() => {
             haptic.selection();
@@ -1981,6 +2163,20 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         >
           <Archive className="w-3.5 h-3.5 shrink-0" />
           <span>Yedekleme ({backups.length})</span>
+        </button>
+        <button
+          onClick={() => {
+            haptic.selection();
+            setActiveTab("logs");
+          }}
+          className={`py-2 px-1 rounded-xl transition-all text-center flex items-center justify-center gap-1 ${
+            activeTab === "logs"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 shrink-0" />
+          <span>Loglar</span>
         </button>
       </div>
 
@@ -3110,6 +3306,102 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
             </div>
           </Card>
 
+          {/* VIP ÜYELİK VE İNDİRİM AYARLARI */}
+          <Card className="p-4 space-y-4 border-amber-500/30 bg-gradient-to-br from-amber-950/10 via-zinc-900 to-zinc-900">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>⭐ VIP Üyelik & Otomatik İndirim Sistemi</span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Özel müşterilere indirim tanımlama ve yüksek bakiye yükleyenleri otomatik VIP yapma
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-medium">VIP Sistemi:</span>
+                <button
+                  type="button"
+                  onClick={() => setVipSettingsEnabled(!vipSettingsEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    vipSettingsEnabled ? "bg-amber-500" : "bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      vipSettingsEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Varsayılan VIP İndirim Oranı (%)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={vipSettingsDefaultDiscount}
+                    onChange={(e) => setVipSettingsDefaultDiscount(Number(e.target.value))}
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-amber-400">%</span>
+                </div>
+                <p className="text-[10px] text-zinc-500">
+                  VIP üyeler hem Telegram botunda hem WebApp&apos;te tüm numaraları bu indirimle satın alır.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Otomatik VIP Yükleme Eşiği (₺)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    value={vipSettingsAutoDeposit}
+                    onChange={(e) => setVipSettingsAutoDeposit(Number(e.target.value))}
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-emerald-400">₺</span>
+                </div>
+                <p className="text-[10px] text-zinc-500">
+                  Kullanıcı tek seferde bu tutar ve üzerinde kripto veya banka bakiyesi yüklediğinde otomatik VIP yapılır. (0 = Devre Dışı)
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveVipSettings}
+              disabled={savingVipSettings}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {savingVipSettings ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>VIP Ayarlarını Kaydet</span>
+                </>
+              )}
+            </button>
+          </Card>
+
         </div>
       )}
 
@@ -3122,6 +3414,50 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               <span>Kayıtlı Telegram Kullanıcıları ({users.length})</span>
             </h3>
             <span className="text-[11px] text-zinc-400">Kullanıcı & Yetki Yönetimi</span>
+          </div>
+
+          {/* Kullanıcı Filtre Sekmeleri (VIP / Standart) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              onClick={() => {
+                haptic.selection();
+                setUserVipFilter("all");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                userVipFilter === "all"
+                  ? "bg-zinc-200 text-black shadow-sm"
+                  : "bg-zinc-800/80 text-zinc-400 hover:text-white"
+              }`}
+            >
+              Tümü ({users.length})
+            </button>
+            <button
+              onClick={() => {
+                haptic.selection();
+                setUserVipFilter("vip");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all ${
+                userVipFilter === "vip"
+                  ? "bg-amber-400 text-black shadow-md shadow-amber-400/20"
+                  : "bg-zinc-800/80 text-amber-300/80 hover:text-amber-300 hover:bg-amber-500/10"
+              }`}
+            >
+              <Star className="w-3.5 h-3.5 fill-current" />
+              <span>VIP Üyeler ({users.filter((u) => u.isVip).length})</span>
+            </button>
+            <button
+              onClick={() => {
+                haptic.selection();
+                setUserVipFilter("standard");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                userVipFilter === "standard"
+                  ? "bg-zinc-200 text-black shadow-sm"
+                  : "bg-zinc-800/80 text-zinc-400 hover:text-white"
+              }`}
+            >
+              Standart ({users.filter((u) => !u.isVip).length})
+            </button>
           </div>
 
           {/* Arama Çubuğu */}
@@ -3190,6 +3526,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                                     👑 ADMIN
                                   </span>
                                 ) : null}
+
+                                {u.isVip && (
+                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shadow-sm shadow-amber-500/10">
+                                    ⭐ VIP (%{u.vipDiscountPercent || 15})
+                                  </span>
+                                )}
 
                                 {isOnline ? (
                                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
@@ -3273,6 +3615,26 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                       >
                         <ShieldAlert className="w-3.5 h-3.5" />
                         <span>{u.role === "admin" ? "Adminliği Al" : "Admin"}</span>
+                      </button>
+
+                      {/* VIP Üyelik Durumu (Ver / Düzenle / Kaldır) */}
+                      <button
+                        onClick={() => {
+                          setVipTargetUser(u);
+                          setVipDiscountInput(u.vipDiscountPercent || vipSettingsDefaultDiscount || 15);
+                          setVipModalOpen(true);
+                          haptic.impact("light");
+                        }}
+                        disabled={isActionLoading}
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                          u.isVip
+                            ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/20"
+                            : "bg-zinc-800 hover:bg-zinc-700 border-white/10 text-zinc-300"
+                        }`}
+                        title={u.isVip ? "VIP Üyeliği Düzenle veya İptal Et" : "Kullanıcıyı VIP Yap"}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${u.isVip ? "fill-amber-300 text-amber-300" : ""}`} />
+                        <span>{u.isVip ? `VIP (%${u.vipDiscountPercent || 15})` : "VIP Yap"}</span>
                       </button>
 
                       {/* Banla / Engeli Kaldır */}
@@ -4485,6 +4847,232 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         </div>
       )}
 
+      {/* TAB 10: AUDIT LOGS (DENETİM VE GÜVENLİK LOGLARI) */}
+      {activeTab === "logs" && (
+        <div className="space-y-4">
+          {/* Üst Bilgi ve Butonlar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-zinc-900 via-zinc-900 to-indigo-950/30 p-4 rounded-2xl border border-white/10">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Sistem Denetim & Aktivite Logları</span>
+                    <Badge color="purple">Canlı</Badge>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Bakiye yüklemeleri, siparişler, VIP/yetki işlemleri ve güvenlik olayları
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchLogs}
+                disabled={loadingLogs}
+                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-white/10 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? "animate-spin" : ""}`} />
+                <span>Yenile</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearLogs}
+                disabled={clearingLogs || logs.length === 0}
+                className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all border border-rose-500/30 disabled:opacity-40"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{clearingLogs ? "Temizleniyor..." : "Logları Temizle"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filtre ve Arama Çubuğu */}
+          <Card className="p-3.5 bg-zinc-900/90 border-white/10 space-y-3">
+            <div className="flex flex-col md:flex-row gap-2.5">
+              {/* Arama */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="İşlem adı, kullanıcı, ID veya açıklama ara..."
+                  value={logSearchQuery}
+                  onChange={(e) => setLogSearchQuery(e.target.value)}
+                  className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                />
+                {logSearchQuery && (
+                  <button
+                    onClick={() => setLogSearchQuery("")}
+                    className="absolute right-2.5 top-2 text-xs text-zinc-400 hover:text-white"
+                  >
+                    Temizle
+                  </button>
+                )}
+              </div>
+
+              {/* Kategori Filtresi */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 text-xs">
+                {[
+                  { id: "ALL", label: "Tümü" },
+                  { id: "DEPOSIT", label: "💰 Bakiye" },
+                  { id: "ORDER", label: "🛒 Sipariş" },
+                  { id: "USER", label: "👤 Kullanıcı" },
+                  { id: "SECURITY", label: "🛡️ Güvenlik" },
+                  { id: "ADMIN", label: "👑 Admin" },
+                  { id: "BACKUP", label: "💾 Yedek" },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setLogCategoryFilter(c.id)}
+                    className={`px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all text-[11px] ${
+                      logCategoryFilter === c.id
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Seviye Filtresi */}
+            <div className="flex items-center gap-1.5 pt-1 border-t border-white/5 text-[11px]">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <Filter className="w-3 h-3" />
+                Seviye:
+              </span>
+              {[
+                { id: "ALL", label: "Tümü" },
+                { id: "SUCCESS", label: "Başarılı", color: "text-emerald-400" },
+                { id: "INFO", label: "Bilgi", color: "text-blue-400" },
+                { id: "WARN", label: "Uyarı", color: "text-amber-400" },
+                { id: "ERROR", label: "Hata", color: "text-rose-400" },
+              ].map((lvl) => (
+                <button
+                  key={lvl.id}
+                  onClick={() => setLogLevelFilter(lvl.id)}
+                  className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                    logLevelFilter === lvl.id
+                      ? "bg-white/10 text-white font-bold"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <span className={lvl.color}>{lvl.label}</span>
+                </button>
+              ))}
+
+              <span className="ml-auto text-zinc-500 font-mono text-[10px]">
+                {filteredLogs.length} / {logs.length} kayıt
+              </span>
+            </div>
+          </Card>
+
+          {/* Log Listesi */}
+          {loadingLogs ? (
+            <div className="p-12 text-center space-y-2">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mx-auto" />
+              <p className="text-xs text-zinc-400">Denetim kayıtları yükleniyor...</p>
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <Card className="p-8 text-center space-y-2 text-zinc-500 text-xs">
+              <FileText className="w-8 h-8 text-zinc-600 mx-auto" />
+              <p>Filtreye uygun log kaydı bulunamadı.</p>
+              <p className="text-[11px] text-zinc-600">
+                Sistemde işlem gerçekleştikçe (bakiye yükleme, sipariş, ayar değişiklikleri) loglar burada listelenecektir.
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-2 max-h-[700px] overflow-y-auto pr-1">
+              {filteredLogs.map((l: any) => {
+                const isError = l.level === "ERROR";
+                const isWarn = l.level === "WARN";
+                const isSuccess = l.level === "SUCCESS";
+                return (
+                  <div
+                    key={l.id}
+                    className={`p-3 rounded-xl border text-xs transition-all ${
+                      isError
+                        ? "bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50"
+                        : isWarn
+                        ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50"
+                        : isSuccess
+                        ? "bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-500/50"
+                        : "bg-zinc-900/80 border-white/10 hover:border-white/20"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                              isError
+                                ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                : isWarn
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                : isSuccess
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                            }`}
+                          >
+                            {l.level}
+                          </span>
+
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-zinc-300 border border-white/5">
+                            {l.category}
+                          </span>
+
+                          <span className="font-bold font-mono text-xs text-white">
+                            {l.action}
+                          </span>
+                        </div>
+
+                        {l.details && (
+                          <div className="text-[11px] text-zinc-300 font-mono bg-black/40 p-2 rounded-lg border border-white/5 break-all whitespace-pre-wrap">
+                            {typeof l.details === "object"
+                              ? JSON.stringify(l.details, null, 2)
+                              : String(l.details)}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-400 flex-wrap">
+                          {l.telegramId && (
+                            <span>
+                              Kullanıcı: <b className="text-zinc-200">#{l.telegramId}</b>
+                              {l.username && <span className="text-emerald-400"> (@{l.username})</span>}
+                            </span>
+                          )}
+                          {l.ip && (
+                            <span>
+                              IP: <b className="text-zinc-300 font-mono">{l.ip}</b>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 text-[10px] text-zinc-400">
+                        <div className="flex items-center gap-1 justify-end font-mono">
+                          <Clock className="w-3 h-3 text-zinc-500" />
+                          <span>{new Date(l.timestamp).toLocaleTimeString("tr-TR")}</span>
+                        </div>
+                        <span className="text-zinc-500 block">
+                          {new Date(l.timestamp).toLocaleDateString("tr-TR")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Yeni Kupon Oluşturma Modalı */}
       {couponModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -5229,6 +5817,137 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                     <span>Onayla ve Geri Yükle</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIP Üyelik & Özel İndirim Modalı */}
+      {vipModalOpen && vipTargetUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#11131a] border border-amber-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    {vipTargetUser.isVip ? "⭐ VIP Üyeliği Düzenle" : "⭐ VIP Üyelik Tanımla"}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    {vipTargetUser.firstName || vipTargetUser.username || vipTargetUser.telegramId} için özel indirim
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVipModalOpen(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Kullanıcı Özeti */}
+            <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div>
+                <div className="font-bold text-white flex items-center gap-1.5">
+                  <span>{vipTargetUser.firstName || "Kullanıcı"}</span>
+                  {vipTargetUser.username && (
+                    <span className="text-emerald-400 font-mono text-[11px]">@{vipTargetUser.username}</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-zinc-400 font-mono">
+                  ID: {vipTargetUser.telegramId}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-zinc-500 block">Mevcut Bakiye</span>
+                <span className="font-mono font-bold text-emerald-400 text-xs">₺{vipTargetUser.balance.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* İndirim Oranı Belirleme */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Özel VIP İndirim Oranı (%)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={vipDiscountInput}
+                  onChange={(e) => setVipDiscountInput(Math.max(1, Math.min(90, Number(e.target.value))))}
+                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                />
+                <span className="absolute right-3.5 top-2.5 text-xs font-bold text-amber-400">%</span>
+              </div>
+
+              {/* Hızlı Seçim Butonları */}
+              <div className="grid grid-cols-6 gap-1 pt-1">
+                {[5, 10, 15, 20, 25, 50].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setVipDiscountInput(pct)}
+                    className={`py-1 rounded-lg border text-xs font-mono font-bold transition-all ${
+                      vipDiscountInput === pct
+                        ? "bg-amber-500/20 border-amber-500 text-amber-300"
+                        : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    %{pct}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[10px] text-zinc-500 leading-relaxed pt-1">
+                💡 Kullanıcı bu indirimi hem Telegram Botunda hem WebApp üzerinde SMS satın alırken otomatik olarak kullanır. İndirimli fiyatlar sipariş onay ekranında belirgin olarak gösterilir.
+              </p>
+            </div>
+
+            {/* Eylemler */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  handleToggleVip(vipTargetUser, vipDiscountInput, true);
+                  setVipModalOpen(false);
+                }}
+                disabled={userActionLoadingId === vipTargetUser.telegramId}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <Star className="w-4 h-4 fill-black text-black" />
+                <span>
+                  {vipTargetUser.isVip
+                    ? `İndirimi %${vipDiscountInput} Olarak Güncelle`
+                    : `⭐ VIP Üye Yap (%${vipDiscountInput} İndirim)`}
+                </span>
+              </button>
+
+              {vipTargetUser.isVip && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleVip(vipTargetUser, undefined, false);
+                    setVipModalOpen(false);
+                  }}
+                  disabled={userActionLoadingId === vipTargetUser.telegramId}
+                  className="w-full py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 font-semibold text-xs border border-rose-500/30 transition-all"
+                >
+                  VIP Üyeliği ve İndirimi Kaldır
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setVipModalOpen(false)}
+                className="w-full py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs transition-colors"
+              >
+                Vazgeç
               </button>
             </div>
           </div>

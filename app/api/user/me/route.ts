@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export async function POST(req: NextRequest) {
   try {
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const body = await req.json();
     const { telegramId, username, firstName, lastName } = body;
 
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const { searchParams } = new URL(req.url);
     const telegramId = searchParams.get("telegramId");
 

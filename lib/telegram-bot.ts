@@ -485,6 +485,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
       await sendAnimatedVisual(ctx, "🎰");
+      await db.syncFromCloud(true);
 
       const user =
         db.getUser(from.id) ||

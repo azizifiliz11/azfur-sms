@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!isAuthorizedAdmin(req)) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const reqAdminTgId = req.headers.get("x-telegram-id") || db.getSettings().adminTelegramId;
     if (reqAdminTgId) {
       await db.touchUserActive(reqAdminTgId);
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     if (!isAuthorizedAdmin(req)) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const body = await req.json();
     const { action, telegramId, userData } = body;
 
@@ -220,8 +220,41 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Manuel Bakiye Ekleme / Düşme
-    const { delta, reason } = body;
+    // 5. Manuel Bakiye Ekleme / Düşme veya Doğrudan Belirleme
+    const { delta, newBalance, reason } = body;
+    if (action === "set_balance" || newBalance !== undefined) {
+      const targetBal = parseFloat(newBalance);
+      if (isNaN(targetBal) || targetBal < 0) {
+        return NextResponse.json({ success: false, error: "Geçersiz bakiye tutarı" }, { status: 400 });
+      }
+
+      const updatedUser = await db.setUserBalance(telegramId, targetBal, userData);
+
+      await db.addLog({
+        category: "ADMIN",
+        level: "SUCCESS",
+        action: "BALANCE_MANUAL_ADJUST",
+        details: `${updatedUser.firstName} (@${updatedUser.username || telegramId}) bakiyesi doğrudan ${targetBal.toFixed(2)} ₺ olarak ayarlandı. Gerekçe: ${reason || "Yönetici İşlemi"}`,
+        telegramId: Number(telegramId),
+        username: updatedUser.username,
+        metadata: { newBalance: targetBal, reason },
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: `Bakiye doğrudan ₺${targetBal.toFixed(2)} olarak ayarlandı.`,
+          user: updatedUser,
+          reason,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      );
+    }
+
     if (delta !== undefined) {
       const numDelta = parseFloat(delta);
       if (isNaN(numDelta)) {

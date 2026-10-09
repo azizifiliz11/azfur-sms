@@ -9,6 +9,7 @@ export const maxDuration = 15;
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud(true);
     const bot = getTelegramBot();
     if (!bot) {
       console.error("Bot token not configured");

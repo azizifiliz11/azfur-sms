@@ -68,9 +68,10 @@ import { haptic } from "@/lib/haptic";
 
 interface AdminViewProps {
   onBackToApp?: () => void;
+  onCurrentUserUpdated?: (user: any) => void;
 }
 
-export function AdminView({ onBackToApp }: AdminViewProps) {
+export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups" | "logs">("overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
@@ -149,6 +150,8 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Balance edit modal state
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [balanceDelta, setBalanceDelta] = useState<string>("50");
+  const [balanceEditMode, setBalanceEditMode] = useState<"exact" | "delta">("exact");
+  const [exactBalanceInput, setExactBalanceInput] = useState<string>("0");
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Support & Tickets states
@@ -1003,6 +1006,70 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           );
         }
         setToastMsg(`Bakiye güncellendi: ${isAdd ? "+" : "-"}₺${amount.toFixed(2)} (Yeni: ₺${data.user?.balance?.toFixed(2) || optimisticNewBalance.toFixed(2)})`);
+        if (data.user && onCurrentUserUpdated) {
+          onCurrentUserUpdated(data.user);
+        }
+        setTimeout(() => setToastMsg(null), 3000);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Bakiye güncellenemedi");
+        fetchAllData();
+      }
+    } catch (e) {
+      haptic.error();
+      fetchAllData();
+    }
+  };
+
+  const handleSetExactBalance = async () => {
+    if (!editingUser) return;
+    const targetBal = parseFloat(exactBalanceInput);
+    if (isNaN(targetBal) || targetBal < 0) {
+      alert("Lütfen geçerli bir bakiye tutarı giriniz (0 veya daha büyük)");
+      return;
+    }
+
+    haptic.impact("heavy");
+    const targetId = editingUser.telegramId;
+    setUsers((prev) =>
+      prev.map((u) => (u.telegramId === targetId ? { ...u, balance: targetBal } : u))
+    );
+    setEditingUser(null);
+
+    try {
+      const res = await adminFetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_balance",
+          telegramId: targetId,
+          newBalance: targetBal,
+          reason: "Admin doğrudan bakiye belirleme",
+          userData: {
+            telegramId: editingUser.telegramId,
+            username: editingUser.username,
+            firstName: editingUser.firstName,
+            lastName: editingUser.lastName,
+            balance: targetBal,
+            role: editingUser.role,
+            isBanned: editingUser.isBanned,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        if (data.user) {
+          setUsers((prev) =>
+            prev.map((u) => (u.telegramId === data.user.telegramId ? data.user : u))
+          );
+          if (onCurrentUserUpdated) {
+            onCurrentUserUpdated(data.user);
+          }
+        }
+        setToastMsg(`Bakiye doğrudan ₺${targetBal.toFixed(2)} olarak belirlendi.`);
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
       } else {
@@ -3679,6 +3746,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                       <button
                         onClick={() => {
                           haptic.impact("light");
+                          setExactBalanceInput(String(u.balance ?? 0));
+                          setBalanceDelta("50");
+                          setBalanceEditMode("exact");
                           setEditingUser(u);
                         }}
                         className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition-all"
@@ -5302,75 +5372,157 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
 
       {/* Manual Balance Adjustment Modal */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-sm bg-[#11131a] border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3.5">
             <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
               <div>
-                <h3 className="text-sm font-bold text-white">
-                  Bakiye Düzenle: {editingUser.firstName}
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span>💳 Bakiye Düzenle</span>
                 </h3>
-                <p className="text-[11px] text-zinc-400 font-mono">
-                  Telegram ID: {editingUser.telegramId}
+                <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                  {editingUser.firstName} (@{editingUser.username || editingUser.telegramId})
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-zinc-500 block">Mevcut Bakiye</span>
+                <span className="text-[10px] text-zinc-500 block font-medium">Mevcut Bakiye</span>
                 <span className="font-mono font-bold text-emerald-400 text-sm">
-                  ₺{editingUser.balance.toFixed(2)}
+                  ₺{editingUser.balance?.toFixed(2) || "0.00"}
                 </span>
               </div>
             </div>
 
-            {/* Hızlı Miktar Butonları */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] text-zinc-400 font-medium">Hızlı Tutarlar:</span>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[20, 50, 100, 250].map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => setBalanceDelta(String(val))}
-                    className="py-1 px-2 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-xs font-mono text-zinc-300"
-                  >
-                    +{val}₺
-                  </button>
-                ))}
+            {/* Mod Seçimi: Net Bakiye Belirle vs Miktar Ekle/Düş */}
+            <div className="grid grid-cols-2 p-0.5 rounded-xl bg-zinc-900 border border-white/5">
+              <button
+                type="button"
+                onClick={() => setBalanceEditMode("exact")}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  balanceEditMode === "exact"
+                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Net Tutar Belirle (=)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBalanceEditMode("delta")}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  balanceEditMode === "delta"
+                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Miktar Ekle / Düş (±)
+              </button>
+            </div>
+
+            {balanceEditMode === "exact" ? (
+              /* MOD 1: Doğrudan Net Bakiye Belirleme */
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <span className="text-[11px] text-zinc-400 font-medium">
+                    Yeni Net Bakiye Tutarı (₺):
+                  </span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-sm">₺</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={exactBalanceInput}
+                      onChange={(e) => setExactBalanceInput(e.target.value)}
+                      placeholder="Örn: 100"
+                      className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-base font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
+                      autoFocus
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500">
+                    Kullanıcının bakiyesi doğrudan bu rakama eşitlenecektir.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[0, 50, 100, 250].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setExactBalanceInput(String(val))}
+                      className="py-1 px-1.5 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-xs font-mono text-zinc-300"
+                    >
+                      {val}₺
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleSetExactBalance}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                >
+                  <CheckCircle className="w-4 h-4 stroke-[2.5]" />
+                  <span>Yeni Bakiyeyi Doğrudan Kaydet</span>
+                </button>
               </div>
-            </div>
+            ) : (
+              /* MOD 2: Miktar Ekle / Düş (+ / -) */
+              <div className="space-y-3">
+                {/* Hızlı Miktar Butonları */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] text-zinc-400 font-medium">Hızlı Tutarlar:</span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[20, 50, 100, 250].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setBalanceDelta(String(val))}
+                        className="py-1 px-2 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-xs font-mono text-zinc-300"
+                      >
+                        +{val}₺
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Özel Miktar Girişi */}
-            <div className="space-y-1">
-              <span className="text-[11px] text-zinc-400 font-medium">Özel Tutar (₺):</span>
-              <input
-                type="number"
-                value={balanceDelta}
-                onChange={(e) => setBalanceDelta(e.target.value)}
-                placeholder="Örn: 50"
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
+                {/* Özel Miktar Girişi */}
+                <div className="space-y-1">
+                  <span className="text-[11px] text-zinc-400 font-medium">Eklenecek / Düşülecek Tutar (₺):</span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-sm">₺</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      value={balanceDelta}
+                      onChange={(e) => setBalanceDelta(e.target.value)}
+                      placeholder="Örn: 50"
+                      className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
 
-            {/* Ekle / Düş Butonları */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={() => handleAdjustBalance(false)}
-                className="py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Minus className="w-4 h-4" />
-                <span>Bakiye Düş</span>
-              </button>
-              <button
-                onClick={() => handleAdjustBalance(true)}
-                className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Bakiye Ekle</span>
-              </button>
-            </div>
+                {/* Ekle / Düş Butonları */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => handleAdjustBalance(false)}
+                    className="py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <Minus className="w-4 h-4 stroke-[3]" />
+                    <span>- {balanceDelta || 0} ₺ Düş</span>
+                  </button>
+                  <button
+                    onClick={() => handleAdjustBalance(true)}
+                    className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>+ {balanceDelta || 0} ₺ Ekle</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={() => setEditingUser(null)}
-              className="w-full py-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+              className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors"
             >
               Kapat / Vazgeç
             </button>
@@ -5731,6 +5883,10 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         {/* Bakiye Düzenle */}
                         <button
                           onClick={() => {
+                            haptic.impact("light");
+                            setExactBalanceInput(String(selectedUserDetail.balance ?? 0));
+                            setBalanceDelta("50");
+                            setBalanceEditMode("exact");
                             setEditingUser(selectedUserDetail);
                           }}
                           className="p-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"

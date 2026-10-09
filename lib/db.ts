@@ -137,7 +137,7 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
 
 let memoryDb: DatabaseSchema | null = null;
 let lastCloudSyncTime = 0;
-const CLOUD_SYNC_TTL_MS = 15000; // 15 saniye içinde tekrarlanan sync istekleri belleğe anında cevap verir (0ms gecikme)
+const CLOUD_SYNC_TTL_MS = 2000; // 2 saniye içinde tekrarlanan sync istekleri belleğe anında cevap verir
 
 function loadDb(): DatabaseSchema {
   if (memoryDb) {
@@ -610,26 +610,33 @@ export const db = {
     } else {
       const user = data.users[foundKey];
       user.lastActiveAt = new Date().toISOString();
+      let changed = false;
 
-      if (cleanUsername) {
+      if (cleanUsername && user.username !== cleanUsername) {
         user.username = cleanUsername;
+        changed = true;
       } else if (user.username && user.username.startsWith("user_")) {
         user.username = "";
+        changed = true;
       }
 
-      if (cleanFirst) {
+      if (cleanFirst && user.firstName !== cleanFirst) {
         user.firstName = cleanFirst;
+        changed = true;
       }
 
-      if (cleanLast !== undefined) {
+      if (cleanLast !== undefined && user.lastName !== cleanLast) {
         user.lastName = cleanLast;
+        changed = true;
       }
 
-      if (defaults?.balance !== undefined) user.balance = defaults.balance;
       if (isAdminUser && user.role !== "admin") {
         user.role = "admin";
+        changed = true;
       }
-      await saveDb(data);
+      if (changed) {
+        await saveDb(data);
+      }
       return user;
     }
   },
@@ -652,7 +659,7 @@ export const db = {
     delta: number,
     userData?: Partial<User>
   ): Promise<User> {
-    const data = loadDb();
+    const data = await this.syncFromCloud(true);
     const cleanId = String(telegramId).trim();
 
     let foundKey = Object.keys(data.users).find(
@@ -681,7 +688,7 @@ export const db = {
         username: cleanUsername,
         firstName: cleanFirst || `Telegram Kullanıcısı`,
         lastName: userData?.lastName?.trim(),
-        balance: initialBal,
+        balance: Math.max(0, Number((initialBal + delta).toFixed(2))),
         spent: userData?.spent || 0,
         role: (userData?.role as "admin" | "user") || (isAdminUser ? "admin" : "user"),
         isBanned: userData?.isBanned || false,
@@ -702,14 +709,71 @@ export const db = {
       if (userData?.lastName) {
         user.lastName = userData.lastName.trim();
       }
+      user.balance = Math.max(0, Number((user.balance + delta).toFixed(2)));
     }
 
-    user.balance = Math.max(0, Number((user.balance + delta).toFixed(2)));
     if (delta < 0) {
       user.spent = Number(((user.spent || 0) + Math.abs(delta)).toFixed(2));
     }
     user.lastActiveAt = new Date().toISOString();
-    await saveDb(data);
+    await saveDb(data, true);
+    return user;
+  },
+
+  async setUserBalance(
+    telegramId: number | string,
+    newBalance: number,
+    userData?: Partial<User>
+  ): Promise<User> {
+    const data = await this.syncFromCloud(true);
+    const cleanId = String(telegramId).trim();
+
+    let foundKey = Object.keys(data.users).find(
+      (k) =>
+        String(k).trim() === cleanId ||
+        String(data.users[k]?.telegramId).trim() === cleanId
+    );
+
+    let user = foundKey ? data.users[foundKey] : null;
+
+    if (!user) {
+      const isAdminUser = this.isAdmin(cleanId);
+      const cleanUsername = userData?.username
+        ? userData.username.replace(/^@/, "").trim()
+        : "";
+      const cleanFirst = userData?.firstName?.trim() || "";
+
+      user = {
+        telegramId: Number(cleanId),
+        username: cleanUsername,
+        firstName: cleanFirst || `Telegram Kullanıcısı`,
+        lastName: userData?.lastName?.trim(),
+        balance: Math.max(0, Number(newBalance.toFixed(2))),
+        spent: userData?.spent || 0,
+        role: (userData?.role as "admin" | "user") || (isAdminUser ? "admin" : "user"),
+        isBanned: userData?.isBanned || false,
+        createdAt: userData?.createdAt || new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
+      data.users[cleanId] = user;
+    } else {
+      if (user.username && user.username.startsWith("user_")) {
+        user.username = "";
+      }
+      if (userData?.username) {
+        user.username = userData.username.replace(/^@/, "").trim();
+      }
+      if (userData?.firstName) {
+        user.firstName = userData.firstName.trim();
+      }
+      if (userData?.lastName) {
+        user.lastName = userData.lastName.trim();
+      }
+      user.balance = Math.max(0, Number(newBalance.toFixed(2)));
+    }
+
+    user.lastActiveAt = new Date().toISOString();
+    await saveDb(data, true);
     return user;
   },
 

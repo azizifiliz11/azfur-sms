@@ -130,6 +130,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
   // TCMB automatic rate states
   const [useTcmbAutoRate, setUseTcmbAutoRate] = useState<boolean>(true);
+  const [tcmbUpdateIntervalMinutes, setTcmbUpdateIntervalMinutes] = useState<number>(30);
   const [lastTcmbRate, setLastTcmbRate] = useState<number>(49.2);
   const [lastTcmbFetchTime, setLastTcmbFetchTime] = useState<string>("");
   const [tcmbRefreshing, setTcmbRefreshing] = useState<boolean>(false);
@@ -316,6 +317,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         setRateToTry(st.settings.exchangeRateToTry);
         setMockMode(st.settings.mockMode);
         setUseTcmbAutoRate(st.settings.useTcmbAutoRate ?? true);
+        setTcmbUpdateIntervalMinutes(st.settings.tcmbUpdateIntervalMinutes ?? 30);
         setLastTcmbRate(st.tcmbRateInfo?.rate || st.settings.lastTcmbRate || 49.2);
         setLastTcmbFetchTime(st.settings.lastTcmbFetchTime || st.tcmbRateInfo?.timestamp || "");
         if (st.settings?.bankInfo) {
@@ -876,17 +878,22 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           exchangeRateToTry: Number(rateToTry),
           mockMode,
           useTcmbAutoRate,
+          tcmbUpdateIntervalMinutes,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setToastMsg("Kâr marjı, TCMB ve sistem ayarları başarıyla kaydedildi!");
+        setToastMsg("Kur ve sistem ayarları veritabanına kaydedildi.");
         setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        alert(data.error || "Ayarlar kaydedilemedi");
       }
-    } catch (e) {
+    } catch (e: any) {
       haptic.error();
+      alert(e?.message || "Ayarlar kaydedilemedi");
     } finally {
       setSavingSettings(false);
     }
@@ -906,8 +913,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         haptic.success();
         const newRate = data.tcmbRateInfo?.rate || data.settings?.lastTcmbRate;
         if (newRate) {
-          setRateToTry(newRate);
           setLastTcmbRate(newRate);
+          if (useTcmbAutoRate) setRateToTry(newRate);
         }
         if (data.settings?.lastTcmbFetchTime) {
           setLastTcmbFetchTime(data.settings.lastTcmbFetchTime);
@@ -2552,7 +2559,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </span>
               </div>
 
-              <div className="bg-zinc-900/80 p-3 rounded-xl border border-white/5 flex flex-col justify-between">
+              <div className="bg-zinc-900/80 p-3 rounded-xl border border-white/5 flex flex-col justify-between gap-2">
                 <span className="text-[11px] text-zinc-400 block">Kullanılan Kur Kaynağı:</span>
                 <div className="flex items-center gap-2 mt-1">
                   <input
@@ -2566,9 +2573,31 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     {useTcmbAutoRate ? "Otomatik TCMB Aktif" : "Manuel Kur Kullan"}
                   </label>
                 </div>
-                <span className="text-[10px] text-emerald-400 block mt-1">
-                  {useTcmbAutoRate ? "✓ 30 dk aralıkla otomatik güncellenir" : "Sabit manuel kur geçerli"}
-                </span>
+                {useTcmbAutoRate ? (
+                  <div className="space-y-1">
+                    <label htmlFor="tcmbUpdateIntervalMinutes" className="text-[10px] text-zinc-400 block">
+                      Kur kontrol aralığı
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="tcmbUpdateIntervalMinutes"
+                        type="number"
+                        min={1}
+                        max={1440}
+                        step={1}
+                        value={tcmbUpdateIntervalMinutes}
+                        onChange={(e) => setTcmbUpdateIntervalMinutes(Number(e.target.value))}
+                        className="w-20 bg-zinc-950 border border-white/10 rounded-lg px-2 py-1.5 text-xs font-mono text-white"
+                      />
+                      <span className="text-xs text-zinc-400">dakika</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 block">
+                      Uygulamaya istek geldiğinde bu süre dolmuşsa kur yenilenir.
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-zinc-400 block">Sabit manuel kur geçerli</span>
+                )}
               </div>
             </div>
           </Card>

@@ -25,6 +25,16 @@ export async function GET(req: NextRequest) {
 
     // Canlı kuru çek ve DB/Cloud KV'ye kalıcı olarak kaydet
     const live = await tcmb.getLiveRate(true);
+    if (live.source === "CACHED") {
+      return NextResponse.json({
+        success: false,
+        message: "Canlı kur servislerine ulaşılamadı; kayıtlı son kur korunuyor.",
+        tcmbRateInfo: live,
+        rate: live.rate,
+        source: live.source,
+        timestamp: live.timestamp,
+      }, { status: 502 });
+    }
 
     return NextResponse.json({
       success: true,

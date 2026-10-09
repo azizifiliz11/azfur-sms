@@ -45,8 +45,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   globalFixedFee: 5.0, // +5 TL sabit
   exchangeRateToTry: 49.20, // USD to TRY
   useTcmbAutoRate: true, // TCMB'den otomatik kur
+  tcmbUpdateIntervalMinutes: 30,
   lastTcmbRate: 49.20,
-  lastTcmbFetchTime: new Date().toISOString(),
+  lastTcmbFetchTime: "",
+  lastTcmbAttemptTime: "",
   currencySymbol: "₺",
   mockMode: false, // Default to live API
   adminTelegramId: "",
@@ -175,9 +177,9 @@ async function saveUserToSql(u: User): Promise<void> {
   }
 }
 
-async function saveSettingsToSql(settings: SystemSettings): Promise<void> {
+async function saveSettingsToSql(settings: SystemSettings): Promise<boolean> {
   const sql = getSql();
-  if (!sql) return;
+  if (!sql) return false;
   try {
     await sql`
       INSERT INTO system_settings (id, data, updated_at)
@@ -186,8 +188,10 @@ async function saveSettingsToSql(settings: SystemSettings): Promise<void> {
         data = EXCLUDED.data,
         updated_at = NOW();
     `;
+    return true;
   } catch (err) {
     console.error("[PostgreSQL saveSettings Error]:", err);
+    return false;
   }
 }
 
@@ -612,11 +616,11 @@ async function getApironeFromDedicatedKv(): Promise<{
   return null;
 }
 
-async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
-  if (!KV_URL || !KV_TOKEN) return;
+async function saveToCloudKv(data: DatabaseSchema): Promise<boolean> {
+  if (!KV_URL || !KV_TOKEN) return false;
   try {
     const raw = JSON.stringify(data);
-    await fetch(KV_URL, {
+    const res = await fetch(KV_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${KV_TOKEN}`,
@@ -625,6 +629,15 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
       body: JSON.stringify(["SET", KV_KEY, raw]),
       cache: "no-store",
     });
+    if (!res.ok) {
+      console.error(`[Cloud KV Save Error]: HTTP ${res.status}`);
+      return false;
+    }
+    const json = await res.json().catch(() => null);
+    if (json?.error) {
+      console.error("[Cloud KV Save Error]: KV rejected the write");
+      return false;
+    }
 
     // Apirone hesabı varsa ayrık korumalı anahtara da mutlaka yaz
     const apAcc = (data.settings?.cryptoSettings?.apironeAccount || "").trim();
@@ -636,8 +649,10 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
         trxAddress: (data.settings?.cryptoSettings?.trxAddress || "").trim(),
       }).catch(() => {});
     }
+    return true;
   } catch (err) {
     console.error("[Cloud KV Save Error]:", err);
+    return false;
   }
 }
 
@@ -669,6 +684,9 @@ function loadDb(): DatabaseSchema {
     const data = JSON.parse(raw);
     if (!data.settings) data.settings = DEFAULT_SETTINGS;
     if (data.settings.useTcmbAutoRate === undefined) data.settings.useTcmbAutoRate = true;
+    if (!Number.isInteger(data.settings.tcmbUpdateIntervalMinutes)) {
+      data.settings.tcmbUpdateIntervalMinutes = DEFAULT_SETTINGS.tcmbUpdateIntervalMinutes;
+    }
     if (!data.settings.lastTcmbRate) data.settings.lastTcmbRate = 49.20;
     if (!data.settings.bankInfo) data.settings.bankInfo = DEFAULT_SETTINGS.bankInfo;
     if (!data.settings.cryptoSettings) data.settings.cryptoSettings = DEFAULT_SETTINGS.cryptoSettings;
@@ -891,40 +909,52 @@ export const db = {
             }
           }
 
-          if (!cloudData.settings.cryptoSettings) {
-            cloudData.settings.cryptoSettings = { ...DEFAULT_SETTINGS.cryptoSettings };
-          } else {
-            cloudData.settings.cryptoSettings = {
-              ...DEFAULT_SETTINGS.cryptoSettings,
-              ...cloudData.settings.cryptoSettings,
-            };
-          }
+          const mergedCloudSettings: SystemSettings = {
+            ...DEFAULT_SETTINGS,
+            ...cloudData.settings,
+            cryptoSettings: {
+              ...(DEFAULT_SETTINGS.cryptoSettings || {}),
+              ...(cloudData.settings.cryptoSettings || {}),
+            },
+            backupSettings: {
+              ...DEFAULT_BACKUP_SETTINGS,
+              ...(cloudData.settings.backupSettings || {}),
+            },
+            vipSettings: {
+              defaultDiscountPercent: 15,
+              enabled: true,
+              ...(DEFAULT_SETTINGS.vipSettings || {}),
+              ...(cloudData.settings.vipSettings || {}),
+            },
+          };
+          cloudData.settings = mergedCloudSettings;
+          const cloudCryptoSettings = mergedCloudSettings.cryptoSettings!;
 
           // 1. Eğer memoryDb'de kayıtlı bir Apirone hesabı varsa ve bulutta boşsa, asla silinmesin
           if (
             memoryDb?.settings?.cryptoSettings?.apironeAccount &&
-            !cloudData.settings.cryptoSettings.apironeAccount
+            !cloudCryptoSettings.apironeAccount
           ) {
-            cloudData.settings.cryptoSettings.apironeAccount = memoryDb.settings.cryptoSettings.apironeAccount;
+            cloudCryptoSettings.apironeAccount = memoryDb.settings.cryptoSettings.apironeAccount;
             if (memoryDb.settings.cryptoSettings.apironeTransferKey) {
-              cloudData.settings.cryptoSettings.apironeTransferKey = memoryDb.settings.cryptoSettings.apironeTransferKey;
+              cloudCryptoSettings.apironeTransferKey = memoryDb.settings.cryptoSettings.apironeTransferKey;
             }
           }
 
           // 2. Eğer buluttaki ana DB'de Apirone hesabı boşsa, ayrık korumalı KV anahtarından otomatik kurtar
-          if (!cloudData.settings.cryptoSettings.apironeAccount) {
+          if (!cloudCryptoSettings.apironeAccount) {
             try {
               const dedicated = await getApironeFromDedicatedKv();
               if (dedicated && dedicated.apironeAccount) {
-                cloudData.settings.cryptoSettings.apironeAccount = dedicated.apironeAccount;
+                cloudCryptoSettings.apironeAccount = dedicated.apironeAccount;
                 if (dedicated.apironeTransferKey) {
-                  cloudData.settings.cryptoSettings.apironeTransferKey = dedicated.apironeTransferKey;
+                  cloudCryptoSettings.apironeTransferKey = dedicated.apironeTransferKey;
                 }
-                if (dedicated.usdtTrc20Address && !cloudData.settings.cryptoSettings.usdtTrc20Address) {
-                  cloudData.settings.cryptoSettings.usdtTrc20Address = dedicated.usdtTrc20Address;
+                if (dedicated.usdtTrc20Address && !cloudCryptoSettings.usdtTrc20Address) {
+                  cloudCryptoSettings.usdtTrc20Address = dedicated.usdtTrc20Address;
                 }
-                if (dedicated.trxAddress && !cloudData.settings.cryptoSettings.trxAddress) {
-                  cloudData.settings.cryptoSettings.trxAddress = dedicated.trxAddress;
+                if (dedicated.trxAddress && !cloudCryptoSettings.trxAddress) {
+                  cloudCryptoSettings.trxAddress = dedicated.trxAddress;
                 }
               }
             } catch (e) {}
@@ -999,6 +1029,7 @@ export const db = {
       ? { ...(data.settings.vipSettings || DEFAULT_SETTINGS.vipSettings), ...partial.vipSettings }
       : data.settings.vipSettings;
 
+    const previousSettings = data.settings;
     data.settings = {
       ...data.settings,
       ...partial,
@@ -1018,8 +1049,15 @@ export const db = {
       }).catch(() => {});
     }
 
-    await saveSettingsToSql(data.settings);
-    await saveDb(data, true);
+    const [sqlSaved, kvSaved] = await Promise.all([
+      saveSettingsToSql(data.settings),
+      saveToCloudKv(data),
+    ]);
+    if (!sqlSaved && !kvSaved) {
+      data.settings = previousSettings;
+      throw new Error("Ayarlar kalıcı veritabanına kaydedilemedi. Veritabanı bağlantısını kontrol edin.");
+    }
+    await saveDb(data, false);
     return data.settings;
   },
 
@@ -2324,21 +2362,11 @@ export const db = {
   },
 
   async updateBackupSettings(updates: Partial<BackupSettings>): Promise<BackupSettings> {
-    const data = loadDb();
-    if (!data.settings.backupSettings) {
-      data.settings.backupSettings = {
-        autoBackupEnabled: true,
-        autoBackupIntervalHours: 6,
-        maxBackupsCount: 20,
-        lastAutoBackupTime: new Date().toISOString(),
-      };
-    }
-    data.settings.backupSettings = {
-      ...data.settings.backupSettings,
-      ...updates,
-    };
-    await saveDb(data);
-    return data.settings.backupSettings;
+    const data = await this.syncFromCloud(true);
+    const current = data.settings.backupSettings || DEFAULT_BACKUP_SETTINGS;
+    const updated = { ...current, ...updates };
+    await this.updateSettings({ backupSettings: updated });
+    return this.getSettings().backupSettings || updated;
   },
 
   // ==========================================

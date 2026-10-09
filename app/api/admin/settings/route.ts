@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
     // Özel işlem: TCMB canlı kurunu anında yeniden çek
     if (body.action === "refresh_tcmb") {
       const live = await tcmb.getLiveRate(true);
+      if (live.source === "CACHED") {
+        return NextResponse.json({
+          success: false,
+          error: "Canlı kur servislerine ulaşılamadı; kayıtlı son kur korunuyor.",
+          tcmbRateInfo: live,
+          settings: db.getSettings(),
+        }, { status: 502 });
+      }
       await db.addLog({
         category: "ADMIN",
         level: "INFO",
@@ -215,6 +223,17 @@ export async function POST(req: NextRequest) {
         success: false,
         error: testRes.error || "OxaPay API Anahtarı doğrulanamadı.",
       });
+    }
+
+    if (body.tcmbUpdateIntervalMinutes !== undefined) {
+      const interval = Number(body.tcmbUpdateIntervalMinutes);
+      if (!Number.isInteger(interval) || interval < 1 || interval > 1440) {
+        return NextResponse.json({
+          success: false,
+          error: "Kur güncelleme aralığı 1 ile 1440 dakika arasında tam sayı olmalıdır.",
+        }, { status: 400 });
+      }
+      body.tcmbUpdateIntervalMinutes = interval;
     }
 
     const updated = await db.updateSettings(body);

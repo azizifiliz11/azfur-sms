@@ -131,8 +131,10 @@ export interface SystemSettings {
   globalFixedFee: number; // e.g. 5.0 -> 5 TL
   exchangeRateToTry: number; // e.g. 49.20
   useTcmbAutoRate: boolean; // TCMB'den otomatik canlı kur çekme
+  tcmbUpdateIntervalMinutes: number; // Otomatik kur kontrol aralığı
   lastTcmbRate: number; // TCMB'den çekilen son kur
   lastTcmbFetchTime?: string;
+  lastTcmbAttemptTime?: string;
   currencySymbol: string; // "₺"
   mockMode: boolean; // toggle to simulate numbers if provider balance is 0 or testing
   adminTelegramId: string;

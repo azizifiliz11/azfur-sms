@@ -30,16 +30,13 @@ export async function POST(req: NextRequest) {
     const activeOrders = db.getActiveOrders(telegramId);
     let settings = db.getSettings();
 
-    // Otomatik TCMB kur güncellemesi: 30 dakikadan eski ise otomatik yenile
+    // Yenileme aralığı tcmb.getLiveRate tarafından DB ayarına göre uygulanır.
     if (settings.useTcmbAutoRate !== false) {
-      const lastFetchMs = settings.lastTcmbFetchTime ? new Date(settings.lastTcmbFetchTime).getTime() : 0;
-      if (!lastFetchMs || isNaN(lastFetchMs) || Date.now() - lastFetchMs > 30 * 60 * 1000) {
-        try {
-          await tcmb.getLiveRate();
-          settings = db.getSettings();
-        } catch (e) {
-          console.warn("[Auto-Rate]: Arka plan kur yenileme hatası:", e);
-        }
+      try {
+        await tcmb.getLiveRate();
+        settings = db.getSettings();
+      } catch (e) {
+        console.warn("[Auto-Rate]: Kur yenileme hatası:", e);
       }
     }
 

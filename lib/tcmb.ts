@@ -2,7 +2,12 @@ import { db } from "./db";
 
 let cachedRate: number | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 dakika önbellek
+
+function getUpdateIntervalMs(value: number | undefined): number {
+  const minutes = Number(value);
+  const safeMinutes = Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : 30;
+  return safeMinutes * 60 * 1000;
+}
 
 export const tcmb = {
   /**
@@ -13,18 +18,22 @@ export const tcmb = {
   async getLiveRate(forceRefresh = false): Promise<{ rate: number; source: "TCMB" | "FALLBACK_API" | "CACHED"; timestamp: string }> {
     const now = Date.now();
     const settings = db.getSettings();
+    const intervalMs = getUpdateIntervalMs(settings.tcmbUpdateIntervalMinutes);
 
-    // Veritabanındaki son başarılı çekilme zamanını kontrol et
+    // Son deneme zamanı hatalı dış servislerin her kullanıcı isteğinde tekrar çağrılmasını önler.
     const lastDbFetchMs = settings.lastTcmbFetchTime ? new Date(settings.lastTcmbFetchTime).getTime() : 0;
-    const isDbFresh = !isNaN(lastDbFetchMs) && lastDbFetchMs > 0 && (now - lastDbFetchMs < CACHE_DURATION_MS);
+    const lastAttemptMs = settings.lastTcmbAttemptTime
+      ? new Date(settings.lastTcmbAttemptTime).getTime()
+      : lastDbFetchMs;
+    const isDbFresh = Number.isFinite(lastAttemptMs) && lastAttemptMs > 0 && now - lastAttemptMs < intervalMs;
 
-    // Eğer zorunlu yenileme istenmediyse ve son 30 dk içinde çekilmişse önbellekten dön
+    // Zorunlu yenileme istenmediyse, ayarlanan süre dolana kadar DB'deki son başarılı kuru kullan.
     if (!forceRefresh && isDbFresh && (cachedRate || settings.lastTcmbRate)) {
-      const activeRate = cachedRate || settings.lastTcmbRate || settings.exchangeRateToTry || 49.20;
+      const activeRate = settings.lastTcmbRate || cachedRate || settings.exchangeRateToTry || 49.20;
       return {
         rate: activeRate,
         source: "CACHED",
-        timestamp: new Date(lastDbFetchMs || lastCacheTime).toLocaleTimeString("tr-TR"),
+        timestamp: settings.lastTcmbFetchTime || new Date(lastDbFetchMs || lastCacheTime).toISOString(),
       };
     }
 
@@ -110,23 +119,34 @@ export const tcmb = {
     cachedRate = finalRate;
     lastCacheTime = now;
 
-    // Ayarları SADECE yeni bir kur dış API'den başarıyla çekildiyse ve mevcuttan farklıysa kaydet
-    if (newRate && newRate !== settings.lastTcmbRate) {
+    const attemptedAt = new Date(now).toISOString();
+
+    // Son çekim zamanı kur aynı kalsa da ilerler; aralık kontrolü için deneme zamanı da ayrıca saklanır.
+    if (newRate) {
       const shouldUpdateActiveExchangeRate = settings.useTcmbAutoRate !== false;
-      const updatePayload: Record<string, any> = {
+      const updatePayload: {
+        lastTcmbRate: number;
+        lastTcmbFetchTime: string;
+        lastTcmbAttemptTime: string;
+        exchangeRateToTry?: number;
+      } = {
         lastTcmbRate: finalRate,
-        lastTcmbFetchTime: new Date().toISOString(),
+        lastTcmbFetchTime: attemptedAt,
+        lastTcmbAttemptTime: attemptedAt,
       };
       if (shouldUpdateActiveExchangeRate) {
         updatePayload.exchangeRateToTry = finalRate;
       }
       await db.updateSettings(updatePayload);
+    } else {
+      // Başarısız dış servis çağrılarını da aralık boyunca beklet, başarılı güncelleme zamanını değiştirme.
+      await db.updateSettings({ lastTcmbAttemptTime: attemptedAt });
     }
 
     return {
       rate: finalRate,
       source: newRate ? rateSource : "CACHED",
-      timestamp: new Date().toLocaleTimeString("tr-TR"),
+      timestamp: newRate ? attemptedAt : (settings.lastTcmbFetchTime || attemptedAt),
     };
   },
 };

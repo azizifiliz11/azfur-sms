@@ -46,6 +46,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const user = db.getUser(telegramId);
+    if (user?.isBanned) {
+      return NextResponse.json(
+        { success: false, error: "Hesabınız askıya alınmıştır (banlı)." },
+        { status: 403 }
+      );
+    }
+
     const result = await db.redeemCoupon(code, Number(telegramId));
 
     if (!result.success) {

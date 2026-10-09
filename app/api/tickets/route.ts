@@ -56,6 +56,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const user = db.getUser(telegramId);
+      if (user?.isBanned) {
+        return NextResponse.json(
+          { success: false, error: "Hesabınız askıya alınmıştır (banlı)." },
+          { status: 403 }
+        );
+      }
+
       const ticketId = `TCK-${Date.now().toString(36).toUpperCase()}`;
       const now = new Date().toISOString();
 
@@ -125,6 +133,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { success: false, error: "Destek talebi bulunamadı" },
           { status: 404 }
+        );
+      }
+
+      const user = db.getUser(telegramId || ticket.telegramId);
+      if (user?.isBanned) {
+        return NextResponse.json(
+          { success: false, error: "Hesabınız askıya alınmıştır (banlı)." },
+          { status: 403 }
         );
       }
 

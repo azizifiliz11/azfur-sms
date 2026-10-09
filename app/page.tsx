@@ -11,12 +11,13 @@ import { SupportModal } from "@/components/SupportModal";
 import { CouponModal } from "@/components/CouponModal";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
-import { Shield, Zap, Headphones, Gift, Ticket } from "lucide-react";
+import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert } from "lucide-react";
 
 function HomeContent() {
   const { isReady, user: tgUser } = useTelegram();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [adminUsernames, setAdminUsernames] = useState<string[]>(["olanak"]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [catalog, setCatalog] = useState<CalculatedCatalogItem[]>([]);
@@ -51,6 +52,9 @@ function HomeContent() {
       const data = await res.json();
       if (data.success && data.user) {
         setCurrentUser(data.user);
+        if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
+          setAdminUsernames(data.adminUsernames);
+        }
       }
     } catch (e) {
       console.error("User init error:", e);
@@ -67,8 +71,16 @@ function HomeContent() {
           .then((r) => r.json())
           .then((data) => {
             if (data.success && data.user) {
+              if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
+                setAdminUsernames(data.adminUsernames);
+              }
               setCurrentUser((prev: any) => {
-                if (!prev || prev.balance !== data.user.balance || prev.spent !== data.user.spent) {
+                if (
+                  !prev ||
+                  prev.balance !== data.user.balance ||
+                  prev.spent !== data.user.spent ||
+                  prev.isBanned !== data.user.isBanned
+                ) {
                   return { ...prev, ...data.user };
                 }
                 return prev;
@@ -201,6 +213,67 @@ function HomeContent() {
         </div>
         <p className="mt-4 text-xs font-semibold text-zinc-400 animate-pulse">
           AzFur Altyapısı Başlatılıyor...
+        </p>
+      </div>
+    );
+  }
+
+  if (currentUser?.isBanned) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#090a0f] text-center select-none">
+        <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 mb-5 shadow-2xl shadow-rose-950/50">
+          <ShieldAlert className="w-10 h-10 animate-pulse" />
+        </div>
+        <h1 className="text-xl font-black text-white tracking-wider uppercase mb-2">
+          HESABINIZ ENGELLENDİ
+        </h1>
+        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+          Yönetici kararı veya sistem kuralları gereği hesabınız kalıcı/geçici olarak askıya alınmıştır. Bu süre zarfında bot ve web servislerimize erişim sağlayamazsınız.
+        </p>
+
+        <div className="w-full max-w-sm bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 text-left mb-6 shadow-xl backdrop-blur-md">
+          <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <span>👑 İletişim & Destek Yöneticileri</span>
+          </div>
+          <div className="space-y-2">
+            {adminUsernames.length > 0 ? (
+              adminUsernames.map((adminUser) => (
+                <a
+                  key={adminUser}
+                  href={`https://t.me/${adminUser}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/50 text-white transition-all group active:scale-98"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
+                      @
+                    </div>
+                    <span className="text-sm font-semibold text-zinc-200 group-hover:text-emerald-400 transition-colors">
+                      @{adminUser}
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                    Mesaj At →
+                  </span>
+                </a>
+              ))
+            ) : (
+              <a
+                href="https://t.me/olanak"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/50 text-white transition-all group"
+              >
+                <span className="text-sm font-semibold">@olanak</span>
+                <span className="text-xs text-emerald-400">Mesaj At →</span>
+              </a>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[11px] text-zinc-600">
+          AzFur SMS Onay Altyapısı Güvenlik Sistemi
         </p>
       </div>
     );

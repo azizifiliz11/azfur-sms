@@ -45,6 +45,38 @@ function getAppUrls() {
   };
 }
 
+export function getAdminUsernamesList(): string[] {
+  const settings = db.getSettings();
+  const list = new Set<string>();
+
+  // 1. Settings'te tanımlı destek / yönetici kullanıcı adları
+  const rawSupport = Array.isArray(settings.supportTelegramUsernames)
+    ? settings.supportTelegramUsernames
+    : settings.supportTelegramUsername
+    ? [settings.supportTelegramUsername]
+    : [];
+  rawSupport.forEach((u) => {
+    const clean = String(u).replace(/^@/, "").trim();
+    if (clean) list.add(clean);
+  });
+
+  // 2. Veritabanındaki admin kullanıcılarının kullanıcı adları
+  const adminIds = db.getAdminTelegramIds();
+  for (const id of adminIds) {
+    const user = db.getUser(id);
+    if (user?.username) {
+      const clean = user.username.replace(/^@/, "").trim();
+      if (clean) list.add(clean);
+    }
+  }
+
+  const result = Array.from(list);
+  if (result.length === 0) {
+    return ["olanak"];
+  }
+  return result;
+}
+
 // ==========================================
 // ANİMASYONLU GÖRSEL VE STİCKER MOTORU
 // ==========================================
@@ -176,7 +208,67 @@ export function getTelegramBot(): Bot | null {
     });
 
     // ==========================================
-    // 0.1. TELEGRAM BOT & BUTON RATE LIMIT MİDDLEWARE
+    // 0.1. BANLI KULLANICI ENGELLEME MİDDLEWARE
+    // ==========================================
+    botInstance.use(async (ctx, next) => {
+      const from = ctx.from;
+      if (!from || !from.id) return next();
+
+      // Adminler asla ban kontrolüne takılmaz
+      if (db.isAdmin(from.id)) {
+        return next();
+      }
+
+      const user = db.getUser(from.id);
+      if (user && user.isBanned) {
+        const adminUsernames = getAdminUsernamesList();
+        const adminsText =
+          adminUsernames.length > 0
+            ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+            : "• <b>@olanak</b>";
+
+        const text =
+          `🚫 <b>HESABINIZ ENGELLENDİ (BANLANDINIZ)</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Sistem kuralları veya yönetici kararı doğrultusunda AzFur SMS botuna erişiminiz durdurulmuştur.\n\n` +
+          `Banınızın kaldırılması veya bilgi almak için aşağıdaki yöneticilerle iletişime geçebilirsiniz:\n\n` +
+          `👑 <b>Yöneticiler:</b>\n` +
+          `${adminsText}`;
+
+        const kb = new InlineKeyboard();
+        for (const u of adminUsernames) {
+          kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
+        }
+
+        if (ctx.callbackQuery) {
+          try {
+            await ctx.answerCallbackQuery({
+              text: "🚫 Hesabınız engellendi! Bota erişemezsiniz.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          try {
+            await ctx.editMessageText(text, {
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+          } catch (e) {}
+        } else {
+          try {
+            await ctx.reply(text, {
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+          } catch (e) {}
+        }
+        return; // Bota erişim kesinlikle engellenir
+      }
+
+      await next();
+    });
+
+    // ==========================================
+    // 0.2. TELEGRAM BOT & BUTON RATE LIMIT MİDDLEWARE
     // ==========================================
     botInstance.use(async (ctx, next) => {
       const from = ctx.from;
@@ -1575,7 +1667,8 @@ export async function sendTelegramSmsNotification(
 export async function sendTelegramDirectMessage(
   telegramId: number | string,
   text: string,
-  parseMode: "HTML" | "Markdown" = "HTML"
+  parseMode: "HTML" | "Markdown" = "HTML",
+  replyMarkup?: any
 ): Promise<{ ok: boolean; error?: string }> {
   if (!CONFIG.TELEGRAM_BOT_TOKEN) {
     return { ok: false, error: "Bot token tanımlı değil" };
@@ -1583,14 +1676,19 @@ export async function sendTelegramDirectMessage(
 
   try {
     const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const payload: any = {
+      chat_id: telegramId,
+      text: text,
+      parse_mode: parseMode,
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: telegramId,
-        text: text,
-        parse_mode: parseMode,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();

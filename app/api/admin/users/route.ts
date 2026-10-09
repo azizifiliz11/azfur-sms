@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { fetchTelegramUserInfo } from "@/lib/telegram-bot";
+import { fetchTelegramUserInfo, sendTelegramDirectMessage, getAdminUsernamesList } from "@/lib/telegram-bot";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +113,36 @@ export async function POST(req: NextRequest) {
     if (action === "toggle_ban") {
       const { isBanned } = body;
       const updated = await db.toggleUserBan(telegramId, isBanned, userData);
+
+      // Kullanıcı banlandığında anında bota ban mesajı ve admin kullanıcı adlarını gönder
+      if (isBanned) {
+        try {
+          const adminUsernames = getAdminUsernamesList();
+          const adminsText =
+            adminUsernames.length > 0
+              ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+              : "• <b>@olanak</b>";
+
+          const banMsg =
+            `🚫 <b>HESABINIZ ENGELLENDİ (BANLANDINIZ)</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Sistem kuralları veya yönetici kararı doğrultusunda AzFur SMS botuna ve hizmetlerine erişiminiz durdurulmuştur.\n\n` +
+            `İtiraz etmek veya bilgi almak için aşağıdaki yöneticilerle iletişime geçebilirsiniz:\n\n` +
+            `👑 <b>Yöneticiler:</b>\n` +
+            `${adminsText}`;
+
+          const inlineKeyboard = {
+            inline_keyboard: adminUsernames.map((u) => [
+              { text: `💬 Yöneticiye Yaz (@${u})`, url: `https://t.me/${u}` },
+            ]),
+          };
+
+          await sendTelegramDirectMessage(telegramId, banMsg, "HTML", inlineKeyboard);
+        } catch (e) {
+          console.warn("Direct ban message error:", e);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: isBanned ? "Kullanıcı başarıyla engellendi (banlandı)" : "Kullanıcının engeli kaldırıldı",

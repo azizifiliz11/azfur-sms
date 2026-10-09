@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
-import { fetchTelegramUserInfo } from "@/lib/telegram-bot";
+import { fetchTelegramUserInfo, getAdminUsernamesList } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
     const activeOrders = db.getActiveOrders(telegramId);
     const settings = db.getSettings();
+    const adminUsernames = getAdminUsernamesList();
 
     return NextResponse.json(
       {
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
         activeOrdersCount: activeOrders.length,
         currency: settings.currencySymbol,
         isAdmin: db.isAdmin(telegramId) || user.role === "admin",
+        adminUsernames,
       },
       {
         headers: {
@@ -105,8 +107,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const adminUsernames = getAdminUsernamesList();
+
     return NextResponse.json(
-      { success: true, user },
+      { success: true, user, adminUsernames },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

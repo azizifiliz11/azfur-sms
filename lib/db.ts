@@ -53,6 +53,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   cryptoSettings: {
     usdtTrc20Address: "",
     trxAddress: "",
+    apironeAccount: "",
+    apironeTransferKey: "",
     oxapayApiKey: "",
     cryptoBotToken: "",
     autoVerifyEnabled: true,

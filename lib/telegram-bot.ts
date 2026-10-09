@@ -1334,23 +1334,13 @@ export function getTelegramBot(): Bot | null {
       }
 
       // --- OTOMATİK KRİPTO ADRESİ & QR KOD OLUŞTURMA ---
-      if (data.startsWith("oxa_pay:") || data.startsWith("cbot_pay:")) {
+      // --- OTOMATİK KRİPTO ADRESİ & QR KOD OLUŞTURMA (APIRONE) ---
+      if (data.startsWith("oxa_pay:") || data.startsWith("cbot_pay:") || data.startsWith("apr_pay:")) {
         const amt = parseFloat(data.split(":")[1]) || 100;
-        const depositId = `dep_oxa_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const depositId = `dep_apr_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-        const { createWhiteLabelPayment, getOxapayApiKey } = await import("./oxapay");
-        const apiKey = getOxapayApiKey();
-
-        if (!apiKey) {
-          await editOrReply(
-            ctx,
-            `⚠️ <b>Kripto Ödeme Sistemi Henüz Yapılandırılmadı</b>\n\nLütfen yöneticiyle iletişime geçiniz veya TRON Cüzdanı yöntemini kullanınız.`,
-            new InlineKeyboard().text("🔙 Ödeme Yöntemleri", "btn_deposit_menu")
-          );
-          return;
-        }
-
-        const payResult = await createWhiteLabelPayment({
+        const { createApironeInvoice } = await import("./apirone");
+        const payResult = await createApironeInvoice({
           telegramId: Number(from.id),
           username: from.username && !from.username.startsWith("user_") ? from.username : "",
           amountTry: amt,
@@ -1359,7 +1349,9 @@ export function getTelegramBot(): Bot | null {
           orderId: depositId,
         });
 
-        if (!payResult.success || !payResult.address || !payResult.trackId) {
+        const invoiceId = payResult.invoiceId || payResult.trackId;
+
+        if (!payResult.success || !payResult.address || !invoiceId) {
           await editOrReply(
             ctx,
             `❌ <b>Ödeme Adresi Oluşturulamadı</b>\n\n${payResult.error || "Kripto servisine bağlanılamadı."}`,
@@ -1376,27 +1368,32 @@ export function getTelegramBot(): Bot | null {
           amount: amt,
           method: "Crypto",
           status: "PENDING",
-          referenceCode: `OXA-${payResult.trackId}`,
-          txid: String(payResult.trackId),
+          referenceCode: `APR-${invoiceId}`,
+          txid: String(invoiceId),
           createdAt: new Date().toISOString(),
         });
 
         const caption =
-          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n` +
+          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK - APIRONE)</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Yüklenecek Bakiye:</b> <code>${amt.toFixed(2)} ₺</code>\n` +
           `🪙 <b>Yatırılacak Tutar:</b> <code>${payResult.payAmount} ${payResult.payCurrency}</code>\n` +
-          `🌐 <b>Ağ:</b> <code>${payResult.network}</code>\n\n` +
-          `📋 <b>Cüzdan Adresi (Kopyalamak için dokunun):</b>\n` +
+          `🌐 <b>Ağ:</b> <code>TRC-20 (Tron)</code>\n\n` +
+          `📋 <b>Özel Ödeme Adresi (Kopyalamak için dokunun):</b>\n` +
           `<code>${payResult.address}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `⏳ <b>Geçerlilik:</b> 60 Dakika\n` +
-          `ℹ️ Herhangi bir borsadan (Binance, Paribu vb.) veya cüzdanınızdan bu adrese transfer yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik olarak</b> hesabınıza yüklenecektir.`;
+          `⏳ <b>Geçerlilik Süresi:</b> 60 Dakika\n` +
+          `ℹ️ Herhangi bir borsadan (Binance, Paribu, BtcTurk vb.) veya cüzdanınızdan (TrustWallet, TronLink) bu adrese transfer yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik olarak</b> hesabınıza yüklenecektir.`;
 
         const kb = new InlineKeyboard()
-          .text("🔄 Ödemeyi Kontrol Et", `oxa_chk:${payResult.trackId}:${amt}`)
-          .row()
-          .text("🔙 Ödeme Menüsü", "btn_deposit_menu");
+          .text("🔄 Ödemeyi Kontrol Et", `oxa_chk:${invoiceId}:${amt}`)
+          .row();
+
+        if (payResult.invoiceUrl) {
+          kb.url("🌐 Fatura Sayfasını Aç", payResult.invoiceUrl).row();
+        }
+
+        kb.text("🔙 Ödeme Menüsü", "btn_deposit_menu");
 
         // QR kod fotoğrafı göndermeyi dene, hata olursa metin olarak göster
         try {
@@ -1417,7 +1414,7 @@ export function getTelegramBot(): Bot | null {
       }
 
       // --- OTOMATİK KRİPTO ÖDEME DURUM KONTROLÜ ---
-      if (data.startsWith("oxa_chk:") || data.startsWith("cbot_chk:")) {
+      if (data.startsWith("oxa_chk:") || data.startsWith("cbot_chk:") || data.startsWith("apr_chk:")) {
         const parts = data.split(":");
         const trackId = parts[1];
         const amt = parseFloat(parts[2]) || 0;
@@ -1428,7 +1425,10 @@ export function getTelegramBot(): Bot | null {
         if (payInfo.success && payInfo.status === "paid") {
           const deposits = db.getDeposits();
           const dep = deposits.find(
-            (d) => d.referenceCode === `OXA-${trackId}` || d.txid === String(trackId)
+            (d) =>
+              d.referenceCode === `APR-${trackId}` ||
+              d.referenceCode === `OXA-${trackId}` ||
+              d.txid === String(trackId)
           );
           if (dep && dep.status !== "APPROVED") {
             await db.updateDepositStatus(dep.id, "APPROVED");

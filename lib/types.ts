@@ -99,11 +99,13 @@ export interface BankInfo {
 }
 
 export interface CryptoSettings {
-  usdtTrc20Address?: string; // USDT (TRC-20) cüzdan adresi
+  usdtTrc20Address?: string; // USDT (TRC-20) cüzdan adresi (Kişisel cüzdanınız - Paraların aktarılacağı adres)
   trxAddress?: string; // TRX cüzdan adresi
-  oxapayApiKey?: string; // OxaPay Merchant API Key
+  apironeAccount?: string; // Apirone Account ID (apr-...)
+  apironeTransferKey?: string; // Apirone Transfer Key
+  oxapayApiKey?: string; // OxaPay Merchant API Key (Geriye dönük uyumluluk)
   cryptoBotToken?: string; // Geriye dönük uyumluluk
-  autoVerifyEnabled?: boolean; // TronScan / OxaPay ile anında otomatik doğrulama
+  autoVerifyEnabled?: boolean; // Apirone ile anında otomatik doğrulama
 }
 
 export interface CustomPriceRule {

@@ -16,6 +16,7 @@ import {
   Zap,
   Activity,
   ArrowUpRight,
+  ArrowRight,
   Plus,
   Minus,
   UserX,
@@ -93,9 +94,18 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Crypto wallet states
   const [usdtTrc20Address, setUsdtTrc20Address] = useState<string>("");
   const [trxAddress, setTrxAddress] = useState<string>("");
+  const [apironeAccount, setApironeAccount] = useState<string>("");
+  const [apironeTransferKey, setApironeTransferKey] = useState<string>("");
   const [oxapayApiKey, setOxapayApiKey] = useState<string>("");
   const [autoVerifyEnabled, setAutoVerifyEnabled] = useState<boolean>(true);
   const [savingCrypto, setSavingCrypto] = useState<boolean>(false);
+  const [testingApirone, setTestingApirone] = useState<boolean>(false);
+  const [creatingApirone, setCreatingApirone] = useState<boolean>(false);
+  const [settingForwarding, setSettingForwarding] = useState<boolean>(false);
+  const [apironeTestResult, setApironeTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
   const [testingOxapay, setTestingOxapay] = useState<boolean>(false);
   const [oxapayTestResult, setOxapayTestResult] = useState<{
     success: boolean;
@@ -291,6 +301,8 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         if (st.settings?.cryptoSettings) {
           setUsdtTrc20Address(st.settings.cryptoSettings.usdtTrc20Address || "");
           setTrxAddress(st.settings.cryptoSettings.trxAddress || "");
+          setApironeAccount(st.settings.cryptoSettings.apironeAccount || "");
+          setApironeTransferKey(st.settings.cryptoSettings.apironeTransferKey || "");
           setOxapayApiKey(st.settings.cryptoSettings.oxapayApiKey || "");
           setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
         }
@@ -994,6 +1006,8 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
           cryptoSettings: {
             usdtTrc20Address,
             trxAddress,
+            apironeAccount: apironeAccount.trim(),
+            apironeTransferKey: apironeTransferKey.trim(),
             oxapayApiKey,
             autoVerifyEnabled,
           },
@@ -1002,7 +1016,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setToastMsg("Kripto cüzdan ayarları başarıyla kaydedildi!");
+        setToastMsg("Kripto cüzdan ve Apirone ayarları başarıyla kaydedildi!");
         setTimeout(() => setToastMsg(null), 3000);
         fetchAllData();
       } else {
@@ -1014,6 +1028,132 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       alert("Hata oluştu");
     } finally {
       setSavingCrypto(false);
+    }
+  };
+
+  // Apirone Hesabını Test Et
+  const handleTestApironeAccount = async () => {
+    if (!apironeAccount.trim()) {
+      alert("Lütfen önce bir Apirone Account ID (örn: apr-...) giriniz.");
+      return;
+    }
+    setTestingApirone(true);
+    setApironeTestResult(null);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test_apirone_account",
+          account: apironeAccount.trim(),
+          transferKey: apironeTransferKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setApironeTestResult({
+          success: true,
+          message: data.message || "Apirone Bağlantısı Başarılı ve Hesap Aktif!",
+        });
+      } else {
+        haptic.error();
+        setApironeTestResult({
+          success: false,
+          message: data.error || "Geçersiz hesap veya bağlantı hatası.",
+        });
+      }
+    } catch {
+      haptic.error();
+      setApironeTestResult({
+        success: false,
+        message: "Apirone sunucusuna ulaşılamadı.",
+      });
+    } finally {
+      setTestingApirone(false);
+    }
+  };
+
+  // Tek Tıkla Otomatik Apirone Hesabı Oluştur
+  const handleCreateApironeAccount = async () => {
+    setCreatingApirone(true);
+    setApironeTestResult(null);
+    haptic.impact("heavy");
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_apirone_account" }),
+      });
+      const data = await res.json();
+      if (data.success && data.account) {
+        haptic.success();
+        setApironeAccount(data.account);
+        if (data.transferKey) setApironeTransferKey(data.transferKey);
+        setApironeTestResult({
+          success: true,
+          message: `🎉 Yeni Apirone Hesabı Oluşturuldu: ${data.account}`,
+        });
+        setToastMsg("✅ Apirone hesabı oluşturuldu ve sisteme bağlandı!");
+        setTimeout(() => setToastMsg(null), 3500);
+        fetchAllData();
+      } else {
+        haptic.error();
+        setApironeTestResult({
+          success: false,
+          message: data.error || "Hesap oluşturulamadı.",
+        });
+      }
+    } catch {
+      haptic.error();
+      setApironeTestResult({
+        success: false,
+        message: "Apirone sunucusuna bağlanırken hata oluştu.",
+      });
+    } finally {
+      setCreatingApirone(false);
+    }
+  };
+
+  // Apirone Cüzdan Yönlendirmesini (Forwarding) Ayarla
+  const handleSetApironeForwarding = async () => {
+    if (!apironeAccount.trim() || !apironeTransferKey.trim()) {
+      alert("Yönlendirme için Apirone Account ID ve Transfer Key gereklidir.");
+      return;
+    }
+    const targetAddr = (usdtTrc20Address || trxAddress || "").trim();
+    if (!targetAddr) {
+      alert("Lütfen önce yukarıdaki 'USDT (TRC-20) Cüzdan Adresi' alanına kendi kişisel cüzdanınızı yazınız.");
+      return;
+    }
+    setSettingForwarding(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_apirone_forwarding",
+          account: apironeAccount.trim(),
+          transferKey: apironeTransferKey.trim(),
+          destinationAddress: targetAddr,
+          currency: "usdt@trx",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        alert("✅ Gelen tüm USDT (TRC-20) ödemelerinin kişisel cüzdanınıza otomatik aktarılması (Forwarding) başarıyla aktif edildi!");
+      } else {
+        haptic.error();
+        alert(data.error || "Yönlendirme ayarlanamadı.");
+      }
+    } catch {
+      haptic.error();
+      alert("İşlem sırasında hata oluştu.");
+    } finally {
+      setSettingForwarding(false);
     }
   };
 
@@ -2424,35 +2564,76 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 />
               </div>
 
-              {/* Otomatik Kripto (OxaPay White-Label) API & Test Bölümü */}
-              <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/25 space-y-3">
+              {/* Otomatik Kripto (Apirone Non-Custodial Gateway) API & Ayarlar Bölümü */}
+              <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/35 space-y-3.5 shadow-lg shadow-emerald-500/5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-white">Otomatik Kripto Ödeme Sistemi (OxaPay API)</span>
+                    <span className="text-xs font-bold text-white">Otomatik Kripto Ödeme Sistemi (Apirone Gateway)</span>
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                    Bot İçi QR + Otomatik Onay
+                    KYC Yok • Non-Custodial Forwarding
                   </span>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-300">OxaPay Merchant API Key</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={oxapayApiKey}
-                      onChange={(e) => setOxapayApiKey(e.target.value)}
-                      placeholder="Örn: 2B9X-XXXX-XXXX-XXXX"
-                      className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                    />
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Apirone, OxaPay gibi KYC veya şirket onayı istemez. Kullanıcılar ödeme yaptığında blokzincir onayından sonra para <b>doğrudan kişisel TRC20/TRX cüzdanınıza</b> aktarılır ve bakiyeleri anında yüklenir.
+                </p>
+
+                {/* 1-Tıkla Hesap Oluştur / Mevcut Hesap Girdileri */}
+                <div className="space-y-2.5 bg-black/40 p-3 rounded-xl border border-white/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">Apirone Hesap Bilgileri</span>
                     <button
                       type="button"
-                      onClick={handleTestOxapayKey}
-                      disabled={testingOxapay || !oxapayApiKey.trim()}
-                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 shrink-0 transition-all disabled:opacity-50"
+                      onClick={handleCreateApironeAccount}
+                      disabled={creatingApirone}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] flex items-center gap-1 transition-all disabled:opacity-50"
                     >
-                      {testingOxapay ? (
+                      {creatingApirone ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Oluşturuluyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3" />
+                          <span>⚡ 1-Tıkla Yeni Hesap Oluştur</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">Apirone Account ID</label>
+                    <input
+                      type="text"
+                      value={apironeAccount}
+                      onChange={(e) => setApironeAccount(e.target.value)}
+                      placeholder="Örn: apr-28a9319739bc0e540fe5f4b2930e1bef"
+                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">Apirone Transfer Key (Güvenlik Anahtarı)</label>
+                    <input
+                      type="password"
+                      value={apironeTransferKey}
+                      onChange={(e) => setApironeTransferKey(e.target.value)}
+                      placeholder="Örn: 9vze07JpR0JOpUfUaV1dK8fNXowYQaCE"
+                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleTestApironeAccount}
+                      disabled={testingApirone || !apironeAccount.trim()}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      {testingApirone ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Test Ediliyor...</span>
@@ -2464,26 +2645,45 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         </>
                       )}
                     </button>
-                  </div>
-                </div>
 
-                {/* Test Sonucu Bildirimi */}
-                {oxapayTestResult && (
-                  <div
-                    className={`p-2.5 rounded-xl text-xs font-medium border ${
-                      oxapayTestResult.success
-                        ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-                        : "bg-rose-950/60 border-rose-500/40 text-rose-300"
-                    }`}
-                  >
-                    {oxapayTestResult.message}
+                    <button
+                      type="button"
+                      onClick={handleSetApironeForwarding}
+                      disabled={settingForwarding || !apironeAccount.trim() || !apironeTransferKey.trim()}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      {settingForwarding ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Kaydediliyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                          <span>Cüzdanıma Otomatik Yönlendirmeyi Bağla</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                )}
+
+                  {/* Test Sonucu Bildirimi */}
+                  {apironeTestResult && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs font-medium border ${
+                        apironeTestResult.success
+                          ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                          : "bg-rose-950/60 border-rose-500/40 text-rose-300"
+                      }`}
+                    >
+                      {apironeTestResult.message}
+                    </div>
+                  )}
+                </div>
 
                 {/* Webhook URL Kopyalama Kutusu */}
                 <div className="space-y-1 pt-1 border-t border-white/5">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                    <span>OxaPay Webhook Callback URL:</span>
+                    <span>Apirone Webhook Callback URL:</span>
                     <span className="text-[10px] text-zinc-500">Otomatik Anında Bakiye Yükleme İçin</span>
                   </div>
                   <div className="flex items-center justify-between bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[11px]">
@@ -2511,7 +2711,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                     </button>
                   </div>
                   <p className="text-[10px] text-zinc-500 pt-0.5">
-                    💡 <b>Nasıl Çalışır:</b> OxaPay panelinizden (Merchant Services) aldığınız API Key&apos;i buraya girin. Kullanıcılar bot veya web panelden ayrılmadan doğrudan bot mesajında QR kod ve cüzdan adresi alır; ödeme blokzincirinde onaylandığında bakiye anında otomatik hesaba geçer.
+                    💡 <b>Bilgi:</b> Sistem her ödeme faturası oluşturulduğunda bu webhook adresini Apirone&apos;a otomatik iletir. Blokzincirinde ödeme tespit edildiğinde bakiye 0 saniyede kullanıcının hesabına yüklenir.
                   </p>
                 </div>
               </div>

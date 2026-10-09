@@ -40,7 +40,8 @@ export async function POST(req: Request) {
     const user = db.getUser(telegramId);
     const username = user?.username || `user_${telegramId}`;
 
-    const paymentRes = await createWhiteLabelPayment({
+    const { createApironeInvoice } = await import("@/lib/apirone");
+    const paymentRes = await createApironeInvoice({
       amountTry: amount,
       telegramId,
       username,
@@ -48,7 +49,9 @@ export async function POST(req: Request) {
       network,
     });
 
-    if (!paymentRes.success || !paymentRes.address || !paymentRes.trackId) {
+    const trackId = paymentRes.invoiceId || paymentRes.trackId;
+
+    if (!paymentRes.success || !paymentRes.address || !trackId) {
       return NextResponse.json(
         {
           success: false,
@@ -60,14 +63,14 @@ export async function POST(req: Request) {
 
     // Bekleyen bakiye yükleme kaydı oluştur
     await db.createDeposit({
-      id: `dep_${paymentRes.trackId}_${Date.now()}`,
+      id: `dep_${trackId}_${Date.now()}`,
       telegramId,
       username,
       amount,
       method: "Crypto",
       status: "PENDING",
-      referenceCode: `OXA-${paymentRes.trackId}`,
-      txid: String(paymentRes.trackId),
+      referenceCode: `APR-${trackId}`,
+      txid: String(trackId),
       createdAt: new Date().toISOString(),
     });
 

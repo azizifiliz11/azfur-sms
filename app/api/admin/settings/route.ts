@@ -88,7 +88,58 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Özel işlem: OxaPay API Anahtarı Test Et
+    // Özel işlem: Apirone Hesabını Test Et
+    if (body.action === "test_apirone_account") {
+      const { testApironeConnection } = await import("@/lib/apirone");
+      const testAcc = (body.account || db.getSettings().cryptoSettings?.apironeAccount || "").trim();
+      const testKey = (body.transferKey || db.getSettings().cryptoSettings?.apironeTransferKey || "").trim();
+      const testRes = await testApironeConnection(testAcc, testKey);
+      if (testRes.success) {
+        return NextResponse.json({
+          success: true,
+          message: testRes.message || "Apirone bağlantısı başarılı ve hesap aktif!",
+          accountInfo: testRes.accountInfo,
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        error: testRes.error || "Apirone hesabı doğrulanamadı.",
+      });
+    }
+
+    // Özel işlem: Tek Tıkla Otomatik Apirone Hesabı Oluştur
+    if (body.action === "create_apirone_account") {
+      const { createApironeAccount } = await import("@/lib/apirone");
+      const result = await createApironeAccount();
+      if (result.success) {
+        return NextResponse.json({
+          success: true,
+          message: result.message || "Apirone hesabı başarıyla oluşturuldu!",
+          account: result.account,
+          transferKey: result.transferKey,
+          settings: db.getSettings(),
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        error: result.error || "Apirone hesabı oluşturulamadı.",
+      });
+    }
+
+    // Özel işlem: Apirone Otomatik Yönlendirme (Kişisel Cüzdana Aktarma) Ayarla
+    if (body.action === "set_apirone_forwarding") {
+      const { setApironeForwarding, getApironeConfig } = await import("@/lib/apirone");
+      const cfg = getApironeConfig();
+      const acc = (body.account || cfg.account).trim();
+      const key = (body.transferKey || cfg.transferKey).trim();
+      const dest = (body.destinationAddress || "").trim();
+      const curr = (body.currency || "usdt@trx").trim();
+
+      const res = await setApironeForwarding(acc, key, curr, dest);
+      return NextResponse.json(res);
+    }
+
+    // Özel işlem: OxaPay API Anahtarı Test Et (Geriye Dönük Uyumluluk)
     if (body.action === "test_oxapay_key") {
       const { testOxapayApiKey } = await import("@/lib/oxapay");
       const testKey = (body.key || db.getSettings().cryptoSettings?.oxapayApiKey || "").trim();

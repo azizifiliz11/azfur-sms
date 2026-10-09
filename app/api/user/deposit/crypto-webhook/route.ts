@@ -13,20 +13,6 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const rawBody = await req.text();
-    const hmacHeader =
-      req.headers.get("HMAC") ||
-      req.headers.get("hmac") ||
-      req.headers.get("x-hmac") ||
-      req.headers.get("X-HMAC");
-
-    // İmzayı doğrula (güvenlik)
-    const isSignatureValid = verifyOxapayWebhook(rawBody, hmacHeader);
-    if (!isSignatureValid) {
-      console.warn("⚠️ OxaPay Webhook: Geçersiz HMAC İmzası!");
-      // Güvenlik: Geçersiz imza durumunda reddet
-      return new NextResponse("Invalid HMAC signature", { status: 400 });
-    }
-
     let payload: any = {};
     try {
       payload = JSON.parse(rawBody);
@@ -34,11 +20,69 @@ export async function POST(req: Request) {
       return new NextResponse("Invalid JSON body", { status: 400 });
     }
 
+    // --- 1. APIRONE WEBHOOK İŞLEME ---
+    if (payload.invoice && payload.account) {
+      const invoiceId = String(payload.invoice);
+      const apStatus = String(payload.status || "").toLowerCase();
+      console.log(`🔔 Apirone Webhook Alındı: Invoice=${invoiceId}, Status=${apStatus}`);
+
+      // Eğer fatura ödendi veya tamamlandıysa
+      if (apStatus === "paid" || apStatus === "completed" || apStatus === "overpaid") {
+        const deposits = db.getDeposits();
+        const dep = deposits.find(
+          (d) =>
+            d.referenceCode === `APR-${invoiceId}` ||
+            d.txid === invoiceId ||
+            d.id.includes(invoiceId)
+        );
+
+        if (dep && dep.status !== "APPROVED") {
+          await db.updateDepositStatus(dep.id, "APPROVED");
+
+          const user = db.getUser(dep.telegramId);
+          if (user) {
+            const newBal = Number((user.balance + dep.amount).toFixed(2));
+            await db.updateUser(dep.telegramId, { balance: newBal });
+
+            await sendTelegramDirectMessage(
+              dep.telegramId,
+              `🎉 <b>TEBRİKLER! ÖDEMENİZ ONAYLANDI</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+                `💰 <b>Yüklenen Tutar:</b> <code>₺${dep.amount.toFixed(2)}</code>\n` +
+                `💳 <b>Yeni Bakiyeniz:</b> <code>₺${newBal.toFixed(2)}</code>\n` +
+                `🆔 <b>İşlem No:</b> <code>#${invoiceId}</code>\n` +
+                `⚡ Bakiyeniz hesabınıza otomatik olarak yüklenmiştir. Keyifli kullanımlar dileriz!`
+            );
+          }
+        }
+      }
+
+      // Apirone servisi için HTTP 200 "ok" (text/plain) dön
+      return new NextResponse("ok", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+
+    // --- 2. OXAPAY WEBHOOK İŞLEME (Geriye Dönük Uyumluluk) ---
+    const hmacHeader =
+      req.headers.get("HMAC") ||
+      req.headers.get("hmac") ||
+      req.headers.get("x-hmac") ||
+      req.headers.get("X-HMAC");
+
+    if (hmacHeader) {
+      const isSignatureValid = verifyOxapayWebhook(rawBody, hmacHeader);
+      if (!isSignatureValid) {
+        console.warn("⚠️ OxaPay Webhook: Geçersiz HMAC İmzası!");
+        return new NextResponse("Invalid HMAC signature", { status: 400 });
+      }
+    }
+
     const trackId = payload.track_id || payload.trackId;
     const orderId = payload.order_id || payload.orderId;
     const status = String(payload.status || "").toLowerCase();
 
-    console.log(`🔔 OxaPay Webhook Alındı: TrackId=${trackId}, Status=${status}, OrderId=${orderId}`);
+    console.log(`🔔 Kripto Webhook Alındı: TrackId=${trackId}, Status=${status}, OrderId=${orderId}`);
 
     // Yalnızca başarılı ödemeleri işle
     if (status === "paid" || status === "complete" || status === "completed") {
@@ -47,6 +91,7 @@ export async function POST(req: Request) {
         (d) =>
           d.referenceCode === `OXA-${trackId}` ||
           d.txid === String(trackId) ||
+          d.referenceCode === `APR-${trackId}` ||
           d.referenceCode === orderId ||
           d.id === orderId
       );
@@ -71,11 +116,10 @@ export async function POST(req: Request) {
           }
         }
       } else {
-        console.warn(`⚠️ OxaPay Webhook: Depozit kaydı bulunamadı (TrackId: ${trackId})`);
+        console.warn(`⚠️ Kripto Webhook: Depozit kaydı bulunamadı (TrackId: ${trackId})`);
       }
     }
 
-    // OxaPay bildiriminin başarıyla teslim alındığını onaylamak için HTTP 200 "ok" dönmelidir
     return new NextResponse("ok", {
       status: 200,
       headers: { "Content-Type": "text/plain" },

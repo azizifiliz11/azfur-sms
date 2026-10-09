@@ -111,7 +111,36 @@ export async function createWhiteLabelPayment(params: {
   network?: string; // TRC20, TON vb.
   orderId?: string;
 }): Promise<OxaPayWhiteLabelResult> {
+  // Apirone önceliği: Eğer Apirone hesabı varsa veya OxaPay API anahtarı yoksa doğrudan Apirone kullan
+  const { getApironeConfig, createApironeInvoice } = await import("./apirone");
+  const apironeCfg = getApironeConfig();
+
   const apiKey = getOxapayApiKey();
+  if (apironeCfg.account || !apiKey) {
+    const apResult = await createApironeInvoice({
+      amountTry: params.amountTry,
+      telegramId: params.telegramId,
+      username: params.username,
+      payCurrency: params.payCurrency,
+      network: params.network,
+      orderId: params.orderId,
+    });
+
+    return {
+      success: apResult.success,
+      trackId: apResult.invoiceId,
+      address: apResult.address,
+      payAmount: apResult.payAmount,
+      payCurrency: apResult.payCurrency,
+      network: apResult.network,
+      qrCodeUrl: apResult.qrCodeUrl,
+      expiredAt: apResult.expiredAt,
+      amountTry: apResult.amountTry,
+      amountUsd: apResult.amountUsd,
+      error: apResult.error,
+    };
+  }
+
   if (!apiKey) {
     return {
       success: false,
@@ -226,8 +255,37 @@ export async function createWhiteLabelPayment(params: {
 export async function getPaymentInformation(
   trackId: number | string
 ): Promise<OxaPayPaymentInfo> {
+  const strId = String(trackId).trim();
+  const { getApironeInvoiceInfo } = await import("./apirone");
+
+  // Eğer ID harf içeriyorsa veya Apirone invoice formatındaysa Apirone'dan sorgula
+  if (/[a-zA-Z]/.test(strId) || !getOxapayApiKey()) {
+    const apInfo = await getApironeInvoiceInfo(strId);
+    if (apInfo.success) {
+      return {
+        success: true,
+        status: apInfo.status,
+        trackId: apInfo.invoiceId,
+        address: apInfo.address,
+        amount: apInfo.amount,
+        raw: apInfo.raw,
+      };
+    }
+  }
+
   const apiKey = getOxapayApiKey();
   if (!apiKey) {
+    const apFallback = await getApironeInvoiceInfo(strId);
+    if (apFallback.success) {
+      return {
+        success: true,
+        status: apFallback.status,
+        trackId: apFallback.invoiceId,
+        address: apFallback.address,
+        amount: apFallback.amount,
+        raw: apFallback.raw,
+      };
+    }
     return {
       success: false,
       status: "unknown",

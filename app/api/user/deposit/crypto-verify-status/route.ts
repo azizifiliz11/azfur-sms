@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     const deposits = db.getDeposits();
     const dep = deposits.find(
       (d) =>
+        d.referenceCode === `APR-${trackId}` ||
         d.referenceCode === `OXA-${trackId}` ||
         d.txid === String(trackId)
     );

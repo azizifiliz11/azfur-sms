@@ -1,15 +1,27 @@
 import fs from "fs";
 import path from "path";
-import { User, ActivationOrder, SystemSettings, DepositRequest, Ticket, TicketMessage, TicketStatus, Coupon } from "./types";
+import {
+  User,
+  ActivationOrder,
+  SystemSettings,
+  DepositRequest,
+  Ticket,
+  TicketMessage,
+  TicketStatus,
+  Coupon,
+  SystemBackup,
+  BackupSettings,
+} from "./types";
 import { CONFIG } from "./config";
 
-interface DatabaseSchema {
+export interface DatabaseSchema {
   settings: SystemSettings;
   users: Record<string, User>;
   activations: Record<string, ActivationOrder>;
   deposits: DepositRequest[];
   tickets: Record<string, Ticket>;
   coupons?: Record<string, Coupon>;
+  backups?: SystemBackup[];
 }
 
 const SEED_DB_PATH = path.join(process.cwd(), "data", "db.json");
@@ -49,6 +61,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
   supportTelegramUsernames: [],
   customStickerFileId: "",
   heroSmsApiKey: "",
+  backupSettings: {
+    autoBackupEnabled: true,
+    autoBackupIntervalHours: 6,
+    maxBackupsCount: 20,
+    lastAutoBackupTime: new Date().toISOString(),
+  },
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
@@ -169,6 +187,10 @@ function loadDb(): DatabaseSchema {
     if (!data.deposits) data.deposits = [];
     if (!data.tickets) data.tickets = {};
     if (!data.coupons) data.coupons = {};
+    if (!data.backups || !Array.isArray(data.backups)) data.backups = [];
+    if (!data.settings.backupSettings) {
+      data.settings.backupSettings = DEFAULT_SETTINGS.backupSettings;
+    }
 
     // Silinen kullanıcılar asla geri gelmesin
     if (Array.isArray(data.settings?.deletedTelegramIds)) {
@@ -1066,5 +1088,231 @@ export const db = {
 
     await saveDb(data);
     return { success: true, message: `Kupon başarıyla uygulandı!`, coupon };
+  },
+
+  // ==========================================
+  // YEDEKLEME VE GERİ YÜKLEME SİSTEMİ (BACKUP & RESTORE)
+  // ==========================================
+
+  getFullDatabaseSnapshot(): DatabaseSchema {
+    const data = loadDb();
+    return {
+      settings: JSON.parse(JSON.stringify(data.settings)),
+      users: JSON.parse(JSON.stringify(data.users)),
+      activations: JSON.parse(JSON.stringify(data.activations || {})),
+      deposits: JSON.parse(JSON.stringify(data.deposits || [])),
+      tickets: JSON.parse(JSON.stringify(data.tickets || {})),
+      coupons: JSON.parse(JSON.stringify(data.coupons || {})),
+    };
+  },
+
+  async createBackup(
+    type: "AUTO" | "MANUAL" | "PRE_RESTORE" = "MANUAL",
+    label?: string
+  ): Promise<SystemBackup> {
+    const data = loadDb();
+    const now = new Date().toISOString();
+    const backupId = `bk_${Date.now()}`;
+
+    // Temiz anlık görüntü klonu (kendi içinde yedek listesini döngüsel içermesin)
+    const snapshotData: DatabaseSchema = {
+      settings: JSON.parse(JSON.stringify(data.settings)),
+      users: JSON.parse(JSON.stringify(data.users)),
+      activations: JSON.parse(JSON.stringify(data.activations || {})),
+      deposits: JSON.parse(JSON.stringify(data.deposits || [])),
+      tickets: JSON.parse(JSON.stringify(data.tickets || {})),
+      coupons: JSON.parse(JSON.stringify(data.coupons || {})),
+    };
+
+    const usersCount = Object.keys(snapshotData.users).length;
+    const activationsCount = Object.keys(snapshotData.activations).length;
+    const depositsCount = (snapshotData.deposits || []).length;
+    const ticketsCount = Object.keys(snapshotData.tickets).length;
+    const couponsCount = Object.keys(snapshotData.coupons || {}).length;
+    const totalUserBalance = Object.values(snapshotData.users).reduce(
+      (sum, u) => sum + (Number(u.balance) || 0),
+      0
+    );
+
+    const serialized = JSON.stringify(snapshotData);
+    const sizeBytes = Buffer.byteLength(serialized, "utf8");
+
+    const defaultLabel =
+      type === "AUTO"
+        ? "Otomatik Zamanlanmış Sistem Yedeği"
+        : type === "PRE_RESTORE"
+        ? "Geri Yükleme Öncesi Güvenlik Yedeği"
+        : "Manuel Yönetici Yedeği";
+
+    const backupRecord: SystemBackup = {
+      id: backupId,
+      timestamp: now,
+      type,
+      label: label || defaultLabel,
+      sizeBytes,
+      stats: {
+        usersCount,
+        activationsCount,
+        depositsCount,
+        ticketsCount,
+        couponsCount,
+        totalUserBalance: Number(totalUserBalance.toFixed(2)),
+      },
+      data: snapshotData,
+    };
+
+    if (!data.backups || !Array.isArray(data.backups)) {
+      data.backups = [];
+    }
+
+    // Yeni yedeği en başa ekle
+    data.backups.unshift(backupRecord);
+
+    // Maksimum saklama sayısını uygula (varsayılan 20)
+    const maxCount = data.settings.backupSettings?.maxBackupsCount || 20;
+    if (data.backups.length > maxCount) {
+      data.backups = data.backups.slice(0, maxCount);
+    }
+
+    // Eğer otomatik yedekse son otomatik yedekleme zamanını güncelle
+    if (type === "AUTO") {
+      if (!data.settings.backupSettings) {
+        data.settings.backupSettings = {
+          autoBackupEnabled: true,
+          autoBackupIntervalHours: 6,
+          maxBackupsCount: 20,
+          lastAutoBackupTime: now,
+        };
+      } else {
+        data.settings.backupSettings.lastAutoBackupTime = now;
+      }
+    }
+
+    await saveDb(data);
+    return backupRecord;
+  },
+
+  getBackups(): SystemBackup[] {
+    const data = loadDb();
+    if (!data.backups || !Array.isArray(data.backups)) {
+      return [];
+    }
+    // Liste ekranında çok büyük veri dönmesin diye data alanını hariç tutarak özet listeyi döndür
+    return data.backups.map((b) => ({
+      id: b.id,
+      timestamp: b.timestamp,
+      type: b.type,
+      label: b.label,
+      sizeBytes: b.sizeBytes,
+      stats: b.stats,
+    }));
+  },
+
+  getBackupById(backupId: string): SystemBackup | null {
+    const data = loadDb();
+    if (!data.backups || !Array.isArray(data.backups)) {
+      return null;
+    }
+    return data.backups.find((b) => b.id === backupId) || null;
+  },
+
+  async deleteBackup(backupId: string): Promise<boolean> {
+    const data = loadDb();
+    if (!data.backups || !Array.isArray(data.backups)) {
+      return false;
+    }
+    const initialLen = data.backups.length;
+    data.backups = data.backups.filter((b) => b.id !== backupId);
+    if (data.backups.length !== initialLen) {
+      await saveDb(data);
+      return true;
+    }
+    return false;
+  },
+
+  async checkAndRunAutoBackup(): Promise<SystemBackup | null> {
+    const data = loadDb();
+    const bs = data.settings.backupSettings;
+    if (!bs || !bs.autoBackupEnabled) {
+      return null;
+    }
+
+    const intervalHours = bs.autoBackupIntervalHours || 6;
+    const intervalMs = intervalHours * 3600 * 1000;
+    const lastTime = bs.lastAutoBackupTime ? new Date(bs.lastAutoBackupTime).getTime() : 0;
+    const now = Date.now();
+
+    if (now - lastTime >= intervalMs) {
+      return await this.createBackup("AUTO");
+    }
+    return null;
+  },
+
+  async restoreBackup(backupPayload: any): Promise<{ success: boolean; message: string; details: any }> {
+    if (!backupPayload || typeof backupPayload !== "object") {
+      throw new Error("Geçersiz yedek dosyası formatı!");
+    }
+
+    // Yedek nesnesi doğrudan data içerebilir veya kök seviyede veritabanı olabilir
+    const targetData: DatabaseSchema =
+      backupPayload.data && typeof backupPayload.data === "object"
+        ? backupPayload.data
+        : backupPayload;
+
+    if (!targetData.users || typeof targetData.users !== "object") {
+      throw new Error("Yedek dosyasında 'users' (kullanıcılar) tablosu bulunamadı!");
+    }
+    if (!targetData.settings || typeof targetData.settings !== "object") {
+      throw new Error("Yedek dosyasında 'settings' (sistem ayarları) bulunamadı!");
+    }
+
+    // 1. Önce mevcut durumu güvenlik yedeği olarak al (Asla veri kaybı yaşanmasın)
+    await this.createBackup("PRE_RESTORE", "Geri Yükleme Öncesi Güvenlik Yedeği");
+
+    const currentData = loadDb();
+    const existingBackups = currentData.backups || [];
+
+    // 2. Verileri geri yüklenen içerikle güncelle
+    currentData.settings = { ...currentData.settings, ...targetData.settings };
+    currentData.users = { ...targetData.users };
+    currentData.activations = targetData.activations || {};
+    currentData.deposits = targetData.deposits || [];
+    currentData.tickets = targetData.tickets || {};
+    currentData.coupons = targetData.coupons || {};
+    // Mevcut yedekler geçmişini koru
+    currentData.backups = existingBackups;
+
+    await saveDb(currentData);
+
+    const stats = {
+      usersCount: Object.keys(currentData.users).length,
+      activationsCount: Object.keys(currentData.activations).length,
+      depositsCount: currentData.deposits.length,
+      couponsCount: Object.keys(currentData.coupons).length,
+    };
+
+    return {
+      success: true,
+      message: "Yedek başarıyla geri yüklendi! Tüm kullanıcılar, bakiyeler ve ayarlar güncellendi.",
+      details: stats,
+    };
+  },
+
+  async updateBackupSettings(updates: Partial<BackupSettings>): Promise<BackupSettings> {
+    const data = loadDb();
+    if (!data.settings.backupSettings) {
+      data.settings.backupSettings = {
+        autoBackupEnabled: true,
+        autoBackupIntervalHours: 6,
+        maxBackupsCount: 20,
+        lastAutoBackupTime: new Date().toISOString(),
+      };
+    }
+    data.settings.backupSettings = {
+      ...data.settings.backupSettings,
+      ...updates,
+    };
+    await saveDb(data);
+    return data.settings.backupSettings;
   },
 };

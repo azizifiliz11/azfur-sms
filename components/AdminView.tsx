@@ -47,6 +47,14 @@ import {
   ExternalLink,
   Calendar,
   Hash,
+  Archive,
+  Download,
+  Upload,
+  HardDrive,
+  FileText,
+  AlertTriangle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -60,7 +68,7 @@ interface AdminViewProps {
 }
 
 export function AdminView({ onBackToApp }: AdminViewProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups">("overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -176,6 +184,28 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   const [savingCoupon, setSavingCoupon] = useState<boolean>(false);
   const [couponModalOpen, setCouponModalOpen] = useState<boolean>(false);
 
+  // Yedekleme & Geri Yükleme Durumları
+  const [backups, setBackups] = useState<any[]>([]);
+  const [backupSettings, setBackupSettings] = useState<{
+    autoBackupEnabled: boolean;
+    autoBackupIntervalHours: number;
+    maxBackupsCount: number;
+    lastBackupAt?: string;
+  }>({
+    autoBackupEnabled: true,
+    autoBackupIntervalHours: 6,
+    maxBackupsCount: 20,
+  });
+  const [creatingBackup, setCreatingBackup] = useState<boolean>(false);
+  const [restoringBackup, setRestoringBackup] = useState<boolean>(false);
+  const [savingBackupSettings, setSavingBackupSettings] = useState<boolean>(false);
+  const [selectedBackupToRestore, setSelectedBackupToRestore] = useState<any | null>(null);
+  const [uploadedFileBackup, setUploadedFileBackup] = useState<any | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [restoreConfirmModalOpen, setRestoreConfirmModalOpen] = useState<boolean>(false);
+  const [restoreTargetType, setRestoreTargetType] = useState<"snapshot" | "file">("snapshot");
+  const [backupSecurityPin, setBackupSecurityPin] = useState<string>("2026");
+
   // Güvenli Admin Başlıkları (Dahili Admin Doğrulaması)
   const getAdminHeaders = () => {
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
@@ -222,22 +252,24 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
     setRefreshing(true);
     const headers = getAdminHeaders();
     try {
-      const [ovRes, setRes, uRes, depRes, tckRes, cpnRes] = await Promise.all([
+      const [ovRes, setRes, uRes, depRes, tckRes, cpnRes, bkpRes] = await Promise.all([
         fetch("/api/admin/overview", { headers, cache: "no-store" }),
         fetch("/api/admin/settings", { headers, cache: "no-store" }),
         fetch("/api/admin/users", { headers, cache: "no-store" }),
         fetch("/api/admin/deposits", { headers, cache: "no-store" }),
         fetch("/api/admin/tickets", { headers, cache: "no-store" }),
         fetch("/api/admin/coupons", { headers, cache: "no-store" }),
+        fetch("/api/admin/backups?action=list", { headers, cache: "no-store" }),
       ]);
 
-      const [ov, st, us, dep, tck, cpn] = await Promise.all([
+      const [ov, st, us, dep, tck, cpn, bkp] = await Promise.all([
         ovRes.json(),
         setRes.json(),
         uRes.json(),
         depRes.json(),
         tckRes.json(),
         cpnRes.json(),
+        bkpRes.json(),
       ]);
 
       if (ov.success) setOverview(ov);
@@ -293,6 +325,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       if (dep.success) setDeposits(dep.deposits);
       if (tck.success) setTickets(tck.tickets || []);
       if (cpn.success) setCoupons(cpn.coupons || []);
+      if (bkp?.success) {
+        setBackups(bkp.backups || []);
+        if (bkp.backupSettings) {
+          setBackupSettings(bkp.backupSettings);
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -403,6 +441,284 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Manuel Sistem Yedeği Oluştur
+  const handleCreateBackup = async (customLabel?: string) => {
+    setCreatingBackup(true);
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          type: "MANUAL",
+          label:
+            customLabel ||
+            `Manuel Sistem Yedeği - ${new Date().toLocaleDateString("tr-TR")} ${new Date().toLocaleTimeString(
+              "tr-TR",
+              { hour: "2-digit", minute: "2-digit" }
+            )}`,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("✅ Sistem yedeği başarıyla oluşturuldu ve buluta kaydedildi!");
+        setTimeout(() => setToastMsg(null), 3500);
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Yedek oluşturulamadı");
+      }
+    } catch (e: any) {
+      haptic.error();
+      alert("Yedek oluşturulurken hata oluştu: " + (e?.message || ""));
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  // Canlı Veritabanını JSON Olarak İndir
+  const handleDownloadCurrentDatabase = async () => {
+    haptic.impact("light");
+    try {
+      const res = await adminFetch("/api/admin/backups?action=download_current");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "İndirilemedi");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const datePart = new Date().toISOString().slice(0, 10);
+      a.download = `azfur_veritabani_canli_${datePart}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      haptic.success();
+      setToastMsg("📥 Canlı veritabanı JSON yedeği başarıyla indirildi!");
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (e: any) {
+      haptic.error();
+      alert("Canlı veritabanı indirilemedi: " + (e?.message || ""));
+    }
+  };
+
+  // Kayıtlı Snapshot'ı JSON Olarak İndir
+  const handleDownloadSnapshot = async (backupId: string, createdAt: string) => {
+    haptic.impact("light");
+    try {
+      const res = await adminFetch(
+        `/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}`
+      );
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "İndirilemedi");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const datePart = new Date(createdAt)
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, "_");
+      a.download = `azfur_yedek_${datePart}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      haptic.success();
+      setToastMsg("📥 Yedek dosyası başarıyla indirildi!");
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (e: any) {
+      haptic.error();
+      alert("Yedek dosyası indirilemedi: " + (e?.message || ""));
+    }
+  };
+
+  // Yedek Kaydını Sil
+  const handleDeleteBackup = async (backupId: string) => {
+    if (!confirm("Bu sistem yedeğini silmek istediğinize emin misiniz?")) return;
+    haptic.impact("medium");
+    try {
+      const res = await adminFetch("/api/admin/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", backupId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setBackups((prev) => prev.filter((b) => b.id !== backupId));
+        setToastMsg("🗑️ Yedek kaydı başarıyla silindi.");
+        setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        alert(data.error || "Silinemedi");
+      }
+    } catch {
+      haptic.error();
+      alert("Hata oluştu");
+    }
+  };
+
+  // Otomatik Yedekleme Ayarlarını Kaydet
+  const handleSaveBackupSettings = async (overrides?: any) => {
+    setSavingBackupSettings(true);
+    haptic.impact("medium");
+    const payload = {
+      ...backupSettings,
+      ...(overrides || {}),
+    };
+    try {
+      const res = await adminFetch("/api/admin/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_settings",
+          settings: payload,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setBackupSettings(data.backupSettings);
+        setToastMsg("⚙️ Otomatik yedekleme ayarları kaydedildi!");
+        setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        alert(data.error || "Ayarlar kaydedilemedi");
+      }
+    } catch {
+      haptic.error();
+      alert("Ayarlar kaydedilirken hata oluştu");
+    } finally {
+      setSavingBackupSettings(false);
+    }
+  };
+
+  // Bilgisayardan/Telefondan Yedek Dosyası Seç (.json)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      alert("Lütfen yalnızca .json uzantılı yedek dosyası seçiniz!");
+      e.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+
+        // Desteklenen formatlar: doğrudan DatabaseSchema veya SystemBackup wrapper { id, data, ... }
+        let dbData = parsed;
+        if (
+          parsed.data &&
+          typeof parsed.data === "object" &&
+          (parsed.data.users || parsed.data.settings)
+        ) {
+          dbData = parsed.data;
+        }
+
+        if (!dbData.users) {
+          throw new Error(
+            "Dosya içeriğinde kullanıcı listesi ('users') bulunamadı! Lütfen geçerli bir AzFur yedek dosyası seçiniz."
+          );
+        }
+
+        setUploadedFileBackup(dbData);
+        setUploadedFileName(file.name);
+        setRestoreTargetType("file");
+        setRestoreConfirmModalOpen(true);
+        haptic.selection();
+      } catch (err: any) {
+        haptic.error();
+        alert("Geçersiz yedek dosyası: " + (err?.message || "JSON okunamadı"));
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Geri Yükleme Onayla ve Uygula (Güvenlik PIN'i ve Rate Limit korumalı)
+  const handleConfirmRestore = async () => {
+    if (!backupSecurityPin.trim()) {
+      alert("Lütfen Yönetici PIN kodunu giriniz!");
+      return;
+    }
+
+    setRestoringBackup(true);
+    haptic.impact("heavy");
+    try {
+      let res;
+      const headers = {
+        "Content-Type": "application/json",
+        "x-admin-pin": backupSecurityPin.trim(),
+      };
+
+      if (restoreTargetType === "file" && uploadedFileBackup) {
+        res = await adminFetch("/api/admin/backups", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "restore_upload",
+            payload: uploadedFileBackup,
+          }),
+        });
+      } else if (restoreTargetType === "snapshot" && selectedBackupToRestore) {
+        res = await adminFetch("/api/admin/backups", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "restore_id",
+            backupId: selectedBackupToRestore.id,
+          }),
+        });
+      } else {
+        alert("Geri yüklenecek geçerli bir yedek seçilmedi");
+        setRestoringBackup(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (res.status === 429) {
+        haptic.error();
+        alert(
+          data.error ||
+            "⚠️ Çok fazla hatalı PIN denemesi yapıldı! Brute-force koruması nedeniyle sistem 15 dakika kilitlendi."
+        );
+        return;
+      }
+
+      if (data.success) {
+        haptic.success();
+        setToastMsg("🎉 Yedek başarıyla geri yüklendi! Sistem verileri güncellendi.");
+        setTimeout(() => setToastMsg(null), 4000);
+        setRestoreConfirmModalOpen(false);
+        setSelectedBackupToRestore(null);
+        setUploadedFileBackup(null);
+        setUploadedFileName("");
+        fetchAllData();
+      } else {
+        haptic.error();
+        alert(data.error || "Geri yükleme işlemi başarısız oldu");
+      }
+    } catch (e: any) {
+      haptic.error();
+      alert("Geri yükleme sırasında hata oluştu: " + (e?.message || ""));
+    } finally {
+      setRestoringBackup(false);
     }
   };
 
@@ -1404,7 +1720,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
         <button
           onClick={() => {
             haptic.selection();
@@ -1510,7 +1826,21 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
               : "text-zinc-400 hover:text-zinc-200"
           }`}
         >
-          Duyuru & Mesaj
+          Duyuru
+        </button>
+        <button
+          onClick={() => {
+            haptic.selection();
+            setActiveTab("backups");
+          }}
+          className={`py-2 px-1 rounded-xl transition-all text-center flex items-center justify-center gap-1 ${
+            activeTab === "backups"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <Archive className="w-3.5 h-3.5 shrink-0" />
+          <span>Yedekleme ({backups.length})</span>
         </button>
       </div>
 
@@ -3553,6 +3883,408 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         </div>
       )}
 
+      {/* TAB 9: VERİTABANI YEDEKLEME & GERİ YÜKLEME */}
+      {activeTab === "backups" && (
+        <div className="space-y-4">
+          {/* Üst Bilgi ve Durum Paneli */}
+          <Card className="p-4 bg-gradient-to-br from-[#12141e] via-[#0d1017] to-[#0a0d14] border-emerald-500/30">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <Archive className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Sistem Yedekleme & Geri Yükleme Motoru</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                      {backups.length} Yedek
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Otomatik periyodik snapshotlar, tek tıkla canlı JSON indirme ve dosyadan tam geri yükleme
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => {
+                    haptic.impact("light");
+                    fetchAllData();
+                  }}
+                  disabled={refreshing}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-emerald-400" : ""}`} />
+                  <span>Yenile</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Durum Rozetleri */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-white/[0.06]">
+              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Otomatik Yedekleme</span>
+                <span className={`text-xs font-bold flex items-center gap-1 mt-0.5 ${backupSettings.autoBackupEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${backupSettings.autoBackupEnabled ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+                  {backupSettings.autoBackupEnabled ? "AKTİF" : "KAPALI"}
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Yedekleme Sıklığı</span>
+                <span className="text-xs font-bold text-blue-400 font-mono mt-0.5 block">
+                  Her {backupSettings.autoBackupIntervalHours} Saatte Bir
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Maksimum Saklama</span>
+                <span className="text-xs font-bold text-purple-400 font-mono mt-0.5 block">
+                  {backupSettings.maxBackupsCount} Snapshot
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                <span className="text-[10px] text-zinc-400 block">Son Yedek Zamanı</span>
+                <span className="text-xs font-semibold text-amber-300 mt-0.5 block truncate">
+                  {backupSettings.lastBackupAt ? formatUserLastActive(backupSettings.lastBackupAt) : "Henüz alınmadı"}
+                </span>
+              </div>
+            </div>
+
+            {/* Güvenlik & Rate Limit Bildirimi */}
+            <div className="mt-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-2 text-[11px] text-blue-300">
+              <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                <b>Brute-force ve Güvenlik Koruması Aktif:</b> Yedekleme ve geri yükleme uç noktaları rate limit ile korunur. 5 hatalı PIN denemesinde IP adresi 15 dakika boyunca kilitlenir.
+              </span>
+            </div>
+          </Card>
+
+          {/* 3 BÜYÜK HIZLI EYLEM KARTI */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Kart 1: Şimdi Manuel Yedek Al */}
+            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-emerald-500/40 transition-all">
+              <div className="space-y-1.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <h4 className="text-sm font-bold text-white">Şimdi Manuel Yedek Al</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Sistemin güncel veritabanını anında yeni bir snapshot olarak buluta kaydeder.
+                </p>
+              </div>
+
+              <button
+                onClick={() => handleCreateBackup()}
+                disabled={creatingBackup}
+                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {creatingBackup ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Yedek Alınıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <HardDrive className="w-4 h-4" />
+                    <span>💾 Şimdi Yedek Al</span>
+                  </>
+                )}
+              </button>
+            </Card>
+
+            {/* Kart 2: Canlı Veritabanını İndir (.json) */}
+            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-blue-500/40 transition-all">
+              <div className="space-y-1.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <ArrowDownToLine className="w-5 h-5" />
+                </div>
+                <h4 className="text-sm font-bold text-white">Canlı Veritabanını İndir</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Şu anki canlı veritabanını cihazınıza <code className="text-blue-300 font-mono">.json</code> dosyası olarak indirir.
+                </p>
+              </div>
+
+              <button
+                onClick={handleDownloadCurrentDatabase}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>📥 JSON Olarak İndir</span>
+              </button>
+            </Card>
+
+            {/* Kart 3: Dosyadan Geri Yükle (.json Yükle) */}
+            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-purple-500/40 transition-all">
+              <div className="space-y-1.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                  <ArrowUpFromLine className="w-5 h-5" />
+                </div>
+                <h4 className="text-sm font-bold text-white">Dosyadan Geri Yükle</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  İndirmiş olduğunuz bir <code className="text-purple-300 font-mono">.json</code> yedek dosyasını yükleyip sistemi geri yükleyin.
+                </p>
+              </div>
+
+              <div>
+                <input
+                  type="file"
+                  accept=".json"
+                  id="backup-file-uploader"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="backup-file-uploader"
+                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>📤 Yedek Dosyası Seç (.json)</span>
+                </label>
+              </div>
+            </Card>
+          </div>
+
+          {/* OTOMATİK YEDEKLEME AYARLARI */}
+          <Card className="p-4 bg-zinc-900/80 border-white/10 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-sm font-bold text-white">Otomatik Periyodik Yedekleme Ayarları</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-medium">Otomatik Çalışma:</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSaveBackupSettings({
+                      autoBackupEnabled: !backupSettings.autoBackupEnabled,
+                    })
+                  }
+                  disabled={savingBackupSettings}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    backupSettings.autoBackupEnabled ? "bg-emerald-500" : "bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      backupSettings.autoBackupEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* Sıklık Seçimi */}
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                  ⏱️ Yedekleme Sıklığı (Aralık)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { hours: 1, label: "1 Saat", desc: "Çok Sık" },
+                    { hours: 3, label: "3 Saat", desc: "Yoğun İşlem" },
+                    { hours: 6, label: "6 Saat", desc: "Önerilen ⭐" },
+                    { hours: 12, label: "12 Saat", desc: "Günde 2 Kez" },
+                    { hours: 24, label: "24 Saat", desc: "Günlük" },
+                  ].map((item) => (
+                    <button
+                      key={item.hours}
+                      type="button"
+                      onClick={() =>
+                        handleSaveBackupSettings({ autoBackupIntervalHours: item.hours })
+                      }
+                      className={`p-2.5 rounded-xl border text-center transition-all ${
+                        backupSettings.autoBackupIntervalHours === item.hours
+                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm"
+                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-xs block">{item.label}</span>
+                      <span className="text-[10px] text-zinc-500 block">{item.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Maksimum Saklanacak Yedek Sayısı */}
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                  🗄️ Bulutta Saklanacak Maksimum Snapshot Sayısı
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { count: 10, label: "10 Adet", desc: "Hafif" },
+                    { count: 20, label: "20 Adet", desc: "Standart (Önerilen)" },
+                    { count: 50, label: "50 Adet", desc: "Geniş Geçmiş" },
+                  ].map((item) => (
+                    <button
+                      key={item.count}
+                      type="button"
+                      onClick={() =>
+                        handleSaveBackupSettings({ maxBackupsCount: item.count })
+                      }
+                      className={`p-2.5 rounded-xl border text-center transition-all ${
+                        backupSettings.maxBackupsCount === item.count
+                          ? "bg-purple-500/20 border-purple-500 text-purple-300 font-bold shadow-sm"
+                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-xs block">{item.label}</span>
+                      <span className="text-[10px] text-zinc-500 block">{item.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-zinc-500">
+              💡 Belirlenen sıklık süresi dolduğunda sistem otomatik olarak güvenli bir snapshot oluşturur. Maksimum saklama sayısına ulaşıldığında en eski otomatik snapshotlar otomatik olarak arşivlenir.
+            </p>
+          </Card>
+
+          {/* KAYITLI SİSTEM YEDEKLERİ GEÇMİŞİ */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-emerald-400" />
+                <span>Kayıtlı Sistem Snapshotları ({backups.length})</span>
+              </h4>
+              <span className="text-[11px] text-zinc-500 font-mono">
+                Son eklenenler en üstte listelenir
+              </span>
+            </div>
+
+            {backups.length === 0 ? (
+              <Card className="p-8 text-center space-y-2 text-zinc-500 text-xs">
+                <Archive className="w-8 h-8 text-zinc-600 mx-auto" />
+                <p>Henüz sistemde kayıtlı bir yedek bulunmuyor.</p>
+                <p className="text-[11px] text-zinc-600">
+                  Yukarıdaki &quot;Şimdi Manuel Yedek Al&quot; butonuna basarak ilk yedeğinizi anında oluşturabilirsiniz.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-2.5">
+                {backups.map((b) => {
+                  const isAuto = b.type === "AUTO";
+                  const isPreRestore = b.type === "PRE_RESTORE";
+                  return (
+                    <Card
+                      key={b.id}
+                      className={`p-3.5 space-y-3 transition-all border ${
+                        isPreRestore
+                          ? "border-purple-500/30 bg-gradient-to-r from-purple-950/20 to-zinc-900"
+                          : isAuto
+                          ? "border-blue-500/20 bg-zinc-900/90 hover:border-blue-500/40"
+                          : "border-emerald-500/20 bg-zinc-900/90 hover:border-emerald-500/40"
+                      }`}
+                    >
+                      {/* Üst Satır: Tür, Başlık ve Tarih */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                isPreRestore
+                                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                  : isAuto
+                                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              }`}
+                            >
+                              {isPreRestore
+                                ? "🛡️ GÜVENLİK YEDEĞİ"
+                                : isAuto
+                                ? "🤖 OTOMATİK"
+                                : "👤 MANUEL"}
+                            </span>
+                            <span className="font-bold text-xs text-white">
+                              {b.label || "Sistem Snapshotı"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                            <Clock className="w-3 h-3 text-zinc-500" />
+                            <span>{new Date(b.createdAt).toLocaleString("tr-TR")}</span>
+                            <span className="text-zinc-600">•</span>
+                            <span className="text-emerald-400 font-medium">
+                              {formatUserLastActive(b.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Aksiyon Butonları */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* İndir */}
+                          <button
+                            onClick={() => handleDownloadSnapshot(b.id, b.createdAt)}
+                            className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                            title="Yedek Dosyasını İndir (.json)"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">İndir</span>
+                          </button>
+
+                          {/* Geri Yükle */}
+                          <button
+                            onClick={() => {
+                              setSelectedBackupToRestore(b);
+                              setRestoreTargetType("snapshot");
+                              setRestoreConfirmModalOpen(true);
+                              haptic.impact("medium");
+                            }}
+                            className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                            title="Bu Yedeğe Geri Dön"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Geri Yükle</span>
+                          </button>
+
+                          {/* Sil */}
+                          <button
+                            onClick={() => handleDeleteBackup(b.id)}
+                            className="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs transition-all"
+                            title="Yedeği Sil"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* İstatistikler */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-2 border-t border-white/[0.04] text-[11px] font-mono">
+                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
+                          <span className="text-zinc-500 text-[10px]">Kullanıcı:</span>
+                          <span className="font-bold text-white">{b.stats?.usersCount || 0}</span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
+                          <span className="text-zinc-500 text-[10px]">Bakiye:</span>
+                          <span className="font-bold text-emerald-400">
+                            ₺{b.stats?.totalBalance?.toFixed(2) || "0.00"}
+                          </span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
+                          <span className="text-zinc-500 text-[10px]">Sipariş:</span>
+                          <span className="font-bold text-blue-400">{b.stats?.ordersCount || 0}</span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
+                          <span className="text-zinc-500 text-[10px]">Yükleme:</span>
+                          <span className="font-bold text-amber-400">{b.stats?.depositsCount || 0}</span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
+                          <span className="text-zinc-500 text-[10px]">Boyut:</span>
+                          <span className="font-bold text-purple-400">{b.stats?.sizeKb || 0} KB</span>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Yeni Kupon Oluşturma Modalı */}
       {couponModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -4187,6 +4919,116 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-white font-semibold transition-colors"
               >
                 Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. GERİ YÜKLEME ONAY MODALI (PIN & BRUTEFORCE GÜVENLİK KORUMALI) */}
+      {restoreConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-[#11131a] border border-amber-500/40 rounded-2xl p-5 shadow-2xl space-y-4">
+            {/* Modal Başlık */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Sistemi Yedeğe Geri Yükleme</h3>
+                  <p className="text-[11px] text-zinc-400">Veritabanı önceki durumuna geri yüklenecektir</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRestoreConfirmModalOpen(false)}
+                className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Güvenlik Uyarısı */}
+            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-1 text-xs text-amber-200">
+              <span className="font-bold block">⚠️ Dikkat: Mevcut veritabanı seçilen yedek ile değiştirilecektir!</span>
+              <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                İşlem öncesinde sistem otomatik olarak şu anki durumun <b>&quot;PRE_RESTORE&quot; (Güvenlik Yedeği)</b> kopyasını alacaktır. İstediğiniz an mevcut duruma da geri dönebilirsiniz.
+              </p>
+            </div>
+
+            {/* Geri Yüklenecek Yedek Özeti */}
+            <div className="p-3 rounded-xl bg-zinc-900 border border-white/5 space-y-2">
+              <span className="text-xs font-bold text-zinc-300 block">Hedef Yedek Özeti:</span>
+              {restoreTargetType === "file" && uploadedFileBackup && (
+                <div className="text-xs font-mono space-y-1">
+                  <div className="text-emerald-400">📁 Yüklenen Dosya: <b>{uploadedFileName}</b></div>
+                  <div className="text-zinc-300">
+                    👥 Kullanıcı: <b>{Object.keys(uploadedFileBackup.users || {}).length} Kişi</b>
+                  </div>
+                  <div className="text-zinc-400 text-[11px]">
+                    📦 Sipariş Kayıtları: <b>{Object.keys(uploadedFileBackup.activations || {}).length} Adet</b>
+                  </div>
+                </div>
+              )}
+
+              {restoreTargetType === "snapshot" && selectedBackupToRestore && (
+                <div className="text-xs font-mono space-y-1">
+                  <div className="text-emerald-400">🏷️ Yedek Etiketi: <b>{selectedBackupToRestore.label}</b></div>
+                  <div className="text-zinc-300">
+                    🕒 Tarih: <b>{new Date(selectedBackupToRestore.createdAt).toLocaleString("tr-TR")}</b>
+                  </div>
+                  <div className="text-zinc-400 text-[11px]">
+                    👥 {selectedBackupToRestore.stats?.usersCount} Kullanıcı • 💰 ₺{selectedBackupToRestore.stats?.totalBalance?.toFixed(2)} Toplam Bakiye • 📦 {selectedBackupToRestore.stats?.ordersCount} Sipariş
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PIN Kodu Güvenlik Girişi */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+                <span>Yönetici PIN Kodu Doğrulaması</span>
+                <span className="text-[10px] text-zinc-500 font-mono">Brute-force Korumalı</span>
+              </label>
+              <input
+                type="password"
+                value={backupSecurityPin}
+                onChange={(e) => setBackupSecurityPin(e.target.value)}
+                placeholder="Yönetici PIN Kodu (Örn: 2026)"
+                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+              />
+              <p className="text-[10px] text-zinc-500">
+                🔒 Güvenlik uyarısı: 5 defa hatalı PIN girilirse IP adresiniz sistem tarafından 15 dakika boyunca kilitlenir.
+              </p>
+            </div>
+
+            {/* Eylem Butonları */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => setRestoreConfirmModalOpen(false)}
+                disabled={restoringBackup}
+                className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={restoringBackup || !backupSecurityPin.trim()}
+                className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {restoringBackup ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Geri Yükleniyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Onayla ve Geri Yükle</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -143,6 +143,33 @@ export interface SystemSettings {
   botInfo?: any; // GrammY botInfo önbelleği (getMe çağrısını 0ms'ye düşürür)
   useBannerPhoto?: boolean; // false = Ultra Hızlı Metin Modu (~30ms), true = Fotoğraflı Kart
   bannerFileId?: string; // Telegram CDN görsel ID'si
+  backupSettings?: BackupSettings; // Otomatik yedekleme yapılandırması
+}
+
+export interface BackupStats {
+  usersCount: number;
+  activationsCount: number;
+  depositsCount: number;
+  ticketsCount: number;
+  couponsCount: number;
+  totalUserBalance: number;
+}
+
+export interface SystemBackup {
+  id: string; // e.g. "backup_1791546000000"
+  timestamp: string; // ISO string
+  type: "AUTO" | "MANUAL" | "PRE_RESTORE";
+  label?: string;
+  sizeBytes: number;
+  stats: BackupStats;
+  data?: any; // Snapshot data
+}
+
+export interface BackupSettings {
+  autoBackupEnabled: boolean;
+  autoBackupIntervalHours: number; // e.g. 1, 3, 6, 12, 24
+  maxBackupsCount: number; // e.g. 20
+  lastAutoBackupTime?: string;
 }
 
 export interface DepositRequest {

@@ -11,12 +11,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
-    const settings = db.getSettings();
     const [allCountries, allServices, tcmbRateInfo] = await Promise.all([
       heroSms.getCountries(),
       heroSms.getServicesList(),
       tcmb.getLiveRate(),
     ]);
+    const settings = db.getSettings();
 
     return NextResponse.json({
       success: true,

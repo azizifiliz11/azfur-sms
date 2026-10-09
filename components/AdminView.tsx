@@ -2400,8 +2400,12 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                 <span className="text-xl font-bold font-mono text-blue-400 block mt-0.5">
                   ₺{lastTcmbRate.toFixed(4)}
                 </span>
-                <span className="text-[10px] text-zinc-500 block mt-0.5">
-                  {lastTcmbFetchTime ? `Son çekilme: ${lastTcmbFetchTime}` : "Otomatik senkronize"}
+                <span className="text-[10px] text-zinc-500 block mt-0.5 truncate" title={lastTcmbFetchTime}>
+                  {lastTcmbFetchTime
+                    ? !isNaN(Date.parse(lastTcmbFetchTime))
+                      ? `Son güncelleme: ${new Date(lastTcmbFetchTime).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+                      : `Son güncelleme: ${lastTcmbFetchTime}`
+                    : "Otomatik senkronize"}
                 </span>
               </div>
 

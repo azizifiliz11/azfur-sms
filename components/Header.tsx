@@ -119,20 +119,20 @@ export function Header({
       : "0.00";
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/95 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2.5 backdrop-blur-2xl">
-      <div className="mx-auto max-w-md space-y-2">
-        <div className="flex min-h-9 items-center justify-between gap-2 px-0.5">
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/95 px-3 pt-[calc(env(safe-area-inset-top)+0.55rem)] pb-3 backdrop-blur-2xl">
+      <div className="mx-auto max-w-md space-y-2.5">
+        <div className="flex min-h-10 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-300 to-teal-500 text-[#062017] shadow-md shadow-emerald-950/30">
-              <Zap className="h-4 w-4 fill-current" />
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-300 via-teal-400 to-cyan-500 text-[#062017] shadow-lg shadow-emerald-950/40">
+              <Zap className="h-[18px] w-[18px] fill-current" />
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#080a10] bg-emerald-300" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[15px] font-black leading-none tracking-tight text-white">AzFur</span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-300">SMS Onay</span>
+                <span className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.07] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.13em] text-emerald-200">SMS ONAY</span>
               </div>
-              <span className="mt-1 block text-[9px] leading-none text-zinc-500">Hesabınız ve cüzdanınız</span>
+              <span className="mt-1 block text-[9px] leading-none text-zinc-500">Hızlı, güvenli ve canlı</span>
             </div>
           </div>
 
@@ -144,7 +144,7 @@ export function Header({
                   haptic.impact("light");
                   onOpenSupport();
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] px-2.5 text-[11px] font-semibold text-sky-200 transition-colors hover:bg-sky-300/[0.12] active:scale-95"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] px-2.5 text-[10px] font-semibold text-sky-200 transition-colors hover:bg-sky-300/[0.12] active:scale-95"
                 title="Canlı Destek & Ticket Aç"
                 aria-label="Canlı destek ve ticket aç"
               >
@@ -152,7 +152,6 @@ export function Header({
                 <span>Destek</span>
               </button>
             )}
-
             {isAdmin && onToggleAdminView && (
               <button
                 type="button"
@@ -160,7 +159,7 @@ export function Header({
                   haptic.impact("light");
                   onToggleAdminView();
                 }}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold transition-colors active:scale-95 ${
+                className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-bold transition-colors active:scale-95 ${
                   adminViewActive
                     ? "border-violet-300/35 bg-violet-300/15 text-violet-100"
                     : "border-violet-300/15 bg-violet-300/[0.06] text-violet-200 hover:bg-violet-300/[0.12]"
@@ -175,53 +174,49 @@ export function Header({
           </div>
         </div>
 
-        <section className="relative overflow-hidden rounded-[1.4rem] border border-emerald-300/[0.12] bg-[linear-gradient(135deg,rgba(18,28,34,0.98),rgba(13,16,24,0.98)_55%,rgba(15,20,30,0.98))] p-3.5 shadow-lg shadow-black/30">
-          <div className="pointer-events-none absolute -right-14 -top-20 h-40 w-40 rounded-full bg-emerald-400/[0.08] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 left-1/4 h-32 w-32 rounded-full bg-sky-400/[0.06] blur-3xl" />
+        <section className="relative isolate overflow-hidden rounded-[1.55rem] border border-emerald-300/15 bg-[linear-gradient(135deg,#10221f_0%,#10151d_52%,#111522_100%)] p-3.5 shadow-[0_16px_44px_rgba(0,0,0,0.28)]">
+          <div className="pointer-events-none absolute -right-12 -top-16 -z-10 h-40 w-40 rounded-full bg-emerald-400/[0.13] blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 -z-10 h-36 w-36 rounded-full bg-sky-400/[0.09] blur-3xl" />
 
-          <div className="relative flex min-w-0 items-center gap-3">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.055] text-sm font-black tracking-wide text-emerald-200 shadow-inner shadow-white/[0.04]">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="relative mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] border border-emerald-200/15 bg-gradient-to-br from-emerald-300/15 to-sky-300/[0.06] text-[15px] font-black tracking-wide text-emerald-100 shadow-inner shadow-white/[0.04]">
               {initials}
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#11191d] bg-emerald-400" />
+              <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-[3px] border-[#111a1c] bg-emerald-400" />
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <h2 className="max-w-full truncate text-[14px] font-bold leading-tight tracking-tight text-white">
+              <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]" />
+                Hesap paneli
+              </div>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                <h2 className="max-w-full truncate text-[17px] font-extrabold leading-tight tracking-tight text-white">
                   {greeting}
                 </h2>
                 {isAdmin && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-200">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/20 bg-emerald-300/[0.09] px-2 py-0.5 text-[8px] font-bold text-emerald-100">
                     <ShieldCheck className="h-2.5 w-2.5" /> Yönetici
                   </span>
                 )}
                 {user?.isVip && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold text-amber-200">
-                    <Sparkles className="h-2.5 w-2.5" />
-                    VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/20 bg-amber-300/[0.09] px-2 py-0.5 text-[8px] font-bold text-amber-100">
+                    <Sparkles className="h-2.5 w-2.5" /> VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
                   </span>
                 )}
               </div>
-
               <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
                 {showUsername && (
-                  <span className="max-w-[48%] truncate text-[10px] font-medium text-zinc-400">
-                    @{visibleUsername}
-                  </span>
+                  <span className="max-w-[55%] truncate text-[10px] font-medium text-zinc-300">@{visibleUsername}</span>
                 )}
                 <button
                   type="button"
                   onClick={handleCopyId}
-                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-white/[0.07] bg-black/20 px-1.5 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/15 hover:text-white"
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-black/20 px-2 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/15 hover:text-white"
                   title="Telegram ID'yi kopyala"
                   aria-label={`Telegram ID ${user?.telegramId || "0"}, kopyalamak için dokun`}
                 >
                   <span>ID {user?.telegramId || "0"}</span>
-                  {copiedId ? (
-                    <Check className="h-2.5 w-2.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-2.5 w-2.5 opacity-60" />
-                  )}
+                  {copiedId ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
                 </button>
               </div>
             </div>
@@ -230,7 +225,7 @@ export function Header({
               type="button"
               onClick={handleRefreshClick}
               disabled={refreshing}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.04] text-zinc-400 transition-colors hover:bg-white/[0.09] hover:text-white active:scale-95 disabled:cursor-wait"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.055] text-zinc-300 transition-colors hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:cursor-wait"
               title="Bakiyeyi ve verileri yenile"
               aria-label="Bakiyeyi ve verileri yenile"
             >
@@ -238,71 +233,62 @@ export function Header({
             </button>
           </div>
 
-          <div className="relative my-3 border-t border-white/[0.08]" />
-
-          <div className="relative flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={handleRefreshClick}
-              className="group min-w-0 flex-1 cursor-pointer text-left"
-              title="Bakiyeyi yenilemek için dokun"
-              aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
-            >
-              <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">
-                <Wallet className="h-3 w-3 text-emerald-300" /> Kullanılabilir bakiye
-              </span>
-              <span className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
-                <span className="font-mono text-[22px] font-bold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">
-                  ₺{balanceDisplay}
-                </span>
-                <span className="text-[9px] font-semibold tracking-wide text-emerald-300">TRY</span>
-              </span>
-            </button>
-
-            <div className="flex shrink-0 items-center gap-1.5">
-              {onOpenCoupon && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic.impact("light");
-                    onOpenCoupon();
-                  }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-2.5 text-[10px] font-bold text-amber-200 transition-colors hover:bg-amber-300/[0.14] active:scale-95"
-                  title="Kupon / Promosyon Kodu Kullan"
-                  aria-label="Kupon veya promosyon kodu kullan"
-                >
-                  <Ticket className="h-3.5 w-3.5" />
-                  <span>Kupon</span>
-                </button>
-              )}
-
+          <div className="mt-4 rounded-2xl border border-white/[0.07] bg-[#080c12]/70 p-3">
+            <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={handleDepositClick}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-300 px-3 text-[10px] font-extrabold text-[#062017] shadow-md shadow-emerald-950/30 transition-all hover:brightness-110 active:scale-95"
-                title="Bakiye yükle"
-                aria-label="Bakiye yükle"
+                onClick={handleRefreshClick}
+                className="group min-w-0 flex-1 cursor-pointer text-left"
+                title="Bakiyeyi yenilemek için dokun"
+                aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
               >
-                <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                <span>Yükle</span>
+                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">
+                  <Wallet className="h-3 w-3 text-emerald-300" /> Kullanılabilir bakiye
+                </span>
+                <span className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
+                  <span className="font-mono text-[25px] font-extrabold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">₺{balanceDisplay}</span>
+                  <span className="text-[9px] font-semibold tracking-wide text-emerald-300">TRY</span>
+                </span>
               </button>
+
+              <div className={`grid shrink-0 gap-1.5 ${onOpenCoupon ? "grid-cols-2" : "grid-cols-1"}`}>
+                {onOpenCoupon && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic.impact("light");
+                      onOpenCoupon();
+                    }}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-2.5 text-[10px] font-bold text-amber-200 transition-colors hover:bg-amber-300/[0.14] active:scale-95"
+                    title="Kupon / Promosyon Kodu Kullan"
+                    aria-label="Kupon veya promosyon kodu kullan"
+                  >
+                    <Ticket className="h-3.5 w-3.5" />
+                    <span>Kupon</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDepositClick}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-300 to-teal-300 px-3 text-[10px] font-extrabold text-[#062017] shadow-md shadow-emerald-950/30 transition-all hover:brightness-110 active:scale-95"
+                  title="Bakiye yükle"
+                  aria-label="Bakiye yükle"
+                >
+                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                  <span>Yükle</span>
+                </button>
+              </div>
             </div>
           </div>
-        </section>
 
-        <div className="flex items-center justify-center gap-2.5 px-1 text-[9px] font-medium text-zinc-400">
-          <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <Zap className="h-3 w-3 text-emerald-300" /> 5–30 sn teslim
-          </span>
-          <span className="h-1 w-1 rounded-full bg-zinc-700" />
-          <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <ShieldAlert className="h-3 w-3 text-sky-300" /> %100 iade
-          </span>
-          <span className="h-1 w-1 rounded-full bg-zinc-700" />
-          <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <Clock className="h-3 w-3 text-violet-300" /> 7/24 aktif
-          </span>
-        </div>
+          <div className="mt-3 flex items-center justify-between gap-1 px-0.5 text-[9px] font-semibold text-zinc-400">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><Zap className="h-3 w-3 text-emerald-300" /> 5–30 sn teslim</span>
+            <span className="h-1 w-1 rounded-full bg-zinc-700" />
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><ShieldAlert className="h-3 w-3 text-sky-300" /> %100 iade</span>
+            <span className="h-1 w-1 rounded-full bg-zinc-700" />
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3 text-violet-300" /> 7/24 aktif</span>
+          </div>
+        </section>
       </div>
     </header>
   );

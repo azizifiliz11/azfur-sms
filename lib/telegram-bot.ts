@@ -342,6 +342,23 @@ export function getTelegramBot(): Bot | null {
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
 
+      if (ctx.chat?.type === "private") {
+        const menuButton = {
+          type: "web_app" as const,
+          text: "AzFur",
+          web_app: { url: appUrl },
+        };
+
+        try {
+          await Promise.all([
+            ctx.api.setChatMenuButton({ menu_button: menuButton }),
+            ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: menuButton }),
+          ]);
+        } catch (error) {
+          console.warn("Telegram Mini App menü bağlantısı yenilenemedi:", error);
+        }
+      }
+
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);

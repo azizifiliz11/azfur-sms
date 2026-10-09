@@ -1,7 +1,18 @@
 function resolveAppUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (envUrl && envUrl.startsWith("https://")) {
-    return envUrl.replace(/\/$/, "");
+    const normalizedUrl = envUrl.replace(/\/$/, "");
+    const hostname = new URL(normalizedUrl).hostname.toLowerCase();
+    const temporaryHost =
+      hostname.endsWith(".loca.lt") ||
+      hostname.endsWith(".trycloudflare.com") ||
+      hostname.endsWith(".ngrok-free.app") ||
+      hostname.endsWith(".ngrok.io");
+
+    // A public bot must never send users to a developer tunnel that can go offline.
+    if (!(process.env.NODE_ENV === "production" && temporaryHost)) {
+      return normalizedUrl;
+    }
   }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;

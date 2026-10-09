@@ -37,7 +37,7 @@ function HomeContent() {
   // Telegram ve mobil WebView önbelleğini zorunlu yenileme (Eski tasarımı anında ezer)
   useEffect(() => {
     try {
-      const CURRENT_APP_BUILD = "20261009_v9";
+      const CURRENT_APP_BUILD = "20261009_v10";
       const savedBuild = localStorage.getItem("azfur_app_build");
       const urlParams = new URLSearchParams(window.location.search);
       const urlBuild = urlParams.get("v");

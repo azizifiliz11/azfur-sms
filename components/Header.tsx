@@ -74,11 +74,12 @@ export function Header({
     }
   };
 
-  const hasRealFirstName =
+  const hasRealFirstName = Boolean(
     user?.firstName &&
-    user.firstName !== "Kullanıcı" &&
-    user.firstName !== "Misafir" &&
-    user.firstName !== "Telegram Kullanıcısı";
+      user.firstName !== "Kullanıcı" &&
+      user.firstName !== "Misafir" &&
+      user.firstName !== "Telegram Kullanıcısı"
+  );
 
   const cleanUsername = user?.username
     ? user.username.replace(/^@/, "").trim()
@@ -98,40 +99,40 @@ export function Header({
         ? `Kullanıcı #${user.telegramId}`
         : "Misafir";
 
+  const greeting = hasRealFirstName && user?.firstName
+    ? `Merhaba, ${user.firstName}`
+    : displayName;
+
   const initials = user?.firstName && user?.lastName
     ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-    : hasRealFirstName
+    : hasRealFirstName && user?.firstName
       ? user.firstName.slice(0, 2).toUpperCase()
       : visibleUsername
         ? visibleUsername.slice(0, 2).toUpperCase()
         : "AZ";
+
+  const showUsername = visibleUsername && displayName !== `@${visibleUsername}`;
 
   const balanceDisplay =
     user?.balance !== undefined && !isNaN(Number(user.balance))
       ? Number(user.balance).toFixed(2)
       : "0.00";
 
-  const showUsernameBelowName =
-    visibleUsername && displayName !== `@${visibleUsername}`;
-
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/90 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2.5 shadow-xl shadow-black/40 backdrop-blur-2xl">
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/95 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2.5 backdrop-blur-2xl">
       <div className="mx-auto max-w-md space-y-2">
-        {/* Brand and quick actions */}
         <div className="flex min-h-9 items-center justify-between gap-2 px-0.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.09] text-emerald-300 shadow-inner shadow-emerald-300/[0.06]">
-              <Zap className="h-4 w-4 fill-emerald-300/15" />
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#080a10] bg-emerald-400" />
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-300 to-teal-500 text-[#062017] shadow-md shadow-emerald-950/30">
+              <Zap className="h-4 w-4 fill-current" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#080a10] bg-emerald-300" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[15px] font-black leading-none tracking-tight text-white">AzFur</span>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-300">
-                  SMS Onay
-                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-300">SMS Onay</span>
               </div>
-              <span className="mt-1 block text-[9px] font-medium leading-none text-zinc-500">Güvenli numara kiralama</span>
+              <span className="mt-1 block text-[9px] leading-none text-zinc-500">Hesabınız ve cüzdanınız</span>
             </div>
           </div>
 
@@ -143,7 +144,7 @@ export function Header({
                   haptic.impact("light");
                   onOpenSupport();
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-400/15 bg-sky-400/[0.06] px-2.5 text-[11px] font-semibold text-sky-300 transition-colors hover:bg-sky-400/[0.12] active:scale-95"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] px-2.5 text-[11px] font-semibold text-sky-200 transition-colors hover:bg-sky-300/[0.12] active:scale-95"
                 title="Canlı Destek & Ticket Aç"
                 aria-label="Canlı destek ve ticket aç"
               >
@@ -161,38 +162,37 @@ export function Header({
                 }}
                 className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold transition-colors active:scale-95 ${
                   adminViewActive
-                    ? "border-violet-400/35 bg-violet-400/15 text-violet-200"
-                    : "border-violet-400/15 bg-violet-400/[0.06] text-violet-300 hover:bg-violet-400/[0.12]"
+                    ? "border-violet-300/35 bg-violet-300/15 text-violet-100"
+                    : "border-violet-300/15 bg-violet-300/[0.06] text-violet-200 hover:bg-violet-300/[0.12]"
                 }`}
                 title="Yönetici Paneli"
                 aria-label={adminViewActive ? "Uygulamaya dön" : "Yönetici panelini aç"}
               >
                 <ShieldCheck className="h-3.5 w-3.5" />
-                <span>{adminViewActive ? "Uygulama" : "Admin"}</span>
+                <span>{adminViewActive ? "Uygulama" : "Panel"}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Account and balance */}
-        <section className="relative overflow-hidden rounded-[1.35rem] border border-white/[0.09] bg-gradient-to-br from-[#151b25] via-[#10141d] to-[#0d1017] p-3 shadow-lg shadow-black/25">
-          <div className="pointer-events-none absolute -right-14 -top-16 h-36 w-36 rounded-full bg-emerald-400/[0.09] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-12 h-32 w-32 rounded-full bg-sky-400/[0.07] blur-3xl" />
+        <section className="relative overflow-hidden rounded-[1.4rem] border border-emerald-300/[0.12] bg-[linear-gradient(135deg,rgba(18,28,34,0.98),rgba(13,16,24,0.98)_55%,rgba(15,20,30,0.98))] p-3.5 shadow-lg shadow-black/30">
+          <div className="pointer-events-none absolute -right-14 -top-20 h-40 w-40 rounded-full bg-emerald-400/[0.08] blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 left-1/4 h-32 w-32 rounded-full bg-sky-400/[0.06] blur-3xl" />
 
-          <div className="relative flex min-w-0 items-center gap-2.5">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-emerald-300/25 bg-gradient-to-br from-emerald-300/20 to-sky-400/10 text-[13px] font-black text-emerald-200 shadow-md shadow-emerald-950/20">
+          <div className="relative flex min-w-0 items-center gap-3">
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.055] text-sm font-black tracking-wide text-emerald-200 shadow-inner shadow-white/[0.04]">
               {initials}
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#11151e] bg-emerald-400" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#11191d] bg-emerald-400" />
             </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <h2 className="max-w-full truncate text-[13px] font-bold leading-tight tracking-tight text-white">
-                  {displayName}
+                <h2 className="max-w-full truncate text-[14px] font-bold leading-tight tracking-tight text-white">
+                  {greeting}
                 </h2>
                 {isAdmin && (
-                  <span className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-200">
-                    Admin
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-200">
+                    <ShieldCheck className="h-2.5 w-2.5" /> Yönetici
                   </span>
                 )}
                 {user?.isVip && (
@@ -203,14 +203,16 @@ export function Header({
                 )}
               </div>
 
-              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-400">
-                {showUsernameBelowName && (
-                  <span className="max-w-[42%] truncate font-medium text-zinc-400">@{visibleUsername}</span>
+              <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+                {showUsername && (
+                  <span className="max-w-[48%] truncate text-[10px] font-medium text-zinc-400">
+                    @{visibleUsername}
+                  </span>
                 )}
                 <button
                   type="button"
                   onClick={handleCopyId}
-                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-1.5 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/10 hover:text-white"
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-white/[0.07] bg-black/20 px-1.5 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/15 hover:text-white"
                   title="Telegram ID'yi kopyala"
                   aria-label={`Telegram ID ${user?.telegramId || "0"}, kopyalamak için dokun`}
                 >
@@ -228,7 +230,7 @@ export function Header({
               type="button"
               onClick={handleRefreshClick}
               disabled={refreshing}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-zinc-400 transition-colors hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:cursor-wait"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.04] text-zinc-400 transition-colors hover:bg-white/[0.09] hover:text-white active:scale-95 disabled:cursor-wait"
               title="Bakiyeyi ve verileri yenile"
               aria-label="Bakiyeyi ve verileri yenile"
             >
@@ -236,7 +238,7 @@ export function Header({
             </button>
           </div>
 
-          <div className="relative my-2.5 border-t border-white/[0.07]" />
+          <div className="relative my-3 border-t border-white/[0.08]" />
 
           <div className="relative flex items-center justify-between gap-2">
             <button
@@ -246,12 +248,11 @@ export function Header({
               title="Bakiyeyi yenilemek için dokun"
               aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
             >
-              <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-400">
-                <Wallet className="h-3 w-3 text-emerald-300" />
-                Bakiye
+              <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">
+                <Wallet className="h-3 w-3 text-emerald-300" /> Kullanılabilir bakiye
               </span>
-              <span className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap">
-                <span className="font-mono text-[21px] font-bold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">
+              <span className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="font-mono text-[22px] font-bold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">
                   ₺{balanceDisplay}
                 </span>
                 <span className="text-[9px] font-semibold tracking-wide text-emerald-300">TRY</span>
@@ -289,20 +290,18 @@ export function Header({
           </div>
         </section>
 
-        {/* Compact service assurances */}
-        <div className="grid grid-cols-3 gap-1 px-0.5 text-center">
-          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
-            <Zap className="h-3 w-3 shrink-0 text-emerald-300" />
-            <span className="truncate text-[9px] font-semibold text-zinc-300">5–30 sn teslim</span>
-          </div>
-          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
-            <ShieldAlert className="h-3 w-3 shrink-0 text-sky-300" />
-            <span className="truncate text-[9px] font-semibold text-zinc-300">%100 iade</span>
-          </div>
-          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
-            <Clock className="h-3 w-3 shrink-0 text-violet-300" />
-            <span className="truncate text-[9px] font-semibold text-zinc-300">7/24 aktif</span>
-          </div>
+        <div className="flex items-center justify-center gap-2.5 px-1 text-[9px] font-medium text-zinc-400">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <Zap className="h-3 w-3 text-emerald-300" /> 5–30 sn teslim
+          </span>
+          <span className="h-1 w-1 rounded-full bg-zinc-700" />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <ShieldAlert className="h-3 w-3 text-sky-300" /> %100 iade
+          </span>
+          <span className="h-1 w-1 rounded-full bg-zinc-700" />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <Clock className="h-3 w-3 text-violet-300" /> 7/24 aktif
+          </span>
         </div>
       </div>
     </header>

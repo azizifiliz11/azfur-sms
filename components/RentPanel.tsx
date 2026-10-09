@@ -20,6 +20,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { Country, ServiceItem, CalculatedCatalogItem } from "@/lib/types";
+import { getCountryMeta } from "@/lib/country-flags";
 import { haptic } from "@/lib/haptic";
 import { Card } from "./tremor/Card";
 import { Badge } from "./tremor/Badge";
@@ -39,6 +40,55 @@ interface RentPanelProps {
 }
 
 type SortMode = "popular" | "price_asc" | "price_desc" | "stock" | "quality";
+
+function CountryFlag({
+  country,
+  size = "md",
+}: {
+  country: Country;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [failedCountryCode, setFailedCountryCode] = useState("");
+  const flag = country.flag || getCountryMeta(country.id, country.eng).flag;
+  const regionalIndicators = Array.from(flag)
+    .map((character) => character.codePointAt(0) || 0)
+    .filter((codePoint) => codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff);
+  const countryCode = regionalIndicators.length === 2
+    ? regionalIndicators
+        .map((codePoint) => String.fromCharCode(codePoint - 0x1f1e6 + 65))
+        .join("")
+        .toLowerCase()
+    : "";
+
+  const sizeClasses = {
+    sm: "h-4 w-5 text-base",
+    md: "h-[18px] w-6 text-lg",
+    lg: "h-6 w-8 text-xl",
+  }[size];
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center ${sizeClasses}`}
+      title={country.nameTr || country.eng}
+      aria-hidden="true"
+    >
+      {countryCode && failedCountryCode !== countryCode ? (
+        <img
+          src={`https://flagcdn.com/w40/${countryCode}.png`}
+          width={40}
+          height={30}
+          loading="lazy"
+          decoding="async"
+          alt=""
+          className="h-full w-full rounded-[3px] object-cover shadow-sm"
+          onError={() => setFailedCountryCode(countryCode)}
+        />
+      ) : (
+        <span className="leading-none">{flag}</span>
+      )}
+    </span>
+  );
+}
 
 export function RentPanel({
   countries,
@@ -380,7 +430,7 @@ export function RentPanel({
                     : "bg-zinc-900 border border-white/5 text-zinc-300 hover:border-white/20"
                 }`}
               >
-                <span className="text-sm">{c.flag || "🌐"}</span>
+                <CountryFlag country={c} size="sm" />
                 <span>{c.nameTr || c.eng}</span>
                 {isFav && (
                   <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />
@@ -671,7 +721,7 @@ export function RentPanel({
         <Card className="p-4 bg-gradient-to-b from-[#131622] to-[#0c0e15] border-emerald-500/30 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-2xl shrink-0">{selectedCountry.flag || "🌐"}</span>
+              <CountryFlag country={selectedCountry} size="lg" />
               <div className="min-w-0">
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
                   <span>{selectedItem?.serviceName || selectedServiceCode.toUpperCase()}</span>
@@ -859,7 +909,7 @@ export function RentPanel({
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-xl">{c.flag || "🌐"}</span>
+                        <CountryFlag country={c} size="md" />
                         <span className="text-xs font-semibold">{c.nameTr || c.eng}</span>
                       </div>
 
@@ -954,7 +1004,7 @@ export function RentPanel({
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Hedef Ülke:</span>
                 <span className="font-semibold text-white flex items-center gap-1.5">
-                  <span>{selectedCountry.flag || "🌐"}</span>
+                  <CountryFlag country={selectedCountry} size="md" />
                   <span>{selectedCountry.nameTr || selectedCountry.eng}</span>
                 </span>
               </div>

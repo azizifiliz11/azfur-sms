@@ -38,13 +38,14 @@ const POPULAR_COUNTRIES = [
 
 function getAppUrls() {
   const rawUrl = (CONFIG.APP_URL || "").trim();
-  const appUrl = rawUrl.startsWith("https://")
+  const baseUrl = rawUrl.startsWith("https://")
     ? rawUrl.replace(/\/$/, "")
     : "https://azfur-sms.vercel.app";
+  const vTag = "v8";
   return {
-    appUrl,
-    adminUrl: `${appUrl}/admin`,
-    bannerUrl: `${appUrl}/azfur-banner.jpg`,
+    appUrl: `${baseUrl}?v=${vTag}`,
+    adminUrl: `${baseUrl}/admin?v=${vTag}`,
+    bannerUrl: `${baseUrl}/azfur-banner.jpg`,
   };
 }
 

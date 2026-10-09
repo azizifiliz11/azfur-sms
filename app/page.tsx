@@ -34,6 +34,26 @@ function HomeContent() {
   const catalogCacheRef = React.useRef<Record<number, CalculatedCatalogItem[]>>({});
   const hasInitialized = React.useRef<boolean>(false);
 
+  // Telegram ve mobil WebView önbelleğini zorunlu yenileme (Eski tasarımı anında ezer)
+  useEffect(() => {
+    try {
+      const CURRENT_APP_BUILD = "20261009_v8";
+      const savedBuild = localStorage.getItem("azfur_app_build");
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlBuild = urlParams.get("v");
+
+      if (savedBuild !== CURRENT_APP_BUILD || !urlBuild) {
+        localStorage.setItem("azfur_app_build", CURRENT_APP_BUILD);
+        urlParams.set("v", CURRENT_APP_BUILD);
+        urlParams.set("t", String(Date.now()));
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        if (typeof window !== "undefined" && window.location.replace) {
+          window.location.replace(newUrl);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
   // 1. Kullanıcıyı getir veya kaydet
   const initUser = useCallback(async () => {
     if (!tgUser) return;
@@ -316,11 +336,30 @@ function HomeContent() {
 
   const isAdmin = currentUser?.role === "admin";
 
+  const displayUser = currentUser
+    ? {
+        ...currentUser,
+        firstName: currentUser.firstName || tgUser?.first_name || "Kullanıcı",
+        lastName: currentUser.lastName || tgUser?.last_name || "",
+        username: currentUser.username || tgUser?.username || "",
+        telegramId: currentUser.telegramId || tgUser?.id || 0,
+      }
+    : tgUser
+    ? {
+        firstName: tgUser.first_name || "Kullanıcı",
+        lastName: tgUser.last_name || "",
+        username: tgUser.username || "",
+        telegramId: tgUser.id,
+        balance: 0,
+        role: "user",
+      }
+    : null;
+
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0f] text-zinc-100">
       {/* Top Header */}
       <Header
-        user={currentUser}
+        user={displayUser}
         onOpenDeposit={() => setDepositModalOpen(true)}
         onOpenCoupon={() => setCouponModalOpen(true)}
         onOpenSupport={() => setSupportModalOpen(true)}

@@ -11,6 +11,7 @@ import { SupportModal } from "@/components/SupportModal";
 import { CouponModal } from "@/components/CouponModal";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
+import { APP_BUILD_VERSION } from "@/lib/app-version";
 import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert } from "lucide-react";
 
 function HomeContent() {
@@ -37,14 +38,13 @@ function HomeContent() {
   // Telegram ve mobil WebView önbelleğini zorunlu yenileme (Eski tasarımı anında ezer)
   useEffect(() => {
     try {
-      const CURRENT_APP_BUILD = "20261009_v10";
       const savedBuild = localStorage.getItem("azfur_app_build");
       const urlParams = new URLSearchParams(window.location.search);
       const urlBuild = urlParams.get("v");
 
-      if (savedBuild !== CURRENT_APP_BUILD || !urlBuild) {
-        localStorage.setItem("azfur_app_build", CURRENT_APP_BUILD);
-        urlParams.set("v", CURRENT_APP_BUILD);
+      if (savedBuild !== APP_BUILD_VERSION || urlBuild !== APP_BUILD_VERSION) {
+        localStorage.setItem("azfur_app_build", APP_BUILD_VERSION);
+        urlParams.set("v", APP_BUILD_VERSION);
         urlParams.set("t", String(Date.now()));
         const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
         if (typeof window !== "undefined" && window.location.replace) {

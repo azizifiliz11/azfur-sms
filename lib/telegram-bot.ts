@@ -2,6 +2,7 @@ import { Bot, InlineKeyboard, InputFile } from "grammy";
 import fs from "fs";
 import path from "path";
 import { CONFIG } from "./config";
+import { APP_BUILD_VERSION } from "./app-version";
 import { db } from "./db";
 import { heroSms } from "./hero-sms";
 import { pricingEngine } from "./pricing";
@@ -41,7 +42,7 @@ function getAppUrls() {
   const baseUrl = rawUrl.startsWith("https://")
     ? rawUrl.replace(/\/$/, "")
     : "https://azfur-sms.vercel.app";
-  const vTag = "v8";
+  const vTag = APP_BUILD_VERSION;
   return {
     appUrl: `${baseUrl}?v=${vTag}`,
     adminUrl: `${baseUrl}/admin?v=${vTag}`,
@@ -2345,4 +2346,3 @@ export async function sendTelegramDirectMessage(
     return { ok: false, error: err.message || "Bağlantı hatası" };
   }
 }
-

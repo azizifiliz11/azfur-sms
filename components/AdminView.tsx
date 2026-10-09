@@ -524,11 +524,30 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Canlı Veritabanını JSON Olarak İndir
   const handleDownloadCurrentDatabase = async () => {
     haptic.impact("light");
+    const pin = "2026";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const downloadUrl = `${origin}/api/admin/backups?action=download_current&pin=${pin}`;
+
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+
+    // 1. Telegram WebApp içindeyse blob indirme WebView tarafından engellenir; openLink ile aç
+    if (tg?.openLink) {
+      try {
+        tg.openLink(downloadUrl);
+        setToastMsg("📥 Canlı veritabanı indirme bağlantısı tarayıcınızda açıldı!");
+        setTimeout(() => setToastMsg(null), 3500);
+        return;
+      } catch (err) {
+        console.warn("tg.openLink failed, falling back to blob:", err);
+      }
+    }
+
+    // 2. Normal tarayıcı için: Fetch ile Blob olarak indir
     try {
       const res = await adminFetch("/api/admin/backups?action=download_current");
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "İndirilemedi");
+        window.location.href = downloadUrl;
+        return;
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -538,27 +557,57 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       a.download = `azfur_veritabani_canli_${datePart}.json`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      // DİKKAT: revokeObjectURL hemen çağrılırsa Chromium/Safari indirmeyi iptal eder! 60 saniye sonra serbest bırak
+      setTimeout(() => {
+        try {
+          window.URL.revokeObjectURL(url);
+          if (document.body.contains(a)) document.body.removeChild(a);
+        } catch {}
+      }, 60000);
+
       haptic.success();
       setToastMsg("📥 Canlı veritabanı JSON yedeği başarıyla indirildi!");
       setTimeout(() => setToastMsg(null), 3500);
-    } catch (e: any) {
-      haptic.error();
-      alert("Canlı veritabanı indirilemedi: " + (e?.message || ""));
+    } catch {
+      try {
+        window.location.href = downloadUrl;
+      } catch (e: any) {
+        haptic.error();
+        alert("Canlı veritabanı indirilemedi: " + (e?.message || ""));
+      }
     }
   };
 
   // Kayıtlı Snapshot'ı JSON Olarak İndir
   const handleDownloadSnapshot = async (backupId: string, rawDate?: string) => {
     haptic.impact("light");
+    const pin = "2026";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const downloadUrl = `${origin}/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}&pin=${pin}`;
+
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+
+    // 1. Telegram WebApp içindeyse blob indirme WebView tarafından engellenir; openLink ile aç
+    if (tg?.openLink) {
+      try {
+        tg.openLink(downloadUrl);
+        setToastMsg("📥 Yedek indirme bağlantısı tarayıcınızda açıldı!");
+        setTimeout(() => setToastMsg(null), 3500);
+        return;
+      } catch (err) {
+        console.warn("tg.openLink failed, falling back to blob:", err);
+      }
+    }
+
+    // 2. Normal tarayıcı için: Fetch ile Blob olarak indir
     try {
       const res = await adminFetch(
         `/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}`
       );
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "İndirilemedi");
+        window.location.href = downloadUrl;
+        return;
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -576,14 +625,25 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       a.download = `azfur_yedek_${datePart}.json`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      // DİKKAT: revokeObjectURL hemen çağrılırsa Chromium/Safari indirmeyi iptal eder! 60 saniye sonra serbest bırak
+      setTimeout(() => {
+        try {
+          window.URL.revokeObjectURL(url);
+          if (document.body.contains(a)) document.body.removeChild(a);
+        } catch {}
+      }, 60000);
+
       haptic.success();
       setToastMsg("📥 Yedek dosyası başarıyla indirildi!");
       setTimeout(() => setToastMsg(null), 3500);
-    } catch (e: any) {
-      haptic.error();
-      alert("Yedek dosyası indirilemedi: " + (e?.message || ""));
+    } catch {
+      try {
+        window.location.href = downloadUrl;
+      } catch (e: any) {
+        haptic.error();
+        alert("Yedek dosyası indirilemedi: " + (e?.message || ""));
+      }
     }
   };
 
@@ -2784,29 +2844,17 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   Apirone, OxaPay gibi KYC veya şirket onayı istemez. Kullanıcılar ödeme yaptığında blokzincir onayından sonra para <b>doğrudan kişisel TRC20/TRX cüzdanınıza</b> aktarılır ve bakiyeleri anında yüklenir.
                 </p>
 
-                {/* 1-Tıkla Hesap Oluştur / Mevcut Hesap Girdileri */}
+                {/* Kişisel Apirone Hesap Girdileri */}
                 <div className="space-y-2.5 bg-black/40 p-3 rounded-xl border border-white/5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">Apirone Hesap Bilgileri</span>
-                    <button
-                      type="button"
-                      onClick={handleCreateApironeAccount}
-                      disabled={creatingApirone}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] flex items-center gap-1 transition-all disabled:opacity-50"
-                    >
-                      {creatingApirone ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>Oluşturuluyor...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3 h-3" />
-                          <span>⚡ 1-Tıkla Yeni Hesap Oluştur</span>
-                        </>
-                      )}
-                    </button>
+                    <span className="text-[11px] font-bold text-zinc-200">Kişisel Apirone Hesap Bilgileri</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+                      Özel Hesap • Otomatik Oluşturulmaz
+                    </span>
                   </div>
+                  <p className="text-[10.5px] text-zinc-400 leading-relaxed">
+                    Kendi Apirone Account ID ve Transfer Key bilgilerinizi aşağıya girin. Sistem yalnızca sizin girdiğiniz bu hesabı kullanır; arka planda asla otomatik yeni hesap üretilmez.
+                  </p>
 
                   <div className="space-y-1">
                     <label className="text-[10px] font-semibold text-zinc-400">Apirone Account ID</label>

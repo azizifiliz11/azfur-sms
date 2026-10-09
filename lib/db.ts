@@ -33,6 +33,14 @@ const DB_PATH = process.env.VERCEL
   ? path.join("/tmp", "db.json")
   : SEED_DB_PATH;
 
+const DEFAULT_BACKUP_SETTINGS: BackupSettings = {
+  autoBackupEnabled: true,
+  autoBackupIntervalHours: 6,
+  maxBackupsCount: 20,
+  lastAutoBackupTime: new Date().toISOString(),
+  deletedBackupIds: [],
+};
+
 const DEFAULT_SETTINGS: SystemSettings = {
   globalMarginPercent: 35, // %35 kar
   globalFixedFee: 5.0, // +5 TL sabit
@@ -68,12 +76,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   supportTelegramUsernames: [],
   customStickerFileId: "",
   heroSmsApiKey: "",
-  backupSettings: {
-    autoBackupEnabled: true,
-    autoBackupIntervalHours: 6,
-    maxBackupsCount: 20,
-    lastAutoBackupTime: new Date().toISOString(),
-  },
+  backupSettings: DEFAULT_BACKUP_SETTINGS,
   vipSettings: {
     defaultDiscountPercent: 15,
     autoVipOnDepositAmount: 500,
@@ -220,6 +223,13 @@ function loadDb(): DatabaseSchema {
       }
     }
 
+    // Silinen yedekler asla geri gelmesin
+    const deletedBackupList = data.settings?.backupSettings?.deletedBackupIds;
+    if (Array.isArray(deletedBackupList) && deletedBackupList.length > 0 && Array.isArray(data.backups)) {
+      const deletedBackupSet = new Set(deletedBackupList);
+      data.backups = data.backups.filter((b: any) => !deletedBackupSet.has(b.id));
+    }
+
     memoryDb = data;
     return data;
   } catch (err) {
@@ -295,15 +305,36 @@ export const db = {
             }
           }
 
-          // Backups koruması: Bellekteki yeni yedekleri bulutun eski verisiyle ASLA ezme!
+          // Silinen yedeklerin kara listesini yükle ve her iki taraftan da kesinlikle temizle
+          const deletedBackupIds = new Set([
+            ...(cloudData.settings?.backupSettings?.deletedBackupIds || []),
+            ...(memoryDb?.settings?.backupSettings?.deletedBackupIds || []),
+          ]);
+
+          if (deletedBackupIds.size > 0) {
+            if (!cloudData.settings.backupSettings) {
+              cloudData.settings.backupSettings = { ...DEFAULT_BACKUP_SETTINGS };
+            }
+            cloudData.settings.backupSettings.deletedBackupIds = Array.from(deletedBackupIds);
+
+            if (Array.isArray(cloudData.backups)) {
+              cloudData.backups = cloudData.backups.filter((b) => !deletedBackupIds.has(b.id));
+            }
+            if (Array.isArray(memoryDb?.backups)) {
+              memoryDb.backups = memoryDb.backups.filter((b) => !deletedBackupIds.has(b.id));
+            }
+          }
+
+          // Backups koruması: Yalnızca SİLİNMEMİŞ yeni yedekleri buluta ekle
           if (Array.isArray(memoryDb?.backups) && memoryDb.backups.length > 0) {
+            const validMemoryBackups = memoryDb.backups.filter((b) => !deletedBackupIds.has(b.id));
             if (!Array.isArray(cloudData.backups) || cloudData.backups.length === 0) {
-              cloudData.backups = memoryDb.backups;
+              cloudData.backups = validMemoryBackups;
               saveToCloudKv(cloudData).catch(() => {});
             } else {
               const cloudIds = new Set(cloudData.backups.map((b) => b.id));
               let hasNew = false;
-              for (const mb of memoryDb.backups) {
+              for (const mb of validMemoryBackups) {
                 if (!cloudIds.has(mb.id)) {
                   cloudData.backups.unshift(mb);
                   hasNew = true;
@@ -1341,16 +1372,46 @@ export const db = {
 
   async deleteBackup(backupId: string): Promise<boolean> {
     const data = loadDb();
+    if (!data.settings.backupSettings) {
+      data.settings.backupSettings = { ...DEFAULT_BACKUP_SETTINGS };
+    }
+    const bs = data.settings.backupSettings;
+    if (!Array.isArray(bs.deletedBackupIds)) {
+      bs.deletedBackupIds = [];
+    }
+    if (!bs.deletedBackupIds.includes(backupId)) {
+      bs.deletedBackupIds.push(backupId);
+    }
+    // Maksimum 500 adet tut
+    if (bs.deletedBackupIds.length > 500) {
+      bs.deletedBackupIds = bs.deletedBackupIds.slice(-500);
+    }
+
     if (!data.backups || !Array.isArray(data.backups)) {
-      return false;
+      data.backups = [];
     }
-    const initialLen = data.backups.length;
     data.backups = data.backups.filter((b) => b.id !== backupId);
-    if (data.backups.length !== initialLen) {
-      await saveDb(data);
-      return true;
+
+    if (memoryDb) {
+      if (Array.isArray(memoryDb.backups)) {
+        memoryDb.backups = memoryDb.backups.filter((b) => b.id !== backupId);
+      }
+      if (memoryDb.settings?.backupSettings) {
+        memoryDb.settings.backupSettings.deletedBackupIds = bs.deletedBackupIds;
+      }
     }
-    return false;
+
+    await saveDb(data, true);
+
+    // Silme işlemini logla
+    this.addLog({
+      category: "SYSTEM",
+      level: "WARN",
+      action: "BACKUP_DELETED",
+      details: `Sistem yedeği silindi (ID: ${backupId}).`,
+    }).catch(() => {});
+
+    return true;
   },
 
   async checkAndRunAutoBackup(): Promise<SystemBackup | null> {

@@ -41,18 +41,28 @@ export function getApironeConfig(): { account: string; transferKey: string } {
     const account = (
       settings.cryptoSettings?.apironeAccount ||
       process.env.APIRONE_ACCOUNT ||
+      process.env.APIRONE_ACCOUNT_ID ||
       ""
     ).trim();
     const transferKey = (
       settings.cryptoSettings?.apironeTransferKey ||
       process.env.APIRONE_TRANSFER_KEY ||
+      process.env.APIRONE_KEY ||
       ""
     ).trim();
     return { account, transferKey };
   } catch {
     return {
-      account: (process.env.APIRONE_ACCOUNT || "").trim(),
-      transferKey: (process.env.APIRONE_TRANSFER_KEY || "").trim(),
+      account: (
+        process.env.APIRONE_ACCOUNT ||
+        process.env.APIRONE_ACCOUNT_ID ||
+        ""
+      ).trim(),
+      transferKey: (
+        process.env.APIRONE_TRANSFER_KEY ||
+        process.env.APIRONE_KEY ||
+        ""
+      ).trim(),
     };
   }
 }
@@ -254,19 +264,15 @@ export async function createApironeInvoice(params: {
   orderId?: string;
 }): Promise<ApironeInvoiceResult> {
   const config = getApironeConfig();
-  let account = config.account;
+  const account = config.account;
 
-  // Eğer sistemde henüz bir Apirone hesabı yoksa, tek seferlik anında otomatik oluştur!
+  // Kullanıcının kendi Account ID'si kullanılmalı, asla arkada otomatik hesap üretilmemeli
   if (!account) {
-    const autoAcc = await createApironeAccount();
-    if (autoAcc.success && autoAcc.account) {
-      account = autoAcc.account;
-    } else {
-      return {
-        success: false,
-        error: "Apirone hesabı henüz yapılandırılmadı ve otomatik oluşturulamadı.",
-      };
-    }
+    return {
+      success: false,
+      error:
+        "Apirone Account ID henüz tanımlanmamış. Lütfen Yönetici Paneli -> Kripto & Ayarlar bölümünden kendi Apirone Account ID ve Transfer Key bilginizi girip kaydedin.",
+    };
   }
 
   try {

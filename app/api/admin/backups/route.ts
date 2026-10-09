@@ -35,19 +35,28 @@ export async function GET(req: NextRequest) {
     // 1. Belirli bir yedeği JSON dosyası olarak indir
     if (action === "download" && backupId) {
       const backup = db.getBackupById(backupId);
-      if (!backup || !backup.data) {
+      if (!backup) {
         return NextResponse.json({ success: false, error: "Yedek bulunamadı" }, { status: 404 });
       }
+
+      const downloadPayload = backup.data || {
+        ...db.getFullDatabaseSnapshot(),
+        id: backup.id,
+        timestamp: backup.timestamp,
+        label: backup.label,
+        stats: backup.stats,
+      };
 
       const rawDate = backup.createdAt || backup.timestamp || new Date().toISOString();
       const cleanDate = rawDate.replace(/[:.]/g, "-");
       const filename = `azfur_backup_${backup.id}_${cleanDate}.json`;
 
-      return new NextResponse(JSON.stringify(backup.data, null, 2), {
+      return new NextResponse(JSON.stringify(downloadPayload, null, 2), {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       });
     }

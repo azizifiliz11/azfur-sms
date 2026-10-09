@@ -1798,6 +1798,7 @@ export function getTelegramBot(): Bot | null {
 
           kb.text(`📥 ${idx + 1}. İndir`, `adm_bkp_dl:${b.id}`)
             .text(`🔄 Geri Yükle`, `adm_bkp_rst_ask:${b.id}`)
+            .text(`🗑️ Sil`, `adm_bkp_del:${b.id}`)
             .row();
         });
 
@@ -1812,7 +1813,7 @@ export function getTelegramBot(): Bot | null {
         if (!isAdmin) return;
         const bId = data.split(":")[1];
         const backup = db.getBackupById(bId);
-        if (!backup || !backup.data) {
+        if (!backup) {
           try {
             await ctx.answerCallbackQuery({ text: "❌ Yedek bulunamadı!", show_alert: true });
           } catch (e) {}
@@ -1827,7 +1828,8 @@ export function getTelegramBot(): Bot | null {
         const d = rawDate && !isNaN(new Date(rawDate).getTime()) ? new Date(rawDate) : new Date();
         const dateStr = d.toISOString().slice(0, 19).replace(/[:T]/g, "-");
         const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
-        const jsonBuffer = Buffer.from(JSON.stringify(backup.data, null, 2), "utf8");
+        const downloadData = backup.data || db.getFullDatabaseSnapshot();
+        const jsonBuffer = Buffer.from(JSON.stringify(downloadData, null, 2), "utf8");
 
         await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
           caption:
@@ -1840,6 +1842,51 @@ export function getTelegramBot(): Bot | null {
             .text("📋 Yedek Listesi", "adm_bkp_list")
             .text("🔙 Yedekleme Menüsü", "adm_bkp_menu"),
         });
+        return;
+      }
+
+      // --- YEDEĞİ SİL ---
+      if (data.startsWith("adm_bkp_del:")) {
+        if (!isAdmin) return;
+        const bId = data.split(":")[1];
+        await db.deleteBackup(bId);
+        try {
+          await ctx.answerCallbackQuery({ text: "🗑️ Yedek kalıcı olarak silindi!", show_alert: true });
+        } catch (e) {}
+
+        // Listeyi yenile
+        const backups = db.getBackups();
+        if (backups.length === 0) {
+          await editOrReply(
+            ctx,
+            `📋 <b>KAYITLI YEDEK KALMADI</b>\n\nTüm yedekler silindi. Hemen yeni bir yedek alabilirsiniz:`,
+            new InlineKeyboard()
+              .text("💾 Şimdi Yedek Al", "adm_bkp_create")
+              .row()
+              .text("🔙 Yedekleme Menüsü", "adm_bkp_menu")
+          );
+          return;
+        }
+
+        const recent = backups.slice(0, 5);
+        let listText = `📋 <b>KAYITLI SİSTEM YEDEKLERİ (${backups.length})</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+        const kb = new InlineKeyboard();
+        recent.forEach((b, idx) => {
+          const typeIcon = b.type === "AUTO" ? "🤖" : b.type === "PRE_RESTORE" ? "🛡️" : "👤";
+          const dateShort = new Date(b.timestamp).toLocaleDateString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          listText += `${idx + 1}. ${typeIcon} <b>${b.label}</b>\n   🕒 ${dateShort} • ${(b.sizeBytes / 1024).toFixed(1)} KB • 👥 ${b.stats?.usersCount || 0} Kullanıcı\n\n`;
+          kb.text(`📥 ${idx + 1}. İndir`, `adm_bkp_dl:${b.id}`)
+            .text(`🔄 Geri Yükle`, `adm_bkp_rst_ask:${b.id}`)
+            .text(`🗑️ Sil`, `adm_bkp_del:${b.id}`)
+            .row();
+        });
+        kb.text("🔙 Yedekleme Menüsü", "adm_bkp_menu");
+        await editOrReply(ctx, listText, kb);
         return;
       }
 

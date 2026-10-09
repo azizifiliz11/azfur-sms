@@ -405,7 +405,7 @@ function HomeContent() {
               </p>
             </div>
 
-            {/* Direct Contact Admin Buttons */}
+            {/* Direct Contact Admin Buttons (Admin Panelinde Ekli Yöneticiler) */}
             <div className="space-y-2 pt-1">
               {adminUsernames.length > 0 ? (
                 adminUsernames.map((u) => (
@@ -421,15 +421,9 @@ function HomeContent() {
                   </a>
                 ))
               ) : (
-                <a
-                  href="https://t.me/azizifiliz"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 active:scale-98 transition-all"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Yönetici ile İletişime Geç (@azizifiliz)</span>
-                </a>
+                <div className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/50 text-xs text-zinc-400 text-center">
+                  Destek yöneticisi bilgisi henüz tanımlanmamış.
+                </div>
               )}
 
               <button

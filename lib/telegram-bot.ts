@@ -57,7 +57,7 @@ export function getAdminUsernamesList(): string[] {
   const settings = db.getSettings();
   const list = new Set<string>();
 
-  // 1. Settings'te tanımlı destek / yönetici kullanıcı adları
+  // 1. Settings'te tanımlı destek / yönetici kullanıcı adları (Admin panelinde eklenenler)
   const rawSupport = Array.isArray(settings.supportTelegramUsernames)
     ? settings.supportTelegramUsernames
     : settings.supportTelegramUsername
@@ -68,13 +68,24 @@ export function getAdminUsernamesList(): string[] {
     if (clean) list.add(clean);
   });
 
-  // 2. Veritabanındaki admin kullanıcılarının kullanıcı adları
+  // 2. Veritabanındaki admin Telegram ID'leri ile eşleşen kullanıcıların kullanıcı adları
   const adminIds = db.getAdminTelegramIds();
   for (const id of adminIds) {
     const user = db.getUser(id);
     if (user?.username) {
       const clean = user.username.replace(/^@/, "").trim();
       if (clean) list.add(clean);
+    }
+  }
+
+  // 3. Veritabanında role === 'admin' veya db.isAdmin olan tüm kullanıcılar
+  const allUsers = db.getAllUsers();
+  for (const u of allUsers) {
+    if (u && (u.role === "admin" || db.isAdmin(u.telegramId))) {
+      if (u.username) {
+        const clean = u.username.replace(/^@/, "").trim();
+        if (clean) list.add(clean);
+      }
     }
   }
 
@@ -354,12 +365,8 @@ export function getTelegramBot(): Bot | null {
           );
 
         const kb = new InlineKeyboard();
-        if (adminUsernames.length > 0) {
-          for (const u of adminUsernames) {
-            kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
-          }
-        } else {
-          kb.url(`💬 Yöneticiye Yaz (@azizifiliz)`, `https://t.me/azizifiliz`).row();
+        for (const u of adminUsernames) {
+          kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
         }
         kb.text("🔄 Durumu Tekrar Kontrol Et", "btn_check_maintenance");
 

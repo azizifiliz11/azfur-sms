@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { createWhiteLabelPayment } from "@/lib/oxapay";
 import { checkApiRateLimit } from "@/lib/rate-limit";
+import { getApironePaymentOption } from "@/lib/crypto-currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,8 @@ export async function POST(req: Request) {
     }
 
     const amount = Number(body.amount);
-    const payCurrency = (body.payCurrency || "USDT").toUpperCase();
-    const network = body.network || (payCurrency === "USDT" ? "TRC20" : undefined);
+    const payCurrency = String(body.payCurrency || "USDT").toUpperCase();
+    const network = body.network ? String(body.network).toUpperCase() : (payCurrency === "USDT" ? "TRC20" : undefined);
 
     if (!telegramId || isNaN(telegramId)) {
       return NextResponse.json(
@@ -33,6 +33,13 @@ export async function POST(req: Request) {
     if (!amount || isNaN(amount) || amount < 10) {
       return NextResponse.json(
         { success: false, error: "Minimum yükleme tutarı 10 ₺'dir" },
+        { status: 400 }
+      );
+    }
+
+    if (!getApironePaymentOption(payCurrency, network)) {
+      return NextResponse.json(
+        { success: false, error: "Desteklenmeyen kripto para veya ağ seçimi." },
         { status: 400 }
       );
     }

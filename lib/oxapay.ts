@@ -5,7 +5,7 @@ export interface OxaPayWhiteLabelResult {
   success: boolean;
   trackId?: number | string;
   address?: string;
-  payAmount?: number;
+  payAmount?: string | number;
   payCurrency?: string;
   network?: string;
   qrCodeUrl?: string;

@@ -1,11 +1,12 @@
 import { db } from "./db";
+import { getApironePaymentOption } from "./crypto-currencies";
 
 export interface ApironeInvoiceResult {
   success: boolean;
   invoiceId?: string;
   trackId?: string; // Geriye dönük uyumluluk
   address?: string;
-  payAmount?: number;
+  payAmount?: string;
   payCurrency?: string;
   network?: string;
   qrCodeUrl?: string;
@@ -266,8 +267,8 @@ export async function createApironeInvoice(params: {
   amountTry: number;
   telegramId: number;
   username?: string;
-  payCurrency?: string; // "USDT" veya "TRX"
-  network?: string; // "TRC20"
+  payCurrency?: string;
+  network?: string;
   orderId?: string;
 }): Promise<ApironeInvoiceResult> {
   const config = getApironeConfig();
@@ -283,31 +284,45 @@ export async function createApironeInvoice(params: {
   }
 
   try {
-    const settings = db.getSettings();
-    const rateToTry = settings.exchangeRateToTry || 49.2;
-    const amountUsd = Number((params.amountTry / rateToTry).toFixed(2));
-
     const selectedCurrency = (params.payCurrency || "USDT").toUpperCase();
-    let apironeCurrency = "usdt@trx";
-    let minorUnits = 1_000_000; // 6 decimals for USDT
-    let networkName = "TRC20";
-    let cryptoPayAmount = amountUsd;
-
-    if (selectedCurrency === "TRX") {
-      apironeCurrency = "trx";
-      networkName = "TRON";
-      // TRX yaklaşık kur hesabı (örn: 1 TRX ≈ 0.33 USD)
-      const approxTrxRateUsd = 0.33;
-      cryptoPayAmount = Number((amountUsd / approxTrxRateUsd).toFixed(1));
-      minorUnits = 1_000_000; // 1 TRX = 1,000,000 sun
-    } else {
-      apironeCurrency = "usdt@trx";
-      networkName = "TRC20";
-      cryptoPayAmount = amountUsd;
-      minorUnits = 1_000_000; // 1 USDT = 1,000,000 minor units
+    const selectedNetwork = params.network || (selectedCurrency === "USDT" ? "TRC20" : undefined);
+    const selectedOption = getApironePaymentOption(selectedCurrency, selectedNetwork);
+    if (!selectedOption) {
+      return {
+        success: false,
+        error: "Seçilen kripto para ve ağ Apirone tarafından desteklenmiyor.",
+      };
     }
 
-    const calculatedMinorAmount = Math.max(1, Math.round(cryptoPayAmount * minorUnits));
+    const settings = db.getSettings();
+    const rateToTry = Number(settings.exchangeRateToTry || 49.2);
+    if (!Number.isFinite(rateToTry) || rateToTry <= 0) {
+      return { success: false, error: "Güncel USD/TRY kuru alınamadı. Lütfen daha sonra tekrar deneyin." };
+    }
+    const amountUsd = Number((params.amountTry / rateToTry).toFixed(2));
+    const tickerUrl = new URL("https://apirone.com/api/v2/ticker");
+    tickerUrl.searchParams.set("currency", selectedOption.currency);
+    tickerUrl.searchParams.set("fiat", "usd");
+    const tickerRes = await fetch(tickerUrl, { cache: "no-store" });
+    const tickerData = tickerRes.ok ? await tickerRes.json() : null;
+    const usdRate = Number(tickerData?.usd ?? tickerData?.[selectedOption.currency]?.usd);
+    if (!tickerRes.ok || !Number.isFinite(usdRate) || usdRate <= 0) {
+      return {
+        success: false,
+        error: "Seçilen kripto para için Apirone kuru alınamadı. Lütfen tekrar deneyin.",
+      };
+    }
+
+    const decimals = Math.max(0, Math.round(Math.log10(1 / selectedOption.unitsFactor)));
+    const coinAmount = amountUsd / usdRate;
+    if (!Number.isFinite(coinAmount) || coinAmount <= 0) {
+      return { success: false, error: "Ödeme tutarı seçilen kripto para için hesaplanamadı." };
+    }
+    const coinAmountText = coinAmount.toFixed(decimals);
+    const calculatedMinorAmount = coinAmountText.replace(".", "").replace(/^0+(?=\d)/, "");
+    if (!calculatedMinorAmount || /^0+$/.test(calculatedMinorAmount)) {
+      return { success: false, error: "Yükleme tutarı seçilen kripto para için çok düşük." };
+    }
 
     // Apirone fatura (invoice) oluştururken callback-url parametresini ZORUNLU KILMAZ.
     // Otomatik üretilen domainler (Vercel vb.) Apirone tarafından 400 veya 500 hatasıyla reddedilebilir.
@@ -325,13 +340,13 @@ export async function createApironeInvoice(params: {
     const orderId = params.orderId || `dep_${Date.now()}_${params.telegramId}`;
 
     const invoicePayload: any = {
-      currency: apironeCurrency,
+      currency: selectedOption.currency,
       amount: calculatedMinorAmount,
       lifetime: 3600, // 1 Saat geçerli
       "user-data": {
         title: "Bakiye Yukleme - AzFur SMS",
         merchant: "AzFur SMS",
-        price: `${cryptoPayAmount} ${selectedCurrency}`,
+        price: `${coinAmountText} ${selectedCurrency}`,
         telegramId: String(params.telegramId),
         username: params.username || "",
         orderId,
@@ -392,9 +407,9 @@ export async function createApironeInvoice(params: {
       invoiceId,
       trackId: invoiceId, // Geriye dönük uyumluluk
       address,
-      payAmount: cryptoPayAmount,
+      payAmount: coinAmountText,
       payCurrency: selectedCurrency,
-      network: networkName,
+      network: selectedOption.networkLabel,
       qrCodeUrl,
       invoiceUrl: data["invoice-url"] || `https://apirone.com/invoice?id=${invoiceId}`,
       expiredAt: Math.floor(Date.now() / 1000) + 3600,

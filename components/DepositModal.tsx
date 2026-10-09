@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { X, Check, Copy, Coins, ShieldCheck, Loader2, RefreshCw, Zap, Gift, Tag } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { CryptoSettings } from "@/lib/types";
+import { APIRONE_PAYMENT_COINS, getApironePaymentOptionsForCoin } from "@/lib/crypto-currencies";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ interface DepositModalProps {
 export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: DepositModalProps) {
   const [cryptoSubMethod, setCryptoSubMethod] = useState<"AutoCrypto" | "DirectWallet" | "Coupon">("AutoCrypto");
   const [cryptoType, setCryptoType] = useState<"USDT_TRC20" | "TRX">("USDT_TRC20");
+  const [selectedAutoCoin, setSelectedAutoCoin] = useState<string>("");
+  const [selectedAutoNetwork, setSelectedAutoNetwork] = useState<string>("");
   const [amount, setAmount] = useState<number>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [isCopied, setIsCopied] = useState<boolean>(false);
@@ -28,7 +31,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
   const [activePayment, setActivePayment] = useState<{
     trackId: number | string;
     address: string;
-    payAmount: number;
+    payAmount: string | number;
     payCurrency: string;
     network: string;
     qrCodeUrl: string;
@@ -136,8 +139,52 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
       ? cryptoSettings.usdtTrc20Address || "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t"
       : cryptoSettings.trxAddress || cryptoSettings.usdtTrc20Address || "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
+  const quickAmountSelector = (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs text-zinc-400 font-medium">Yüklenecek Tutar (₺)</label>
+        <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+          ≈ ${(currentFinalAmount / (exchangeRate || 49.2)).toFixed(2)} USD
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {quickAmounts.map((q) => (
+          <button
+            key={q}
+            onClick={() => handleSelectAmount(q)}
+            className={`py-2 px-1 rounded-xl border text-sm font-mono font-bold transition-all ${
+              amount === q && !customAmount
+                ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
+                : "bg-zinc-900 border-white/10 text-zinc-300 hover:border-white/20"
+            }`}
+          >
+            ₺{q}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-2.5">
+        <input
+          type="number"
+          min={10}
+          placeholder="Özel tutar girin (₺)"
+          value={customAmount}
+          onChange={(e) => setCustomAmount(e.target.value)}
+          className="w-full bg-zinc-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+        />
+      </div>
+    </div>
+  );
+
   // 1. Kripto ile Öde (Otomatik) - Adres ve QR Kod Oluşturma
   const handleCreateAutoCrypto = async () => {
+    if (!selectedAutoCoin || !selectedAutoNetwork) {
+      haptic.error();
+      setIsErrorMsg(true);
+      setMessage("Ödeme için önce kripto para birimi ve ağı seçin.");
+      return;
+    }
+
     if (currentFinalAmount < 10) {
       haptic.error();
       setIsErrorMsg(true);
@@ -157,8 +204,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
         body: JSON.stringify({
           telegramId,
           amount: currentFinalAmount,
-          payCurrency: "USDT",
-          network: "TRC20",
+          payCurrency: selectedAutoCoin,
+          network: selectedAutoNetwork,
         }),
       });
 
@@ -169,8 +216,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           trackId: data.trackId,
           address: data.address,
           payAmount: data.payAmount,
-          payCurrency: data.payCurrency || "USDT",
-          network: data.network || "TRC20",
+          payCurrency: data.payCurrency || selectedAutoCoin,
+          network: data.network || selectedAutoNetwork,
           qrCodeUrl: data.qrCodeUrl,
           amountTry: data.amountTry,
           amountUsd: data.amountUsd,
@@ -313,41 +360,6 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           </button>
         </div>
 
-        {/* Quick Amounts */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-zinc-400 font-medium">Yüklenecek Tutar (₺)</label>
-            <span className="text-[11px] font-mono text-emerald-400 font-semibold">
-              ≈ {calculatedUsdt} USDT
-            </span>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {quickAmounts.map((q) => (
-              <button
-                key={q}
-                onClick={() => handleSelectAmount(q)}
-                className={`py-2 px-1 rounded-xl border text-sm font-mono font-bold transition-all ${
-                  amount === q && !customAmount
-                    ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
-                    : "bg-zinc-900 border-white/10 text-zinc-300 hover:border-white/20"
-                }`}
-              >
-                ₺{q}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-2.5">
-            <input
-              type="number"
-              placeholder="Özel tutar girin (₺)"
-              value={customAmount}
-              onChange={(e) => setCustomAmount(e.target.value)}
-              className="w-full bg-zinc-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
-            />
-          </div>
-        </div>
-
         {/* YÖNTEMLER SEÇİMİ */}
         <div className="mt-4 space-y-3">
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-950/80 rounded-2xl border border-white/5">
@@ -400,6 +412,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
             </button>
           </div>
 
+          {cryptoSubMethod !== "AutoCrypto" && quickAmountSelector}
+
           {/* SEÇENEK A: KRİPTO İLE ÖDE (OTOMATİK) */}
           {cryptoSubMethod === "AutoCrypto" && (
             <div className="space-y-3">
@@ -419,34 +433,82 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5 text-xs">
-                  <span className="text-zinc-400">Ödenecek Tutar:</span>
-                  <span className="font-mono font-bold text-emerald-400 text-sm">
-                    ₺{currentFinalAmount.toFixed(2)}{" "}
-                    <span className="text-xs text-zinc-400 font-normal">
-                      (≈ ${(currentFinalAmount / (exchangeRate || 49.2)).toFixed(2)} USD)
+                {(activePayment || (selectedAutoCoin && selectedAutoNetwork)) && (
+                  <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5 text-xs">
+                    <span className="text-zinc-400">Ödenecek Tutar:</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                      ₺{currentFinalAmount.toFixed(2)}{" "}
+                      <span className="text-xs text-zinc-400 font-normal">
+                        (≈ ${(currentFinalAmount / (exchangeRate || 49.2)).toFixed(2)} USD)
+                      </span>
                     </span>
-                  </span>
-                </div>
+                  </div>
+                )}
 
-                {/* Desteklenen coin rozetleri */}
-                <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                  <span className="text-zinc-400 mr-1">Kabul Edilen:</span>
-                  {["USDT (TRC-20)", "TRX", "TON", "BTC", "ETH", "LTC"].map((coin) => (
-                    <span
-                      key={coin}
-                      className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-white/5 font-mono font-medium"
-                    >
-                      {coin}
-                    </span>
-                  ))}
-                </div>
+                {!activePayment && (
+                  <div className="space-y-3 rounded-xl border border-white/[0.07] bg-black/20 p-3">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 block mb-1.5">
+                        1. Ödeme yapılacak kripto para birimini seçin
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {APIRONE_PAYMENT_COINS.map((coin) => (
+                          <button
+                            key={coin}
+                            type="button"
+                            onClick={() => {
+                              haptic.selection();
+                              setSelectedAutoCoin(coin);
+                              setSelectedAutoNetwork("");
+                            }}
+                            className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
+                              selectedAutoCoin === coin
+                                ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
+                                : "border-white/10 bg-zinc-900 text-zinc-300 hover:border-white/20"
+                            }`}
+                          >
+                            {coin}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedAutoCoin && (
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 block mb-1.5">
+                          2. Göndereceğiniz ağı seçin
+                        </span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {getApironePaymentOptionsForCoin(selectedAutoCoin).map((option) => (
+                            <button
+                              key={option.networkKey}
+                              type="button"
+                              onClick={() => {
+                                haptic.selection();
+                                setSelectedAutoNetwork(option.networkKey);
+                              }}
+                              className={`rounded-lg border px-2 py-2 text-[10px] font-semibold transition-colors ${
+                                selectedAutoNetwork === option.networkKey
+                                  ? "border-sky-400 bg-sky-500/15 text-sky-200"
+                                  : "border-white/10 bg-zinc-900 text-zinc-300 hover:border-white/20"
+                              }`}
+                            >
+                              {option.networkLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!activePayment && selectedAutoCoin && selectedAutoNetwork && quickAmountSelector}
 
                 {!activePayment ? (
                   <button
                     type="button"
                     onClick={handleCreateAutoCrypto}
-                    disabled={creatingPayment || currentFinalAmount <= 0}
+                    disabled={creatingPayment || currentFinalAmount < 10 || !selectedAutoCoin || !selectedAutoNetwork}
                     className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50"
                   >
                     {creatingPayment ? (

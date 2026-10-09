@@ -1390,34 +1390,103 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
+        const { APIRONE_PAYMENT_COINS } = await import("./crypto-currencies");
         const text =
           `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `🔹 Bottan ayrılmadan anında özel QR kod ve cüzdan adresi oluşturun.\n` +
-          `🔹 Blokzincir onayının ardından bakiyeniz <b>otomatik olarak</b> yüklenir.\n\n` +
+          `Önce ödemeyi hangi kripto para birimiyle yapmak istediğinizi seçin.\n\n` +
           `💰 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
-          `Yüklemek istediğiniz tutarı seçin 👇`;
+          `1. Kripto para birimini seçin 👇`;
+
+        const kb = new InlineKeyboard();
+        for (let i = 0; i < APIRONE_PAYMENT_COINS.length; i += 2) {
+          kb.text(`🪙 ${APIRONE_PAYMENT_COINS[i]}`, `oxa_coin:${APIRONE_PAYMENT_COINS[i]}`);
+          const nextCoin = APIRONE_PAYMENT_COINS[i + 1];
+          if (nextCoin) kb.text(`🪙 ${nextCoin}`, `oxa_coin:${nextCoin}`);
+          kb.row();
+        }
+        kb.text("🔙 Ödeme Menüsü", "btn_deposit_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- OTOMATİK KRİPTO: COIN SEÇİMİNDEN SONRA AĞI SOR ---
+      if (data.startsWith("oxa_coin:")) {
+        const coin = data.split(":")[1]?.toUpperCase() || "";
+        const { getApironePaymentOptionsForCoin } = await import("./crypto-currencies");
+        const options = getApironePaymentOptionsForCoin(coin);
+        if (options.length === 0) {
+          await editOrReply(ctx, "❌ Desteklenmeyen kripto para birimi.", new InlineKeyboard().text("🔙 Yeniden Seç", "btn_dep_cbot"));
+          return;
+        }
+
+        const kb = new InlineKeyboard();
+        for (const option of options) {
+          kb.text(`🌐 ${option.networkLabel}`, `oxa_network:${coin}:${option.networkKey}`).row();
+        }
+        kb.text("🔙 Kripto Para Seçimine Dön", "btn_dep_cbot");
+
+        await editOrReply(
+          ctx,
+          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+            `🪙 Seçilen para: <b>${coin}</b>\n\n` +
+            `2. Gönderim yapacağınız ağı seçin 👇`,
+          kb
+        );
+        return;
+      }
+
+      // --- OTOMATİK KRİPTO: AĞ SEÇİMİNDEN SONRA TUTARI SOR ---
+      if (data.startsWith("oxa_network:")) {
+        const [, coin = "", network = ""] = data.split(":");
+        const { getApironePaymentOption } = await import("./crypto-currencies");
+        const option = getApironePaymentOption(coin, network);
+        if (!option) {
+          await editOrReply(ctx, "❌ Desteklenmeyen ağ seçimi.", new InlineKeyboard().text("🔙 Yeniden Seç", "btn_dep_cbot"));
+          return;
+        }
 
         const kb = new InlineKeyboard()
-          .text("₺50", "oxa_pay:50")
-          .text("₺100", "oxa_pay:100")
-          .text("₺250", "oxa_pay:250")
+          .text("₺50", `oxa_pay:50:${coin}:${network}`)
+          .text("₺100", `oxa_pay:100:${coin}:${network}`)
+          .text("₺250", `oxa_pay:250:${coin}:${network}`)
           .row()
-          .text("₺500", "oxa_pay:500")
-          .text("₺1000", "oxa_pay:1000")
+          .text("₺500", `oxa_pay:500:${coin}:${network}`)
+          .text("₺1000", `oxa_pay:1000:${coin}:${network}`)
           .row()
           .webApp("✍️ Özel Tutarla Yükle (Mini App)", appUrl)
           .row()
-          .text("🔙 Ödeme Menüsü", "btn_deposit_menu");
+          .text("🔙 Ağ Seçimine Dön", `oxa_coin:${coin}`);
 
-        await editOrReply(ctx, text, kb);
+        await editOrReply(
+          ctx,
+          `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+            `🪙 <b>Kripto para:</b> ${coin}\n` +
+            `🌐 <b>Ağ:</b> ${option.networkLabel}\n\n` +
+            `3. Yüklemek istediğiniz tutarı seçin 👇`,
+          kb
+        );
         return;
       }
 
       // --- OTOMATİK KRİPTO ADRESİ & QR KOD OLUŞTURMA ---
       // --- OTOMATİK KRİPTO ADRESİ & QR KOD OLUŞTURMA (APIRONE) ---
       if (data.startsWith("oxa_pay:") || data.startsWith("cbot_pay:") || data.startsWith("apr_pay:")) {
-        const amt = parseFloat(data.split(":")[1]) || 100;
+        const parts = data.split(":");
+        const amt = parseFloat(parts[1]) || 100;
+        const payCurrency = (parts[2] || "USDT").toUpperCase();
+        const network = (parts[3] || (payCurrency === "USDT" ? "TRC20" : "TRON")).toUpperCase();
+        const { getApironePaymentOption } = await import("./crypto-currencies");
+        const selectedPaymentOption = getApironePaymentOption(payCurrency, network);
+        if (!selectedPaymentOption) {
+          await editOrReply(
+            ctx,
+            "❌ Seçilen kripto para ve ağ desteklenmiyor. Lütfen yeniden seçim yapın.",
+            new InlineKeyboard().text("🔙 Kripto Para Seç", "btn_dep_cbot")
+          );
+          return;
+        }
         const depositId = `dep_apr_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
         await db.syncFromCloud(true);
@@ -1426,8 +1495,8 @@ export function getTelegramBot(): Bot | null {
           telegramId: Number(from.id),
           username: from.username && !from.username.startsWith("user_") ? from.username : "",
           amountTry: amt,
-          payCurrency: "USDT",
-          network: "TRC20",
+          payCurrency,
+          network,
           orderId: depositId,
         });
 
@@ -1460,7 +1529,7 @@ export function getTelegramBot(): Bot | null {
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Yüklenecek Bakiye:</b> <code>${amt.toFixed(2)} ₺</code>\n` +
           `🪙 <b>Yatırılacak Tutar:</b> <code>${payResult.payAmount} ${payResult.payCurrency}</code>\n` +
-          `🌐 <b>Ağ:</b> <code>TRC-20 (Tron)</code>\n\n` +
+          `🌐 <b>Ağ:</b> <code>${payResult.network}</code>\n\n` +
           `📋 <b>Özel Ödeme Adresi (Kopyalamak için dokunun):</b>\n` +
           `<code>${payResult.address}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +

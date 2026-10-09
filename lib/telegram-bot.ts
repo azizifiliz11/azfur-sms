@@ -183,12 +183,16 @@ export async function fetchTelegramUserInfo(
   return null;
 }
 
+let cachedBotInfo: any = null;
+
 export function getTelegramBot(): Bot | null {
   if (!CONFIG.TELEGRAM_BOT_TOKEN) {
     return null;
   }
   if (!botInstance) {
-    botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN);
+    const settings = db.getSettings();
+    const botInfo = cachedBotInfo || settings.botInfo;
+    botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, botInfo ? { botInfo } : undefined);
 
     // ==========================================
     // 0. GLOBAL KULLANICI PROFİL SENKRONİZASYON MİDDLEWARE (SIFIR GECİKME - NON-BLOCKING)
@@ -329,37 +333,31 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      // 1. Eğer Telegram file_id zaten bellekteyse doğrudan file_id ile anında gönder (~30ms)
-      if (cachedBannerFileId) {
-        try {
-          await ctx.replyWithPhoto(cachedBannerFileId, {
-            caption: messageText,
-            parse_mode: "HTML",
-            reply_markup: keyboard,
-          });
-          return;
-        } catch (err) {
-          cachedBannerFileId = null; // file_id geçersizse sıfırla
+      const settings = db.getSettings();
+
+      // Fotoğraflı kart modu yalnızca ayarlarda özellikle açık ise kullanılır
+      if (settings.useBannerPhoto) {
+        const photoToUse = settings.bannerFileId || cachedBannerFileId || bannerUrl;
+        if (photoToUse) {
+          try {
+            const sent = await ctx.replyWithPhoto(photoToUse, {
+              caption: messageText,
+              parse_mode: "HTML",
+              reply_markup: keyboard,
+            });
+            if (sent?.photo && sent.photo.length > 0) {
+              const fId = sent.photo[sent.photo.length - 1].file_id;
+              cachedBannerFileId = fId;
+              if (!settings.bannerFileId) {
+                db.updateSettings({ bannerFileId: fId }).catch(() => {});
+              }
+            }
+            return;
+          } catch (photoErr) {}
         }
       }
 
-      // 2. İlk defa çalışırken URL ile gönder ve dönen file_id'yi sonraki tüm /start'lar için önbelleğe al
-      if (bannerUrl.startsWith("https://")) {
-        try {
-          const sent = await ctx.replyWithPhoto(bannerUrl, {
-            caption: messageText,
-            parse_mode: "HTML",
-            reply_markup: keyboard,
-          });
-          if (sent?.photo && sent.photo.length > 0) {
-            cachedBannerFileId = sent.photo[sent.photo.length - 1].file_id;
-          }
-          return;
-        } catch (photoErr) {
-          // Banner gönderilemezse metin olarak gönder
-        }
-      }
-
+      // ŞİMŞEK HIZINDA SAF METİN MENÜ KARTI (0.02 saniyede kullanıcı ekranında belirir)
       await ctx.reply(messageText, {
         parse_mode: "HTML",
         reply_markup: keyboard,

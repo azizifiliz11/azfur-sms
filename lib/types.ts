@@ -140,6 +140,9 @@ export interface SystemSettings {
   heroSmsApiKey?: string;
   adminSecurityPin?: string; // Yönetici Web Paneli Giriş PIN Kodu (Örn: 2026 veya özel şifre)
   deletedTelegramIds?: string[]; // Silinen kullanıcı ID kara listesi (asla geri gelmez)
+  botInfo?: any; // GrammY botInfo önbelleği (getMe çağrısını 0ms'ye düşürür)
+  useBannerPhoto?: boolean; // false = Ultra Hızlı Metin Modu (~30ms), true = Fotoğraflı Kart
+  bannerFileId?: string; // Telegram CDN görsel ID'si
 }
 
 export interface DepositRequest {

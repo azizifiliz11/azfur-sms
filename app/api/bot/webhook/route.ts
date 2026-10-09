@@ -5,6 +5,7 @@ import { CONFIG } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
+export const maxDuration = 15;
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,12 @@ export async function POST(req: NextRequest) {
     // GrammY requires init() before handleUpdate()
     if (!bot.isInited()) {
       await bot.init();
+      try {
+        const settings = db.getSettings();
+        if (!settings.botInfo && bot.botInfo) {
+          db.updateSettings({ botInfo: bot.botInfo }).catch(() => {});
+        }
+      } catch (e) {}
     }
 
     const body = await req.json();

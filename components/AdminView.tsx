@@ -322,12 +322,25 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           setDescriptionNote(st.settings.bankInfo.descriptionNote || "");
         }
         if (st.settings?.cryptoSettings) {
-          setUsdtTrc20Address(st.settings.cryptoSettings.usdtTrc20Address || "");
-          setTrxAddress(st.settings.cryptoSettings.trxAddress || "");
-          setApironeAccount(st.settings.cryptoSettings.apironeAccount || "");
-          setApironeTransferKey(st.settings.cryptoSettings.apironeTransferKey || "");
-          setOxapayApiKey(st.settings.cryptoSettings.oxapayApiKey || "");
-          setAutoVerifyEnabled(st.settings.cryptoSettings.autoVerifyEnabled ?? true);
+          const cs = st.settings.cryptoSettings;
+          if (cs.usdtTrc20Address) {
+            setUsdtTrc20Address(cs.usdtTrc20Address);
+            try { localStorage.setItem("azfur_usdt_trc20_address", cs.usdtTrc20Address); } catch {}
+          }
+          if (cs.trxAddress) {
+            setTrxAddress(cs.trxAddress);
+            try { localStorage.setItem("azfur_trx_address", cs.trxAddress); } catch {}
+          }
+          if (cs.apironeAccount) {
+            setApironeAccount(cs.apironeAccount);
+            try { localStorage.setItem("azfur_apirone_account", cs.apironeAccount); } catch {}
+          }
+          if (cs.apironeTransferKey) {
+            setApironeTransferKey(cs.apironeTransferKey);
+            try { localStorage.setItem("azfur_apirone_transfer_key", cs.apironeTransferKey); } catch {}
+          }
+          setOxapayApiKey(cs.oxapayApiKey || "");
+          setAutoVerifyEnabled(cs.autoVerifyEnabled ?? true);
         }
         if (st.settings?.supportTelegramUsernames && Array.isArray(st.settings.supportTelegramUsernames)) {
           setSupportTelegramUsernames(st.settings.supportTelegramUsernames);
@@ -378,6 +391,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       setRefreshing(false);
     }
   };
+
+  // Apirone ve cüzdan bilgilerini yerel depolamadan (localStorage) anında yükle (Asla silinmez)
+  useEffect(() => {
+    try {
+      const localAcc = localStorage.getItem("azfur_apirone_account");
+      const localKey = localStorage.getItem("azfur_apirone_transfer_key");
+      const localUsdt = localStorage.getItem("azfur_usdt_trc20_address");
+      const localTrx = localStorage.getItem("azfur_trx_address");
+      if (localAcc) setApironeAccount(localAcc);
+      if (localKey) setApironeTransferKey(localKey);
+      if (localUsdt) setUsdtTrc20Address(localUsdt);
+      if (localTrx) setTrxAddress(localTrx);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetchAllData();
@@ -1159,15 +1186,34 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     setSavingCrypto(true);
     haptic.impact("medium");
     try {
+      const acc = apironeAccount.trim();
+      const key = apironeTransferKey.trim();
+      const trc = usdtTrc20Address.trim();
+      const trx = trxAddress.trim();
+
+      // Client tarafında da anında kalıcı olarak sakla
+      if (acc) {
+        try { localStorage.setItem("azfur_apirone_account", acc); } catch {}
+      }
+      if (key) {
+        try { localStorage.setItem("azfur_apirone_transfer_key", key); } catch {}
+      }
+      if (trc) {
+        try { localStorage.setItem("azfur_usdt_trc20_address", trc); } catch {}
+      }
+      if (trx) {
+        try { localStorage.setItem("azfur_trx_address", trx); } catch {}
+      }
+
       const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cryptoSettings: {
-            usdtTrc20Address,
-            trxAddress,
-            apironeAccount: apironeAccount.trim(),
-            apironeTransferKey: apironeTransferKey.trim(),
+            usdtTrc20Address: trc,
+            trxAddress: trx,
+            apironeAccount: acc,
+            apironeTransferKey: key,
             oxapayApiKey,
             autoVerifyEnabled,
           },
@@ -1176,9 +1222,23 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       const data = await res.json();
       if (data.success) {
         haptic.success();
-        setToastMsg("Kripto cüzdan ve Apirone ayarları başarıyla kaydedildi!");
+        setToastMsg("✅ Kripto cüzdan ve Apirone ayarları kalıcı olarak kaydedildi!");
         setTimeout(() => setToastMsg(null), 3000);
-        fetchAllData();
+        if (data.settings?.cryptoSettings) {
+          const cs = data.settings.cryptoSettings;
+          if (cs.apironeAccount) {
+            setApironeAccount(cs.apironeAccount);
+            try { localStorage.setItem("azfur_apirone_account", cs.apironeAccount); } catch {}
+          }
+          if (cs.apironeTransferKey) {
+            setApironeTransferKey(cs.apironeTransferKey);
+            try { localStorage.setItem("azfur_apirone_transfer_key", cs.apironeTransferKey); } catch {}
+          }
+          if (cs.usdtTrc20Address) {
+            setUsdtTrc20Address(cs.usdtTrc20Address);
+            try { localStorage.setItem("azfur_usdt_trc20_address", cs.usdtTrc20Address); } catch {}
+          }
+        }
       } else {
         haptic.error();
         alert(data.error || "Kayıt başarısız");
@@ -1201,18 +1261,24 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     setApironeTestResult(null);
     haptic.impact("medium");
     try {
+      const acc = apironeAccount.trim();
+      const key = apironeTransferKey.trim();
       const res = await adminFetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "test_apirone_account",
-          account: apironeAccount.trim(),
-          transferKey: apironeTransferKey.trim(),
+          account: acc,
+          transferKey: key,
         }),
       });
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        try {
+          if (acc) localStorage.setItem("azfur_apirone_account", acc);
+          if (key) localStorage.setItem("azfur_apirone_transfer_key", key);
+        } catch {}
         setApironeTestResult({
           success: true,
           message: data.message || "Apirone Bağlantısı Başarılı ve Hesap Aktif!",
@@ -1308,6 +1374,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       const data = await res.json();
       if (data.success) {
         haptic.success();
+        try {
+          if (apironeAccount.trim()) localStorage.setItem("azfur_apirone_account", apironeAccount.trim());
+          if (apironeTransferKey.trim()) localStorage.setItem("azfur_apirone_transfer_key", apironeTransferKey.trim());
+          if (targetAddr) localStorage.setItem("azfur_usdt_trc20_address", targetAddr);
+        } catch {}
         alert("✅ Gelen tüm USDT (TRC-20) ödemelerinin kişisel cüzdanınıza otomatik aktarılması (Forwarding) başarıyla aktif edildi!");
       } else {
         haptic.error();

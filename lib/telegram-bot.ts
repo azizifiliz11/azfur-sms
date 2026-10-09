@@ -1406,6 +1406,7 @@ export function getTelegramBot(): Bot | null {
         const amt = parseFloat(data.split(":")[1]) || 100;
         const depositId = `dep_apr_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
+        await db.syncFromCloud(true);
         const { createApironeInvoice } = await import("./apirone");
         const payResult = await createApironeInvoice({
           telegramId: Number(from.id),

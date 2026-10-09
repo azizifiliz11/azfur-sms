@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
     if (!isAuthorizedAdmin(req)) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const [allCountries, allServices, tcmbRateInfo] = await Promise.all([
       heroSms.getCountries(),
       heroSms.getServicesList(),
-      tcmb.getLiveRate(),
+      tcmb.getLiveRate(false),
     ]);
     const settings = db.getSettings();
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!isAuthorizedAdmin(req)) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud();
+    await db.syncFromCloud(true);
     const body = await req.json();
 
     // Özel işlem: TCMB canlı kurunu anında yeniden çek

@@ -37,6 +37,7 @@ export async function POST(req: Request) {
       );
     }
 
+    await db.syncFromCloud(true);
     const user = db.getUser(telegramId);
     const username = user?.username || `user_${telegramId}`;
 

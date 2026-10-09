@@ -105,6 +105,7 @@ const KV_TOKEN =
   DEFAULT_KV_TOKEN;
 
 const KV_KEY = "azfur_sms_db_v1";
+const KV_APIRONE_KEY = "azfur_sms_apirone_creds";
 
 function ensureDbDirectory() {
   const dir = path.dirname(DB_PATH);
@@ -115,6 +116,67 @@ function ensureDbDirectory() {
       // ignore
     }
   }
+}
+
+async function saveApironeToDedicatedKv(creds: {
+  apironeAccount?: string;
+  apironeTransferKey?: string;
+  usdtTrc20Address?: string;
+  trxAddress?: string;
+}): Promise<void> {
+  if (!KV_URL || !KV_TOKEN) return;
+  const acc = (creds.apironeAccount || "").trim();
+  if (!acc) return;
+  try {
+    const raw = JSON.stringify({
+      apironeAccount: acc,
+      apironeTransferKey: (creds.apironeTransferKey || "").trim(),
+      usdtTrc20Address: (creds.usdtTrc20Address || "").trim(),
+      trxAddress: (creds.trxAddress || "").trim(),
+      updatedAt: new Date().toISOString(),
+    });
+    await fetch(KV_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${KV_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(["SET", KV_APIRONE_KEY, raw]),
+      cache: "no-store",
+    });
+  } catch (e) {
+    console.error("[Apirone Dedicated KV Save Error]:", e);
+  }
+}
+
+async function getApironeFromDedicatedKv(): Promise<{
+  apironeAccount?: string;
+  apironeTransferKey?: string;
+  usdtTrc20Address?: string;
+  trxAddress?: string;
+} | null> {
+  if (!KV_URL || !KV_TOKEN) return null;
+  try {
+    const res = await fetch(KV_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${KV_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(["GET", KV_APIRONE_KEY]),
+      cache: "no-store",
+    });
+    const json = await res.json();
+    if (json && json.result && typeof json.result === "string") {
+      const parsed = JSON.parse(json.result);
+      if (parsed && typeof parsed === "object" && parsed.apironeAccount) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
 }
 
 async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
@@ -130,6 +192,17 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
       body: JSON.stringify(["SET", KV_KEY, raw]),
       cache: "no-store",
     });
+
+    // Apirone hesabı varsa ayrık korumalı anahtara da mutlaka yaz
+    const apAcc = (data.settings?.cryptoSettings?.apironeAccount || "").trim();
+    if (apAcc) {
+      await saveApironeToDedicatedKv({
+        apironeAccount: apAcc,
+        apironeTransferKey: (data.settings?.cryptoSettings?.apironeTransferKey || "").trim(),
+        usdtTrc20Address: (data.settings?.cryptoSettings?.usdtTrc20Address || "").trim(),
+        trxAddress: (data.settings?.cryptoSettings?.trxAddress || "").trim(),
+      }).catch(() => {});
+    }
   } catch (err) {
     console.error("[Cloud KV Save Error]:", err);
   }
@@ -347,6 +420,45 @@ export const db = {
             }
           }
 
+          if (!cloudData.settings.cryptoSettings) {
+            cloudData.settings.cryptoSettings = { ...DEFAULT_SETTINGS.cryptoSettings };
+          } else {
+            cloudData.settings.cryptoSettings = {
+              ...DEFAULT_SETTINGS.cryptoSettings,
+              ...cloudData.settings.cryptoSettings,
+            };
+          }
+
+          // 1. Eğer memoryDb'de kayıtlı bir Apirone hesabı varsa ve bulutta boşsa, asla silinmesin
+          if (
+            memoryDb?.settings?.cryptoSettings?.apironeAccount &&
+            !cloudData.settings.cryptoSettings.apironeAccount
+          ) {
+            cloudData.settings.cryptoSettings.apironeAccount = memoryDb.settings.cryptoSettings.apironeAccount;
+            if (memoryDb.settings.cryptoSettings.apironeTransferKey) {
+              cloudData.settings.cryptoSettings.apironeTransferKey = memoryDb.settings.cryptoSettings.apironeTransferKey;
+            }
+          }
+
+          // 2. Eğer buluttaki ana DB'de Apirone hesabı boşsa, ayrık korumalı KV anahtarından otomatik kurtar
+          if (!cloudData.settings.cryptoSettings.apironeAccount) {
+            try {
+              const dedicated = await getApironeFromDedicatedKv();
+              if (dedicated && dedicated.apironeAccount) {
+                cloudData.settings.cryptoSettings.apironeAccount = dedicated.apironeAccount;
+                if (dedicated.apironeTransferKey) {
+                  cloudData.settings.cryptoSettings.apironeTransferKey = dedicated.apironeTransferKey;
+                }
+                if (dedicated.usdtTrc20Address && !cloudData.settings.cryptoSettings.usdtTrc20Address) {
+                  cloudData.settings.cryptoSettings.usdtTrc20Address = dedicated.usdtTrc20Address;
+                }
+                if (dedicated.trxAddress && !cloudData.settings.cryptoSettings.trxAddress) {
+                  cloudData.settings.cryptoSettings.trxAddress = dedicated.trxAddress;
+                }
+              }
+            } catch (e) {}
+          }
+
           memoryDb = cloudData;
           lastCloudSyncTime = now;
 
@@ -376,12 +488,38 @@ export const db = {
   },
 
   async updateSettings(partial: Partial<SystemSettings>): Promise<SystemSettings> {
-    const data = loadDb();
+    const data = await this.syncFromCloud(true);
 
-    // Nested ayar objelerini derin birleştir (Deep Merge) - Apirone ve cüzdan bilgilerinin silinmesini kesinlikle önler
-    const mergedCrypto = partial.cryptoSettings
-      ? { ...(data.settings.cryptoSettings || DEFAULT_SETTINGS.cryptoSettings), ...partial.cryptoSettings }
-      : data.settings.cryptoSettings;
+    const currentCrypto = {
+      ...(DEFAULT_SETTINGS.cryptoSettings || {}),
+      ...(data.settings.cryptoSettings || {}),
+    };
+
+    let mergedCrypto = currentCrypto;
+    if (partial.cryptoSettings) {
+      const p = partial.cryptoSettings;
+      mergedCrypto = {
+        ...currentCrypto,
+        ...p,
+        // Yalnızca YENİ VE DOLU bir değer verilmişse güncelle, boş string mevcut hesabı asla silmesin!
+        apironeAccount:
+          p.apironeAccount !== undefined && p.apironeAccount.trim() !== ""
+            ? p.apironeAccount.trim()
+            : (currentCrypto.apironeAccount || "").trim(),
+        apironeTransferKey:
+          p.apironeTransferKey !== undefined && p.apironeTransferKey.trim() !== ""
+            ? p.apironeTransferKey.trim()
+            : (currentCrypto.apironeTransferKey || "").trim(),
+        usdtTrc20Address:
+          p.usdtTrc20Address !== undefined && p.usdtTrc20Address.trim() !== ""
+            ? p.usdtTrc20Address.trim()
+            : (currentCrypto.usdtTrc20Address || "").trim(),
+        trxAddress:
+          p.trxAddress !== undefined && p.trxAddress.trim() !== ""
+            ? p.trxAddress.trim()
+            : (currentCrypto.trxAddress || "").trim(),
+      };
+    }
 
     const mergedBank = partial.bankInfo
       ? { ...(data.settings.bankInfo || DEFAULT_SETTINGS.bankInfo), ...partial.bankInfo }
@@ -398,12 +536,23 @@ export const db = {
     data.settings = {
       ...data.settings,
       ...partial,
-      ...(mergedCrypto ? { cryptoSettings: mergedCrypto } : {}),
+      cryptoSettings: mergedCrypto,
       ...(mergedBank ? { bankInfo: mergedBank } : {}),
       ...(mergedBackup ? { backupSettings: mergedBackup } : {}),
       ...(mergedVip ? { vipSettings: mergedVip } : {}),
     };
-    await saveDb(data);
+
+    // Ayrık korumalı KV anahtarına da anında yaz
+    if (mergedCrypto.apironeAccount) {
+      await saveApironeToDedicatedKv({
+        apironeAccount: mergedCrypto.apironeAccount,
+        apironeTransferKey: mergedCrypto.apironeTransferKey,
+        usdtTrc20Address: mergedCrypto.usdtTrc20Address,
+        trxAddress: mergedCrypto.trxAddress,
+      }).catch(() => {});
+    }
+
+    await saveDb(data, true);
     return data.settings;
   },
 

@@ -112,6 +112,8 @@ export async function createWhiteLabelPayment(params: {
   orderId?: string;
 }): Promise<OxaPayWhiteLabelResult> {
   // Apirone önceliği: Eğer Apirone hesabı varsa veya OxaPay API anahtarı yoksa doğrudan Apirone kullan
+  const { db } = await import("./db");
+  await db.syncFromCloud(true);
   const { getApironeConfig, createApironeInvoice } = await import("./apirone");
   const apironeCfg = getApironeConfig();
 

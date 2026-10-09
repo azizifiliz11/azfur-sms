@@ -110,16 +110,18 @@ export const tcmb = {
     cachedRate = finalRate;
     lastCacheTime = now;
 
-    // Ayarları HEMEN ve AWAIT ile Upstash KV ve veritabanına kaydet
-    const shouldUpdateActiveExchangeRate = settings.useTcmbAutoRate !== false;
-    const updatePayload: Record<string, any> = {
-      lastTcmbRate: finalRate,
-      lastTcmbFetchTime: new Date().toISOString(),
-    };
-    if (shouldUpdateActiveExchangeRate) {
-      updatePayload.exchangeRateToTry = finalRate;
+    // Ayarları SADECE yeni bir kur dış API'den başarıyla çekildiyse ve mevcuttan farklıysa kaydet
+    if (newRate && newRate !== settings.lastTcmbRate) {
+      const shouldUpdateActiveExchangeRate = settings.useTcmbAutoRate !== false;
+      const updatePayload: Record<string, any> = {
+        lastTcmbRate: finalRate,
+        lastTcmbFetchTime: new Date().toISOString(),
+      };
+      if (shouldUpdateActiveExchangeRate) {
+        updatePayload.exchangeRateToTry = finalRate;
+      }
+      await db.updateSettings(updatePayload);
     }
-    await db.updateSettings(updatePayload);
 
     return {
       rate: finalRate,

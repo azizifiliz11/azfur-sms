@@ -1,4 +1,6 @@
 import { Bot, InlineKeyboard, InputFile } from "grammy";
+import fs from "fs";
+import path from "path";
 import { CONFIG } from "./config";
 import { db } from "./db";
 import { heroSms } from "./hero-sms";
@@ -139,8 +141,12 @@ function buildMainMenuKeyboard(isAdmin: boolean, appUrl: string, adminUrl: strin
 async function editOrReply(ctx: any, text: string, keyboard: InlineKeyboard) {
   try {
     if (ctx.callbackQuery?.message?.photo) {
-      await ctx.editMessageCaption({
-        caption: text,
+      // Fotoğraflı bir mesajdan (örneğin ödeme QR kodu) menülere dönerken
+      // QR kodunun her menünün tepesinde kalmasını engellemek için eski fotoğraflı mesajı sil ve temiz metin gönder
+      try {
+        await ctx.deleteMessage();
+      } catch {}
+      await ctx.reply(text, {
         parse_mode: "HTML",
         reply_markup: keyboard,
       });
@@ -340,9 +346,18 @@ export function getTelegramBot(): Bot | null {
 
       const settings = db.getSettings();
 
-      // Fotoğraflı kart modu yalnızca ayarlarda özellikle açık ise kullanılır
-      if (settings.useBannerPhoto) {
-        const photoToUse = settings.bannerFileId || cachedBannerFileId || bannerUrl;
+      // Banner fotoğrafı: kayıtlı file_id, yerel azfur-banner.jpg dosyası veya cdn url
+      if (settings.useBannerPhoto !== false) {
+        let photoToUse: any = settings.bannerFileId || cachedBannerFileId;
+        if (!photoToUse) {
+          const bannerPath = path.join(process.cwd(), "public", "azfur-banner.jpg");
+          if (fs.existsSync(bannerPath)) {
+            photoToUse = new InputFile(bannerPath);
+          } else {
+            photoToUse = bannerUrl;
+          }
+        }
+
         if (photoToUse) {
           try {
             const sent = await ctx.replyWithPhoto(photoToUse, {
@@ -358,7 +373,9 @@ export function getTelegramBot(): Bot | null {
               }
             }
             return;
-          } catch (photoErr) {}
+          } catch (photoErr) {
+            console.warn("Banner gönderilemedi, metin moduna geçiliyor:", photoErr);
+          }
         }
       }
 
@@ -776,10 +793,10 @@ export function getTelegramBot(): Bot | null {
 
       // --- ANA MENÜYE DÖNÜŞ ---
       if (data === "btn_main_menu" || data === "btn_refresh_menu") {
-        const activeOrders = db.getActiveOrders(from.id);
-        const text = buildMainMenuText(user, from.first_name, activeOrders.length);
-        const kb = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
-        await editOrReply(ctx, text, kb);
+        try {
+          await ctx.deleteMessage();
+        } catch {}
+        await sendWelcome(ctx);
         return;
       }
 
@@ -1340,6 +1357,24 @@ export function getTelegramBot(): Bot | null {
 
       // --- OTOMATİK KRİPTO MENÜSÜ & TUTAR SEÇİMİ ---
       if (data === "btn_dep_cbot" || data === "btn_dep_auto") {
+        const { getApironeConfig } = await import("./apirone");
+        const apironeCfg = getApironeConfig();
+
+        if (!apironeCfg.account) {
+          await editOrReply(
+            ctx,
+            `⚠️ <b>OTOMATİK KRİPTO ÖDEME SİSTEMİ HENÜZ AKTİF DEĞİL</b>\n` +
+              `━━━━━━━━━━━━━━━━━━━━\n` +
+              `Yönetici henüz kendi Apirone Account ID ve Transfer Key bilgilerini sisteme tanımlamamıştır.\n\n` +
+              `Lütfen yöneticiyle iletişime geçiniz veya diğer ödeme yöntemlerini kullanınız.`,
+            new InlineKeyboard()
+              .text("💳 Diğer Ödeme Yolları", "btn_deposit_menu")
+              .row()
+              .text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+
         const text =
           `⚡ <b>KRİPTO İLE ÖDE (OTOMATİK)</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1507,12 +1542,23 @@ export function getTelegramBot(): Bot | null {
       // --- KRİPTO BİLGİLERİ ---
       if (data === "btn_dep_crypto") {
         const settings = db.getSettings();
-        const crypto = settings.cryptoSettings || {
-          usdtTrc20Address: "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
-          trxAddress: "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
-        };
+        const crypto = settings.cryptoSettings;
+        const address = (crypto?.usdtTrc20Address || crypto?.trxAddress || "").trim();
 
-        const address = crypto.usdtTrc20Address || crypto.trxAddress || "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t";
+        if (!address || address === "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t") {
+          await editOrReply(
+            ctx,
+            `⚠️ <b>TRON CÜZDAN ADRESİ HENÜZ TANIMLANMADI</b>\n` +
+              `━━━━━━━━━━━━━━━━━━━━\n` +
+              `Yönetici henüz kişisel TRON (USDT / TRX) cüzdan adresini kaydetmemiştir.\n\n` +
+              `Lütfen yöneticiyle iletişime geçiniz veya diğer ödeme yöntemlerini kullanınız.`,
+            new InlineKeyboard()
+              .text("💳 Diğer Ödeme Yolları", "btn_deposit_menu")
+              .row()
+              .text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
 
         const text =
           `💎 <b>KRİPTO PARA İLE BAKİYE YÜKLE</b>\n` +

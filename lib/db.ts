@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   customStickerFileId: "",
   heroSmsApiKey: "",
   backupSettings: DEFAULT_BACKUP_SETTINGS,
+  useBannerPhoto: true,
   vipSettings: {
     defaultDiscountPercent: 15,
     autoVipOnDepositAmount: 500,

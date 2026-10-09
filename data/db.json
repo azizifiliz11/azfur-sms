@@ -22,12 +22,13 @@
       "descriptionNote": "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız."
     },
     "cryptoSettings": {
-      "usdtTrc20Address": "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
-      "trxAddress": "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      "usdtTrc20Address": "",
+      "trxAddress": "",
       "oxapayApiKey": "",
       "cryptoBotToken": "",
       "autoVerifyEnabled": true
     },
+    "useBannerPhoto": true,
     "supportTelegramUsername": "",
     "supportTelegramUsernames": [],
     "customStickerFileId": "",

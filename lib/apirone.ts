@@ -215,6 +215,13 @@ export async function setApironeForwarding(
     };
   }
 
+  if (address === "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t") {
+    return {
+      success: false,
+      error: "Girilen adres (TR7NHq...) Tether akıllı kontrat adresidir. Lütfen kendi şahsi TRON cüzdan adresinizi giriniz.",
+    };
+  }
+
   try {
     const res = await fetch(`https://apirone.com/api/v2/accounts/${account}`, {
       method: "PATCH",

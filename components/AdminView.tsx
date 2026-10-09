@@ -1212,12 +1212,16 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   // Apirone Cüzdan Yönlendirmesini (Forwarding) Ayarla
   const handleSetApironeForwarding = async () => {
     if (!apironeAccount.trim() || !apironeTransferKey.trim()) {
-      alert("Yönlendirme için Apirone Account ID ve Transfer Key gereklidir.");
+      alert("Yönlendirme için lütfen önce Apirone Account ID ve Transfer Key alanlarını doldurunuz.");
       return;
     }
     const targetAddr = (usdtTrc20Address || trxAddress || "").trim();
-    if (!targetAddr) {
-      alert("Lütfen önce yukarıdaki 'USDT (TRC-20) Cüzdan Adresi' alanına kendi kişisel cüzdanınızı yazınız.");
+    if (!targetAddr || targetAddr === "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t") {
+      alert("⚠️ Lütfen yukarıdaki 'USDT (TRC-20) Cüzdan Adresi' kutusuna kendi şahsi TRON cüzdan adresinizi (örn: TrustWallet, TronLink, Binance veya BtcTurk cüzdanınız) giriniz.\n\nVarsayılan 'TR7NHq...' adresi Tether akıllı kontrat adresidir ve bir kişisel cüzdan değildir.");
+      return;
+    }
+    if (!targetAddr.startsWith("T") || targetAddr.length !== 34) {
+      alert("⚠️ Girdiğiniz cüzdan adresi geçerli bir TRON cüzdan formatında değil! (Tron cüzdan adresleri 'T' harfi ile başlamalı ve tam 34 karakter olmalıdır).");
       return;
     }
     setSettingForwarding(true);

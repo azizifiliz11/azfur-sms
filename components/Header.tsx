@@ -37,6 +37,34 @@ interface HeaderProps {
   adminViewActive?: boolean;
 }
 
+function getIstanbulHour(): number {
+  try {
+    const hourPart = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "hour")?.value;
+    if (hourPart !== undefined) {
+      const h = Number(hourPart);
+      if (!isNaN(h)) return h;
+    }
+  } catch {}
+  return new Date().getHours();
+}
+
+function getTimeGreeting(hour: number): string {
+  if (hour >= 5 && hour < 12) {
+    return "Günaydın";
+  }
+  if (hour >= 12 && hour < 18) {
+    return "İyi günler";
+  }
+  // 18:00 - 04:59 (Akşam ve gece saatleri)
+  return "İyi akşamlar";
+}
+
 export function Header({
   user,
   onOpenDeposit,
@@ -49,26 +77,14 @@ export function Header({
 }: HeaderProps) {
   const [refreshing, setRefreshing] = React.useState(false);
   const [copiedId, setCopiedId] = React.useState(false);
-  const [timeGreeting, setTimeGreeting] = React.useState("İyi günler");
+  const [timeGreeting, setTimeGreeting] = React.useState<string>(() => {
+    return getTimeGreeting(getIstanbulHour());
+  });
 
   React.useEffect(() => {
     const updateGreeting = () => {
-      const hourPart = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Europe/Istanbul",
-        hour: "2-digit",
-        hourCycle: "h23",
-      })
-        .formatToParts(new Date())
-        .find((part) => part.type === "hour")?.value;
-      const hour = Number(hourPart);
-
-      setTimeGreeting(
-        hour >= 5 && hour < 12
-          ? "Günaydın"
-          : hour >= 18 && hour < 24
-            ? "İyi akşamlar"
-            : "İyi günler"
-      );
+      const hour = getIstanbulHour();
+      setTimeGreeting(getTimeGreeting(hour));
     };
 
     updateGreeting();
@@ -219,7 +235,10 @@ export function Header({
                 Hesap paneli
               </div>
               <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <h2 className="max-w-full truncate text-[17px] font-extrabold leading-tight tracking-tight text-white">
+                <h2
+                  suppressHydrationWarning
+                  className="max-w-full truncate text-[17px] font-extrabold leading-tight tracking-tight text-white"
+                >
                   {greeting}
                 </h2>
                 {isAdmin && (

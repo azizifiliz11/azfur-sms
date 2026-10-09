@@ -62,9 +62,10 @@ export function Header({
     setTimeout(() => setRefreshing(false), 900);
   };
 
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopyId = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (!user?.telegramId) return;
+
     haptic.impact("light");
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(String(user.telegramId));
@@ -79,10 +80,10 @@ export function Header({
     user.firstName !== "Misafir" &&
     user.firstName !== "Telegram Kullanıcısı";
 
-  const cleanUsername =
-    user?.username && !user.username.startsWith("user_")
-      ? user.username.trim()
-      : "";
+  const cleanUsername = user?.username
+    ? user.username.replace(/^@/, "").trim()
+    : "";
+  const visibleUsername = cleanUsername.startsWith("user_") ? "" : cleanUsername;
 
   const fullName = [user?.firstName, user?.lastName]
     .filter(Boolean)
@@ -91,225 +92,216 @@ export function Header({
 
   const displayName = hasRealFirstName
     ? fullName || user?.firstName || "Kullanıcı"
-    : cleanUsername
-    ? `@${cleanUsername}`
-    : user?.telegramId
-    ? `Kullanıcı #${user.telegramId}`
-    : "Misafir";
+    : visibleUsername
+      ? `@${visibleUsername}`
+      : user?.telegramId
+        ? `Kullanıcı #${user.telegramId}`
+        : "Misafir";
 
-  const initials =
-    user?.firstName && user?.lastName
-      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-      : hasRealFirstName
+  const initials = user?.firstName && user?.lastName
+    ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+    : hasRealFirstName
       ? user.firstName.slice(0, 2).toUpperCase()
-      : cleanUsername
-      ? cleanUsername.slice(0, 2).toUpperCase()
-      : "AZ";
+      : visibleUsername
+        ? visibleUsername.slice(0, 2).toUpperCase()
+        : "AZ";
 
   const balanceDisplay =
     user?.balance !== undefined && !isNaN(Number(user.balance))
       ? Number(user.balance).toFixed(2)
       : "0.00";
 
+  const showUsernameBelowName =
+    visibleUsername && displayName !== `@${visibleUsername}`;
+
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#07080c]/95 backdrop-blur-2xl border-b border-white/[0.08] px-3 pt-2.5 pb-2.5 shadow-2xl shadow-black/80 transition-all">
-      <div className="max-w-md mx-auto space-y-2.5">
-        {/* 1. SATIR: Üst Marka Barı & Hızlı Navigasyon */}
-        <div className="flex items-center justify-between px-0.5">
-          {/* Logo & Canlı Gösterge */}
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm shadow-emerald-500/50" />
-            </span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-black tracking-tight text-white flex items-center gap-1">
-                <span className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">⚡</span>
-                <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent font-extrabold">
-                  AzFur
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/90 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2.5 shadow-xl shadow-black/40 backdrop-blur-2xl">
+      <div className="mx-auto max-w-md space-y-2">
+        {/* Brand and quick actions */}
+        <div className="flex min-h-9 items-center justify-between gap-2 px-0.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.09] text-emerald-300 shadow-inner shadow-emerald-300/[0.06]">
+              <Zap className="h-4 w-4 fill-emerald-300/15" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#080a10] bg-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[15px] font-black leading-none tracking-tight text-white">AzFur</span>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-300">
+                  SMS Onay
                 </span>
-              </span>
-              <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
-                SMS Onay
-              </span>
+              </div>
+              <span className="mt-1 block text-[9px] font-medium leading-none text-zinc-500">Güvenli numara kiralama</span>
             </div>
           </div>
 
-          {/* Sağ Eylemler: Destek & Yönetici Butonları */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {onOpenSupport && (
               <button
+                type="button"
                 onClick={() => {
                   haptic.impact("light");
                   onOpenSupport();
                 }}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-blue-400 border border-blue-500/20 hover:border-blue-500/40 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm text-xs font-semibold"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-400/15 bg-sky-400/[0.06] px-2.5 text-[11px] font-semibold text-sky-300 transition-colors hover:bg-sky-400/[0.12] active:scale-95"
                 title="Canlı Destek & Ticket Aç"
+                aria-label="Canlı destek ve ticket aç"
               >
-                <Headphones className="w-3.5 h-3.5" />
+                <Headphones className="h-3.5 w-3.5" />
                 <span>Destek</span>
               </button>
             )}
 
             {isAdmin && onToggleAdminView && (
               <button
+                type="button"
                 onClick={() => {
                   haptic.impact("light");
                   onToggleAdminView();
                 }}
-                className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 ${
+                className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold transition-colors active:scale-95 ${
                   adminViewActive
-                    ? "bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-purple-500/25"
-                    : "bg-zinc-900/90 text-purple-300 border-purple-500/20 hover:border-purple-500/40"
+                    ? "border-violet-400/35 bg-violet-400/15 text-violet-200"
+                    : "border-violet-400/15 bg-violet-400/[0.06] text-violet-300 hover:bg-violet-400/[0.12]"
                 }`}
                 title="Yönetici Paneli"
+                aria-label={adminViewActive ? "Uygulamaya dön" : "Yönetici panelini aç"}
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-                <span>{adminViewActive ? "App'e Dön" : "Admin"}</span>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>{adminViewActive ? "Uygulama" : "Admin"}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* 2. SATIR: ANA KULLANICI & BAKİYE KARTI (Hero Profile & Balance Card) */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#131726] via-[#0d101a] to-[#090b12] border border-white/[0.09] p-3.5 shadow-xl shadow-black/60">
-          {/* Ambient Lighting */}
-          <div className="absolute -top-16 -right-16 w-36 h-36 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* Account and balance */}
+        <section className="relative overflow-hidden rounded-[1.35rem] border border-white/[0.09] bg-gradient-to-br from-[#151b25] via-[#10141d] to-[#0d1017] p-3 shadow-lg shadow-black/25">
+          <div className="pointer-events-none absolute -right-14 -top-16 h-36 w-36 rounded-full bg-emerald-400/[0.09] blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-12 h-32 w-32 rounded-full bg-sky-400/[0.07] blur-3xl" />
 
-          {/* Profil Üst Bloğu: Avatar + İsim + Kullanıcı Adı + Rozetler */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              {/* Avatar */}
-              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/30 via-emerald-600/15 to-blue-500/25 border border-emerald-500/40 text-emerald-300 font-black text-sm shadow-lg shadow-emerald-500/10 select-none">
-                {initials}
-                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-[#0d101a] shadow-sm" />
+          <div className="relative flex min-w-0 items-center gap-2.5">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border border-emerald-300/25 bg-gradient-to-br from-emerald-300/20 to-sky-400/10 text-[13px] font-black text-emerald-200 shadow-md shadow-emerald-950/20">
+              {initials}
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#11151e] bg-emerald-400" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <h2 className="max-w-full truncate text-[13px] font-bold leading-tight tracking-tight text-white">
+                  {displayName}
+                </h2>
+                {isAdmin && (
+                  <span className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-200">
+                    Admin
+                  </span>
+                )}
+                {user?.isVip && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold text-amber-200">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
+                  </span>
+                )}
               </div>
 
-              {/* İsim & Kullanıcı Bilgisi */}
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h2 className="text-[13.5px] font-black text-white truncate leading-tight tracking-tight">
-                    {displayName}
-                  </h2>
-                  {isAdmin && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      ADMIN
-                    </span>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-400">
+                {showUsernameBelowName && (
+                  <span className="max-w-[42%] truncate font-medium text-zinc-400">@{visibleUsername}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCopyId}
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-1.5 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/10 hover:text-white"
+                  title="Telegram ID'yi kopyala"
+                  aria-label={`Telegram ID ${user?.telegramId || "0"}, kopyalamak için dokun`}
+                >
+                  <span>ID {user?.telegramId || "0"}</span>
+                  {copiedId ? (
+                    <Check className="h-2.5 w-2.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-2.5 w-2.5 opacity-60" />
                   )}
-                  {user?.isVip && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
-                      <Sparkles className="w-2.5 h-2.5" />
-                      <span>VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}</span>
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 truncate">
-                  {cleanUsername ? (
-                    <span className="font-mono text-zinc-300 font-semibold truncate">
-                      @{cleanUsername}
-                    </span>
-                  ) : null}
-                  <button
-                    onClick={handleCopyId}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/5 font-mono text-[10px] transition-all"
-                    title="ID Kopyala"
-                  >
-                    <span>ID: {user?.telegramId || "0"}</span>
-                    {copiedId ? (
-                      <Check className="w-2.5 h-2.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-2.5 h-2.5 opacity-60" />
-                    )}
-                  </button>
-                </div>
+                </button>
               </div>
             </div>
 
-            {/* Hızlı Bakiye/Veri Yenileme Butonu */}
             <button
+              type="button"
               onClick={handleRefreshClick}
               disabled={refreshing}
-              className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.08] active:scale-90 transition-all shrink-0 shadow-sm"
-              title="Bakiyeyi ve Verileri Yenile"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-zinc-400 transition-colors hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:cursor-wait"
+              title="Bakiyeyi ve verileri yenile"
+              aria-label="Bakiyeyi ve verileri yenile"
             >
-              <RefreshCw
-                className={`w-4 h-4 transition-transform ${
-                  refreshing ? "text-emerald-400 animate-spin" : "text-zinc-400 group-hover:text-white"
-                }`}
-              />
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-emerald-300" : ""}`} />
             </button>
           </div>
 
-          {/* Ayraç Çizgisi */}
-          <div className="my-3 border-t border-white/[0.06]" />
+          <div className="relative my-2.5 border-t border-white/[0.07]" />
 
-          {/* Profil Alt Bloğu: Bakiye Göstergesi + Eylem Butonları */}
-          <div className="flex items-center justify-between gap-2.5">
-            {/* Sol: Bakiye Tutar Alanı */}
-            <div
+          <div className="relative flex items-center justify-between gap-2">
+            <button
+              type="button"
               onClick={handleRefreshClick}
-              className="cursor-pointer group select-none flex-1 min-w-0"
-              title="Bakiyeyi Yenilemek İçin Dokunun"
+              className="group min-w-0 flex-1 cursor-pointer text-left"
+              title="Bakiyeyi yenilemek için dokun"
+              aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
             >
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                <Wallet className="w-3 h-3 text-emerald-400" />
-                <span>Mevcut Bakiye</span>
+              <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+                <Wallet className="h-3 w-3 text-emerald-300" />
+                Bakiye
               </span>
-              <div className="flex items-baseline gap-1 mt-0.5 truncate">
-                <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight group-hover:text-emerald-300 transition-colors">
+              <span className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap">
+                <span className="font-mono text-[21px] font-bold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">
                   ₺{balanceDisplay}
                 </span>
-                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                  TRY
-                </span>
-              </div>
-            </div>
+                <span className="text-[9px] font-semibold tracking-wide text-emerald-300">TRY</span>
+              </span>
+            </button>
 
-            {/* Sağ: Kupon ve Bakiye Yükle Eylemleri */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Kupon Kodu Butonu */}
+            <div className="flex shrink-0 items-center gap-1.5">
               {onOpenCoupon && (
                 <button
+                  type="button"
                   onClick={() => {
                     haptic.impact("light");
                     onOpenCoupon();
                   }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-bold text-xs active:scale-95 transition-all shadow-sm"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-2.5 text-[10px] font-bold text-amber-200 transition-colors hover:bg-amber-300/[0.14] active:scale-95"
                   title="Kupon / Promosyon Kodu Kullan"
+                  aria-label="Kupon veya promosyon kodu kullan"
                 >
-                  <Ticket className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <Ticket className="h-3.5 w-3.5" />
                   <span>Kupon</span>
                 </button>
               )}
 
-              {/* Bakiye Yükle Butonu */}
               <button
+                type="button"
                 onClick={handleDepositClick}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-extrabold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition-all"
-                title="Bakiye Yükle"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-300 px-3 text-[10px] font-extrabold text-[#062017] shadow-md shadow-emerald-950/30 transition-all hover:brightness-110 active:scale-95"
+                title="Bakiye yükle"
+                aria-label="Bakiye yükle"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>+ Yükle</span>
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                <span>Yükle</span>
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* 3. SATIR: Hızlı Güvenlik & Garanti Rozetleri (Kompakt Micro-Ribbon) */}
-        <div className="grid grid-cols-3 gap-1.5 px-0.5 text-center">
-          <div className="flex items-center justify-center gap-1 py-1 px-1 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <Zap className="w-3 h-3 text-emerald-400 shrink-0" />
-            <span className="text-[10px] font-bold text-zinc-300 truncate">5-30 Sn Teslim</span>
+        {/* Compact service assurances */}
+        <div className="grid grid-cols-3 gap-1 px-0.5 text-center">
+          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
+            <Zap className="h-3 w-3 shrink-0 text-emerald-300" />
+            <span className="truncate text-[9px] font-semibold text-zinc-300">5–30 sn teslim</span>
           </div>
-          <div className="flex items-center justify-center gap-1 py-1 px-1 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <ShieldAlert className="w-3 h-3 text-blue-400 shrink-0" />
-            <span className="text-[10px] font-bold text-zinc-300 truncate">%100 İade</span>
+          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
+            <ShieldAlert className="h-3 w-3 shrink-0 text-sky-300" />
+            <span className="truncate text-[9px] font-semibold text-zinc-300">%100 iade</span>
           </div>
-          <div className="flex items-center justify-center gap-1 py-1 px-1 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <Clock className="w-3 h-3 text-purple-400 shrink-0" />
-            <span className="text-[10px] font-bold text-zinc-300 truncate">7/24 Aktif</span>
+          <div className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-1 py-1.5">
+            <Clock className="h-3 w-3 shrink-0 text-violet-300" />
+            <span className="truncate text-[9px] font-semibold text-zinc-300">7/24 aktif</span>
           </div>
         </div>
       </div>

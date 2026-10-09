@@ -5,9 +5,9 @@
     "exchangeRateToTry": 49.2152,
     "currencySymbol": "₺",
     "mockMode": false,
-    "adminTelegramId": "7619776444",
+    "adminTelegramId": "8614398114",
     "adminTelegramIds": [
-      "7619776444"
+      "8614398114"
     ],
     "hiddenServices": [],
     "hiddenCountries": [],
@@ -41,7 +41,7 @@
       "firstName": "Beyazdx",
       "balance": 0,
       "spent": 0,
-      "role": "user",
+      "role": "admin",
       "isBanned": false,
       "createdAt": "2026-10-08T21:11:48.253Z",
       "lastActiveAt": "2026-10-08T21:14:59.554Z"

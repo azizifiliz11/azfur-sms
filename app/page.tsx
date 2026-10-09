@@ -185,17 +185,9 @@ function HomeContent() {
           <Zap className="w-8 h-8" />
         </div>
         <h1 className="text-xl font-bold text-white mb-2">AzFur SMS Onay Platformu</h1>
-        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+        <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
           Bu uygulama bir <b>Telegram Mini App (TMA)</b> servisidir. Güvenliğiniz ve işlemlerinizin anında gerçekleşmesi için lütfen Telegram botumuz üzerinden başlatınız.
         </p>
-        <div className="space-y-3 w-full max-w-xs">
-          <a
-            href="/admin"
-            className="w-full py-3 px-4 rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-200 text-xs font-semibold transition-all block text-center"
-          >
-            🛡️ Yönetici Paneline Git
-          </a>
-        </div>
       </div>
     );
   }

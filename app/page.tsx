@@ -12,13 +12,16 @@ import { CouponModal } from "@/components/CouponModal";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
 import { APP_BUILD_VERSION } from "@/lib/app-version";
-import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert } from "lucide-react";
+import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert, Wrench, RotateCcw, Send } from "lucide-react";
 
 function HomeContent() {
   const { isReady, user: tgUser } = useTelegram();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [adminUsernames, setAdminUsernames] = useState<string[]>([]);
+  const [isUserAdmin, setIsUserAdmin] = useState<boolean>(false);
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>("");
   const [countries, setCountries] = useState<Country[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [catalog, setCatalog] = useState<CalculatedCatalogItem[]>([]);
@@ -74,6 +77,15 @@ function HomeContent() {
         setCurrentUser(data.user);
         if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
           setAdminUsernames(data.adminUsernames);
+        }
+        if (data.isAdmin !== undefined) {
+          setIsUserAdmin(Boolean(data.isAdmin));
+        }
+        if (data.maintenanceMode !== undefined) {
+          setMaintenanceMode(Boolean(data.maintenanceMode));
+        }
+        if (data.maintenanceMessage !== undefined) {
+          setMaintenanceMessage(data.maintenanceMessage || "");
         }
       }
     } catch (e) {
@@ -148,6 +160,15 @@ function HomeContent() {
             if (data.success && data.user) {
               if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
                 setAdminUsernames(data.adminUsernames);
+              }
+              if (data.isAdmin !== undefined) {
+                setIsUserAdmin(Boolean(data.isAdmin));
+              }
+              if (data.maintenanceMode !== undefined) {
+                setMaintenanceMode(Boolean(data.maintenanceMode));
+              }
+              if (data.maintenanceMessage !== undefined) {
+                setMaintenanceMessage(data.maintenanceMessage || "");
               }
               setCurrentUser((prev: any) => {
                 if (
@@ -328,7 +349,107 @@ function HomeContent() {
     );
   }
 
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = Boolean(currentUser?.role === "admin" || isUserAdmin);
+
+  // SİSTEM BAKIM MODUNDA İKEN NORMAL KULLANICILARA SAMİMİ BAKIM EKRANI
+  if (maintenanceMode && !isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-zinc-100 p-4 relative overflow-hidden">
+        {/* Ambient background glows */}
+        <div className="absolute -top-32 -left-32 w-80 h-80 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="w-full max-w-md mx-auto space-y-4 relative z-10">
+          {/* Main Card */}
+          <div className="bg-gradient-to-b from-[#151722]/90 to-[#0e1017]/95 border border-amber-500/30 rounded-3xl p-6 shadow-2xl shadow-black/80 backdrop-blur-xl text-center space-y-4">
+            {/* Animated Icon */}
+            <div className="relative inline-flex items-center justify-center">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/40 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Wrench className="w-10 h-10 text-amber-400 animate-bounce" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
+                <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+              </div>
+            </div>
+
+            {/* Badge */}
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                Planlı Altyapı Bakımı
+              </span>
+            </div>
+
+            {/* Header */}
+            <div className="space-y-2">
+              <h1 className="text-xl font-extrabold text-white tracking-tight">
+                Kısa Bir Mola! Bakımdayız ✨
+              </h1>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                {maintenanceMessage?.trim() || (
+                  <>
+                    Değerli Kullanıcımız, sizlere çok daha hızlı, kesintisiz ve kaliteli bir hizmet sunabilmek için altyapımızda kısa süreli bir bakım ve güncelleme çalışması yapıyoruz.
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Warm Note Box */}
+            <div className="bg-amber-950/30 border border-amber-500/20 rounded-2xl p-4 text-left space-y-2">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                <Headphones className="w-4 h-4 shrink-0" />
+                <span>Numara Almak İçin İletişime Geçin:</span>
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                Bu süreçte otomatik sistemimiz geçici olarak kapalıdır. Acil numara almak, bakiye yüklemek veya herhangi bir sorunuz için yöneticilerimizle doğrudan iletişime geçebilirsiniz; hemen yardımcı olacağız!
+              </p>
+            </div>
+
+            {/* Direct Contact Admin Buttons */}
+            <div className="space-y-2 pt-1">
+              {adminUsernames.length > 0 ? (
+                adminUsernames.map((u) => (
+                  <a
+                    key={u}
+                    href={`https://t.me/${u}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 active:scale-98 transition-all"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Yöneticiye Yaz (@{u})</span>
+                  </a>
+                ))
+              ) : (
+                <a
+                  href="https://t.me/azizifiliz"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 active:scale-98 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Yönetici ile İletişime Geç (@azizifiliz)</span>
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={handleRefreshAll}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-zinc-300 font-medium text-xs active:scale-98 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Durumu Tekrar Kontrol Et</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-zinc-500 pt-1">
+              Anlayışınız ve sabrınız için içtenlikle teşekkür ederiz. ❤️
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const displayUser = currentUser
     ? {
@@ -351,6 +472,24 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0f] text-zinc-100">
+      {/* Yönetici için bakım modu bildirim bandı */}
+      {maintenanceMode && isAdmin && (
+        <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-lg sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 shrink-0" />
+            <span>
+              🛠️ <b>SİSTEM BAKIM MODUNDA</b> — Normal kullanıcıların erişimi kapalıdır.
+            </span>
+          </div>
+          <button
+            onClick={() => setAdminViewActive(true)}
+            className="ml-2 px-2.5 py-1 bg-black/30 hover:bg-black/50 rounded-lg text-[11px] font-bold shrink-0 transition-colors"
+          >
+            Paneli Aç
+          </button>
+        </div>
+      )}
+
       {/* Kullanıcı bakiyesi ve profil bilgileri yönetici panelinde gösterilmez. */}
       {!adminViewActive && (
         <Header

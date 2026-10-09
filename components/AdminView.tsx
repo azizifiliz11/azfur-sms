@@ -58,6 +58,9 @@ import {
   ArrowUpFromLine,
   Star,
   Filter,
+  Wrench,
+  Power,
+  CheckCircle2,
 } from "lucide-react";
 import { Card } from "./tremor/Card";
 import { Metric, Text } from "./tremor/Metric";
@@ -80,6 +83,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const [loading, setLoading] = useState<boolean>(true);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Maintenance mode states
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>("");
+  const [togglingMaintenance, setTogglingMaintenance] = useState<boolean>(false);
+  const [savingMaintenance, setSavingMaintenance] = useState<boolean>(false);
 
   // Profit engine states
   const [marginPercent, setMarginPercent] = useState<number>(35);
@@ -316,6 +325,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         setFixedFee(st.settings.globalFixedFee);
         setRateToTry(st.settings.exchangeRateToTry);
         setMockMode(st.settings.mockMode);
+        if (st.settings?.maintenanceMode !== undefined) {
+          setMaintenanceMode(Boolean(st.settings.maintenanceMode));
+        }
+        if (st.settings?.maintenanceMessage !== undefined) {
+          setMaintenanceMessage(st.settings.maintenanceMessage || "");
+        }
         setUseTcmbAutoRate(st.settings.useTcmbAutoRate ?? true);
         setTcmbUpdateIntervalMinutes(st.settings.tcmbUpdateIntervalMinutes ?? 30);
         setLastTcmbRate(st.tcmbRateInfo?.rate || st.settings.lastTcmbRate || 49.2);
@@ -513,6 +528,75 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Sistem Bakım Modunu Aç / Kapat
+  const handleToggleMaintenance = async (targetMode?: boolean) => {
+    const nextMode = targetMode !== undefined ? targetMode : !maintenanceMode;
+    haptic.impact("heavy");
+    setTogglingMaintenance(true);
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          maintenanceMode: nextMode,
+          maintenanceMessage: maintenanceMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMaintenanceMode(nextMode);
+        if (nextMode) {
+          haptic.impact("heavy");
+        } else {
+          haptic.success();
+        }
+        setToastMsg(
+          nextMode
+            ? "🛠️ Sistem Bakım Moduna Alındı! (Normal kullanıcıların erişimi kapalı)"
+            : "🟢 Bakım Modu Kapatıldı! Sistem tüm kullanıcılara açıldı."
+        );
+        setTimeout(() => setToastMsg(null), 4000);
+      } else {
+        haptic.error();
+        alert(data.error || "Bakım modu güncellenemedi.");
+      }
+    } catch (e: any) {
+      haptic.error();
+      alert("Hata: " + e.message);
+    } finally {
+      setTogglingMaintenance(false);
+    }
+  };
+
+  // Özel Bakım Mesajını Kaydet
+  const handleSaveMaintenanceMessage = async () => {
+    haptic.impact("medium");
+    setSavingMaintenance(true);
+    try {
+      const res = await adminFetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          maintenanceMessage: maintenanceMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        haptic.success();
+        setToastMsg("✅ Özel bakım mesajı başarıyla güncellendi.");
+        setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        alert(data.error || "Kayıt hatası");
+      }
+    } catch (e: any) {
+      haptic.error();
+      alert("Hata: " + e.message);
+    } finally {
+      setSavingMaintenance(false);
     }
   };
 
@@ -2405,6 +2489,86 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* TAB 1: OVERVIEW & METRICS */}
       {activeTab === "overview" && (
         <div className="space-y-4">
+          {/* SİSTEM BAKIM DURUMU & TEK TIKLA BAKIMA ALMA KARTI */}
+          <div
+            className={`p-4 rounded-2xl border transition-all duration-300 ${
+              maintenanceMode
+                ? "bg-gradient-to-br from-red-950/40 via-red-900/20 to-zinc-950/80 border-red-500/50 shadow-lg shadow-red-950/30 ring-1 ring-red-500/30"
+                : "bg-gradient-to-br from-emerald-950/30 via-zinc-950/70 to-zinc-950 border-emerald-500/30 shadow-md shadow-emerald-950/20"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    maintenanceMode
+                      ? "bg-red-500/20 border-red-500/40 text-red-400"
+                      : "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                  }`}
+                >
+                  <Wrench className={`w-5 h-5 ${maintenanceMode ? "text-red-400" : ""}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-white">Sistem Bakım Modu</h3>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        maintenanceMode
+                          ? "bg-red-500/20 text-red-300 border-red-500/40 animate-pulse"
+                          : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          maintenanceMode ? "bg-red-400" : "bg-emerald-400"
+                        }`}
+                      />
+                      {maintenanceMode ? "BAKIMDA (Kullanıcılara Kapalı)" : "AÇIK (Normal Çalışma)"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                    {maintenanceMode
+                      ? "⚠️ Bakım aktif: Normal kullanıcılar bot ve Mini App'te samimi bakım ekranını ve yöneticilerle iletişim butonlarını görür. Yöneticiler her yere tam erişebilir."
+                      : "Sistem aktif: Tüm kullanıcılar Telegram botundan ve Mini App'ten kesintisiz işlem yapabilir."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-[11px] text-zinc-400">
+                {maintenanceMode ? (
+                  <span className="text-amber-300 font-medium flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Yalnızca yöneticiler işlem yapabilir
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">
+                    Acil durumlarda veya güncellemede tek tıkla sistemi bakıma alabilirsiniz.
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleToggleMaintenance()}
+                disabled={togglingMaintenance}
+                className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md disabled:opacity-50 ${
+                  maintenanceMode
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                    : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30"
+                }`}
+              >
+                {togglingMaintenance ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Power className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {maintenanceMode ? "Bakımı Kapat (Sistemi Aç)" : "Sistemi Bakıma Al"}
+                </span>
+              </button>
+            </div>
+          </div>
           {/* Servis Sağlayıcı Kasa Monitörü */}
           <Card className="p-4 bg-gradient-to-br from-[#12141e] to-[#0c0e15] border-blue-500/30">
             <div className="flex items-center justify-between">
@@ -2954,6 +3118,88 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* TAB: CRYPTO WALLET & INTEGRATION SETTINGS */}
       {activeTab === "bank" && (
         <div className="space-y-4">
+          {/* SİSTEM BAKIM MODU & DUYURU AYARLARI */}
+          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
+                    maintenanceMode
+                      ? "bg-red-500/20 border-red-500/40 text-red-400"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                  }`}
+                >
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Sistem Bakım Modu & Duyuru</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                        maintenanceMode
+                          ? "bg-red-500/20 text-red-300 border-red-500/40"
+                          : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                      }`}
+                    >
+                      {maintenanceMode ? "Aktif (Kullanıcılara Kapalı)" : "Pasif (Sistem Açık)"}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Bakım modundayken kullanıcılara gösterilecek samimi duyuruyu belirleyin.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleMaintenance()}
+                disabled={togglingMaintenance}
+                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 ${
+                  maintenanceMode
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30"
+                    : "bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30"
+                }`}
+              >
+                {togglingMaintenance ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Power className="w-3.5 h-3.5" />
+                )}
+                <span>{maintenanceMode ? "Bakımı Kapat" : "Bakımı Aç"}</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Özel Bakım Mesajı / Duyurusu (İsteğe Bağlı)
+              </label>
+              <textarea
+                value={maintenanceMessage}
+                onChange={(e) => setMaintenanceMessage(e.target.value)}
+                placeholder="Boş bırakılırsa samimi varsayılan mesaj kullanılır: 'Değerli Kullanıcımız, sistemimizde bakım çalışması yapılmaktadır. Numara almak için yöneticilerle iletişime geçiniz...'"
+                rows={4}
+                className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Bu mesaj hem Telegram botunda (/start, menü butonları) hem de Web Mini App bakım ekranında gösterilir. Yöneticilerin Telegram iletişim butonları otomatik olarak altına eklenir.
+              </p>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveMaintenanceMessage}
+                  disabled={savingMaintenance}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {savingMaintenance ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>Mesajı Kaydet</span>
+                </button>
+              </div>
+            </div>
+          </Card>
+
           {/* Otomatik Kripto (TRX & USDT & CryptoBot) Cüzdan Ayarları */}
           <Card className="p-4 space-y-4 border-emerald-500/30">
             <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">

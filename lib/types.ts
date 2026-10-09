@@ -160,6 +160,8 @@ export interface SystemSettings {
     autoVipOnDepositAmount?: number; // Otomatik VIP olma eşiği (örn: 500 ₺)
     enabled: boolean;
   };
+  maintenanceMode?: boolean; // Sistem bakım modu (Kullanıcılara kapalı, adminlere açık)
+  maintenanceMessage?: string; // Samimi özel bakım mesajı
 }
 
 export interface BackupStats {

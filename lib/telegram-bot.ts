@@ -320,6 +320,97 @@ export function getTelegramBot(): Bot | null {
     });
 
     // ==========================================
+    // 0.3. SİSTEM BAKIM MODU (MAINTENANCE MODE) KONTROLÜ
+    // ==========================================
+    botInstance.use(async (ctx, next) => {
+      const from = ctx.from;
+      if (!from || !from.id) return next();
+
+      // Adminler bakım modundan muaftır, sisteme her zaman tam ve sınırsız erişebilir
+      if (db.isAdmin(from.id)) {
+        return next();
+      }
+
+      const settings = db.getSettings();
+      if (settings.maintenanceMode) {
+        const adminUsernames = getAdminUsernamesList();
+        const adminsText = adminUsernames.length > 0
+          ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+          : "Yöneticilerimizle doğrudan iletişime geçebilirsiniz.";
+
+        const customMsg = settings.maintenanceMessage?.trim();
+        const text =
+          customMsg ||
+          (
+            `🛠️ <b>KISA BİR MOLA! SİSTEMİMİZ BAKIMDADIR</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Değerli Kullanıcımız,\n\n` +
+            `Sizlere daha kaliteli, hızlı ve kesintisiz hizmet sunabilmek amacıyla sistemimizde kısa süreli bir <b>altyapı bakım ve güncelleme çalışması</b> yapmaktayız. ✨\n\n` +
+            `⏳ <b>Bu süreçte botumuz ve web uygulamamız geçici olarak otomatik işlemlere kapalıdır.</b>\n\n` +
+            `📞 <b>Numara almak, bakiye yüklemek veya bilgi almak için lütfen yöneticilerimizle doğrudan iletişime geçiniz:</b>\n\n` +
+            `👑 <b>Yöneticilerimiz:</b>\n` +
+            `${adminsText}\n\n` +
+            `Anlayışınız ve sabrınız için teşekkür ederiz! ❤️`
+          );
+
+        const kb = new InlineKeyboard();
+        if (adminUsernames.length > 0) {
+          for (const u of adminUsernames) {
+            kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
+          }
+        } else {
+          kb.url(`💬 Yöneticiye Yaz (@azizifiliz)`, `https://t.me/azizifiliz`).row();
+        }
+        kb.text("🔄 Durumu Tekrar Kontrol Et", "btn_check_maintenance");
+
+        if (ctx.callbackQuery) {
+          if (ctx.callbackQuery.data === "btn_check_maintenance") {
+            const fresh = db.getSettings();
+            if (fresh.maintenanceMode) {
+              try {
+                await ctx.answerCallbackQuery({
+                  text: "🛠️ Bakım çalışması halen devam ediyor. Lütfen biraz sonra tekrar deneyin.",
+                  show_alert: true,
+                });
+              } catch (e) {}
+              return;
+            } else {
+              try {
+                await ctx.answerCallbackQuery({
+                  text: "🎉 Bakım tamamlandı! Sistem yeniden açıldı.",
+                  show_alert: false,
+                });
+              } catch (e) {}
+              return next();
+            }
+          }
+          try {
+            await ctx.answerCallbackQuery({
+              text: "🛠️ Sistemimiz şu anda bakımdadır.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          try {
+            await ctx.editMessageText(text, {
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+          } catch (e) {}
+        } else {
+          try {
+            await ctx.reply(text, {
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+          } catch (e) {}
+        }
+        return; // Normal kullanıcı için akışı burada durdur
+      }
+
+      await next();
+    });
+
+    // ==========================================
     // 1. /start VE /menu KOMUTLARI (ŞİMŞEK HIZINDA KARŞILAMA)
     // ==========================================
     const sendWelcome = async (ctx: any) => {
@@ -434,6 +525,43 @@ export function getTelegramBot(): Bot | null {
           `• Banlama ve güvenlik ayarları\n` +
           `• Toplu duyuru ve push bildirimleri\n\n` +
           `Aşağıdaki butonlara tıklayarak işlem yapabilirsiniz 👇`,
+        {
+          parse_mode: "HTML",
+          reply_markup: kb,
+        }
+      );
+    });
+
+    // /bakim veya /maintenance Komutu (Yalnızca Admin)
+    botInstance.command(["bakim", "maintenance"], async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+      await db.syncFromCloud();
+      const isAdmin = db.isAdmin(from.id);
+      if (!isAdmin) return;
+
+      const current = db.getSettings();
+      const newMode = !current.maintenanceMode;
+      await db.updateSettings({ maintenanceMode: newMode });
+
+      db.addLog({
+        category: "ADMIN",
+        level: newMode ? "WARN" : "SUCCESS",
+        action: newMode ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+        details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) /bakim komutuyla bakım modunu ${newMode ? "AÇTI" : "KAPATTI"}.`,
+        telegramId: from.id,
+        username: from.username,
+      }).catch(() => {});
+
+      const kb = new InlineKeyboard().text(
+        newMode ? "🟢 Bakım Modunu Kapat" : "🔴 Sistemi Bakıma Al",
+        "adm_toggle_maintenance"
+      );
+
+      await ctx.reply(
+        newMode
+          ? `🛠️ <b>SİSTEM BAKIMA ALINDI!</b>\n━━━━━━━━━━━━━━━━━━━━\nNormal kullanıcıların bot ve Mini App üzerinden numara alımı durduruldu.\n\nYöneticiler tüm özellikleri kullanmaya ve test etmeye devam edebilir.\n\nKapatmak için tekrar <code>/bakim</code> yazabilir veya butona tıklayabilirsiniz.`
+          : `🟢 <b>BAKIM MODU KAPATILDI!</b>\n━━━━━━━━━━━━━━━━━━━━\nSistem tüm kullanıcılar için yeniden aktif ve kullanıma açıldı.`,
         {
           parse_mode: "HTML",
           reply_markup: kb,
@@ -1770,6 +1898,7 @@ export function getTelegramBot(): Bot | null {
         const text =
           `👑 <b>YÖNETİCİ KONTROL PANELİ</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🛠️ <b>Bakım Durumu:</b> ${settings.maintenanceMode ? "🔴 AKTİF (Kullanıcılara Kapalı)" : "🟢 KAPALI (Sistem Açık)"}\n` +
           `👥 <b>Kayıtlı Kullanıcı:</b> <code>${allUsers.length} kişi</code>\n` +
           `💳 <b>Kullanıcı Bakiyeleri Toplamı:</b> <code>${totalUserBalance.toFixed(2)} ₺</code>\n` +
           `💸 <b>Toplam Gerçekleşen Ciro:</b> <code>${totalUserSpent.toFixed(2)} ₺</code>\n` +
@@ -1781,6 +1910,78 @@ export function getTelegramBot(): Bot | null {
 
         const kb = new InlineKeyboard()
           .webApp("🛡️ Detaylı Web Admin Paneli", adminUrl)
+          .row()
+          .text(
+            settings.maintenanceMode ? "🟢 Bakım Modunu KAPAT" : "🔴 Sistemi BAKIMA AL",
+            "adm_toggle_maintenance"
+          )
+          .row()
+          .text("📦 Yedekleme & Geri Yükleme", "adm_bkp_menu")
+          .row()
+          .text("🔄 Bilgileri Yenile", "btn_admin_menu")
+          .text("🔙 Ana Menü", "btn_main_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- BAKIM MODUNU DEĞİŞTİRME BUTONU ---
+      if (data === "adm_toggle_maintenance") {
+        if (!isAdmin) {
+          try { await ctx.answerCallbackQuery(); } catch (e) {}
+          return;
+        }
+
+        const currentSettings = db.getSettings();
+        const newMode = !currentSettings.maintenanceMode;
+        await db.updateSettings({ maintenanceMode: newMode });
+
+        db.addLog({
+          category: "ADMIN",
+          level: newMode ? "WARN" : "SUCCESS",
+          action: newMode ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+          details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) bot üzerinden bakım modunu ${newMode ? "AÇTI" : "KAPATTI"}.`,
+          telegramId: from.id,
+          username: from.username,
+        }).catch(() => {});
+
+        try {
+          await ctx.answerCallbackQuery({
+            text: newMode
+              ? "🛠️ Bakım modu AÇILDI! Normal kullanıcılar sisteme erişemez."
+              : "🟢 Bakım modu KAPATILDI! Sistem tüm kullanıcılara açıldı.",
+            show_alert: true,
+          });
+        } catch (e) {}
+
+        const allUsers = db.getAllUsers();
+        const allActivations = db.getAllActivations();
+        const updatedSettings = db.getSettings();
+        const providerBalance = await heroSms.getBalance();
+
+        const totalUserBalance = allUsers.reduce((sum, u) => sum + (u.balance || 0), 0);
+        const totalUserSpent = allUsers.reduce((sum, u) => sum + (u.spent || 0), 0);
+
+        const text =
+          `👑 <b>YÖNETİCİ KONTROL PANELİ</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🛠️ <b>Bakım Durumu:</b> ${updatedSettings.maintenanceMode ? "🔴 AKTİF (Kullanıcılara Kapalı)" : "🟢 KAPALI (Sistem Açık)"}\n` +
+          `👥 <b>Kayıtlı Kullanıcı:</b> <code>${allUsers.length} kişi</code>\n` +
+          `💳 <b>Kullanıcı Bakiyeleri Toplamı:</b> <code>${totalUserBalance.toFixed(2)} ₺</code>\n` +
+          `💸 <b>Toplam Gerçekleşen Ciro:</b> <code>${totalUserSpent.toFixed(2)} ₺</code>\n` +
+          `📦 <b>Toplam Sipariş Adedi:</b> <code>${allActivations.length} adet</code>\n` +
+          `🌐 <b>Hero-SMS Sağlayıcı Bakiyesi:</b> <code>${providerBalance.balance.toFixed(2)} USD</code>\n` +
+          `💱 <b>Aktif USD Kuru:</b> <code>${(updatedSettings.lastTcmbRate || updatedSettings.exchangeRateToTry || 49.2).toFixed(2)} ₺</code>\n` +
+          `📈 <b>Global Kâr Marjı:</b> <code>%${updatedSettings.globalMarginPercent} + ${updatedSettings.globalFixedFee}₺</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━`;
+
+        const kb = new InlineKeyboard()
+          .webApp("🛡️ Detaylı Web Admin Paneli", adminUrl)
+          .row()
+          .text(
+            updatedSettings.maintenanceMode ? "🟢 Bakım Modunu KAPAT" : "🔴 Sistemi BAKIMA AL",
+            "adm_toggle_maintenance"
+          )
           .row()
           .text("📦 Yedekleme & Geri Yükleme", "adm_bkp_menu")
           .row()

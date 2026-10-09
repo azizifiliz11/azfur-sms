@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
         currency: settings.currencySymbol,
         isAdmin: db.isAdmin(telegramId) || user.role === "admin",
         adminUsernames,
+        maintenanceMode: Boolean(settings.maintenanceMode),
+        maintenanceMessage: settings.maintenanceMessage || "",
       },
       {
         headers: {
@@ -119,13 +121,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const settings = db.getSettings();
     const adminUsernames = getAdminUsernamesList();
-    const responseUser = user && db.isAdmin(telegramId) && user.role !== "admin"
+    const isAdmin = db.isAdmin(telegramId) || user?.role === "admin";
+    const responseUser = user && isAdmin && user.role !== "admin"
       ? { ...user, role: "admin" as const }
       : user;
 
     return NextResponse.json(
-      { success: true, user: responseUser, adminUsernames },
+      {
+        success: true,
+        user: responseUser,
+        adminUsernames,
+        isAdmin,
+        maintenanceMode: Boolean(settings.maintenanceMode),
+        maintenanceMessage: settings.maintenanceMessage || "",
+      },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

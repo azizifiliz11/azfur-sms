@@ -26,6 +26,16 @@ export async function POST(req: NextRequest) {
     // 1. Kullanıcıyı ve bakiyesini kontrol et
     const user = await db.getOrCreateUser(telegramId);
 
+    const settings = db.getSettings();
+    if (settings.maintenanceMode && !db.isAdmin(telegramId) && user.role !== "admin") {
+      const friendlyMsg = settings.maintenanceMessage?.trim() ||
+        "Sistemimiz şu anda planlı bakım çalışmasındadır. Numara almak veya işlemleriniz için lütfen yöneticilerimizle iletişime geçiniz.";
+      return NextResponse.json(
+        { success: false, error: friendlyMsg },
+        { status: 503 }
+      );
+    }
+
     if (user.isBanned) {
       return NextResponse.json(
         { success: false, error: "Hesabınız sistem yöneticisi tarafından askıya alınmıştır (banlı). Numara kiralayamazsınız." },

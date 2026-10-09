@@ -241,6 +241,16 @@ export async function POST(req: NextRequest) {
       heroSms.clearCache();
     }
 
+    if (body.maintenanceMode !== undefined) {
+      await db.addLog({
+        category: "ADMIN",
+        level: body.maintenanceMode ? "WARN" : "SUCCESS",
+        action: body.maintenanceMode ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+        details: `Sistem Bakım Modu ${body.maintenanceMode ? "AÇILDI (Kullanıcılara Kapatıldı)" : "KAPATILDI (Sistem Açıldı)"}.`,
+        metadata: { maintenanceMode: body.maintenanceMode, maintenanceMessage: body.maintenanceMessage },
+      }).catch(() => {});
+    }
+
     // İşlem tipine göre detaylı log kaydı oluştur
     if (body.cryptoSettings) {
       await db.addLog({

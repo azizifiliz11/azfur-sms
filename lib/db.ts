@@ -85,6 +85,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
     autoVipOnDepositAmount: 500,
     enabled: true,
   },
+  maintenanceMode: false,
+  maintenanceMessage: "",
 };
 
 const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";

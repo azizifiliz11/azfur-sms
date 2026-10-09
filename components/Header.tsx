@@ -49,6 +49,32 @@ export function Header({
 }: HeaderProps) {
   const [refreshing, setRefreshing] = React.useState(false);
   const [copiedId, setCopiedId] = React.useState(false);
+  const [timeGreeting, setTimeGreeting] = React.useState("İyi günler");
+
+  React.useEffect(() => {
+    const updateGreeting = () => {
+      const hourPart = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Istanbul",
+        hour: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(new Date())
+        .find((part) => part.type === "hour")?.value;
+      const hour = Number(hourPart);
+
+      setTimeGreeting(
+        hour >= 5 && hour < 12
+          ? "Günaydın"
+          : hour >= 18 && hour < 24
+            ? "İyi akşamlar"
+            : "İyi günler"
+      );
+    };
+
+    updateGreeting();
+    const intervalId = window.setInterval(updateGreeting, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const handleDepositClick = () => {
     haptic.impact("medium");
@@ -99,8 +125,11 @@ export function Header({
         ? `Kullanıcı #${user.telegramId}`
         : "Misafir";
 
-  const greeting = hasRealFirstName && user?.firstName
-    ? `Merhaba, ${user.firstName}`
+  const greetingName = hasRealFirstName && user?.firstName
+    ? user.firstName
+    : displayName;
+  const greeting = user
+    ? `${timeGreeting}, ${greetingName}`
     : displayName;
 
   const initials = user?.firstName && user?.lastName

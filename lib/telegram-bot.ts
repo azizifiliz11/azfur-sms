@@ -1665,6 +1665,15 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
+        db.addLog({
+          category: "ADMIN",
+          level: "INFO",
+          action: "BOT_ADMIN_MENU_OPENED",
+          details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) bot üzerinden Yönetici Kontrol Paneline giriş yaptı.`,
+          telegramId: from.id,
+          username: from.username,
+        }).catch(() => {});
+
         const allUsers = db.getAllUsers();
         const allActivations = db.getAllActivations();
         const settings = db.getSettings();
@@ -1782,6 +1791,15 @@ export function getTelegramBot(): Bot | null {
         try {
           await ctx.answerCallbackQuery({ text: "📥 Canlı veritabanı hazırlanıyor..." });
         } catch (e) {}
+
+        db.addLog({
+          category: "SYSTEM",
+          level: "WARN",
+          action: "BOT_LIVE_DB_DOWNLOADED",
+          details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) bot üzerinden canlı veritabanını indirdi.`,
+          telegramId: from.id,
+          username: from.username,
+        }).catch(() => {});
 
         await db.syncFromCloud();
         const liveSnapshot = db.getFullDatabaseSnapshot();

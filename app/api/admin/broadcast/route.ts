@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
         }, { status: 400 });
       }
 
+      await db.addLog({
+        category: "ADMIN",
+        level: "INFO",
+        action: "BROADCAST_DIRECT_SENT",
+        details: `${telegramId} ID'li kullanıcıya doğrudan mesaj gönderildi.`,
+        telegramId: Number(telegramId),
+        metadata: { messagePreview: cleanMessage.slice(0, 100) },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: `${telegramId} ID'li kullanıcıya mesaj başarıyla iletildi.`,
@@ -58,6 +67,14 @@ export async function POST(req: NextRequest) {
           failedCount++;
         }
       }
+
+      await db.addLog({
+        category: "ADMIN",
+        level: "INFO",
+        action: "BROADCAST_ALL_SENT",
+        details: `Tüm kullanıcılara toplu duyuru gönderildi (${sentCount} başarılı, ${failedCount} başarısız).`,
+        metadata: { sentCount, failedCount, totalUsers: users.length, messagePreview: cleanMessage.slice(0, 100) },
+      }).catch(() => {});
 
       return NextResponse.json({
         success: true,

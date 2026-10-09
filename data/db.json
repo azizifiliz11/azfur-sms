@@ -24,6 +24,8 @@
     "cryptoSettings": {
       "usdtTrc20Address": "",
       "trxAddress": "",
+      "apironeAccount": "",
+      "apironeTransferKey": "",
       "oxapayApiKey": "",
       "cryptoBotToken": "",
       "autoVerifyEnabled": true

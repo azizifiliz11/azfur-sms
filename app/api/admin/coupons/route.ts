@@ -96,6 +96,14 @@ export async function POST(req: NextRequest) {
 
       await db.saveCoupon(newCoupon);
 
+      await db.addLog({
+        category: "COUPON",
+        level: "SUCCESS",
+        action: "COUPON_CREATED",
+        details: `Yeni kupon oluşturuldu: '${code}' (${type === "BALANCE" ? `+₺${value}` : `%${value}`}, Maks: ${maxUses || "Limitsiz"}).`,
+        metadata: { code, type, value, maxUses },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: `'${code}' kuponu başarıyla oluşturuldu.`,
@@ -115,6 +123,14 @@ export async function POST(req: NextRequest) {
       coupon.isActive = !coupon.isActive;
       await db.saveCoupon(coupon);
 
+      await db.addLog({
+        category: "COUPON",
+        level: "INFO",
+        action: "COUPON_STATUS_TOGGLED",
+        details: `'${coupon.code}' kuponu ${coupon.isActive ? "aktif" : "pasif"} yapıldı.`,
+        metadata: { id, code: coupon.code, isActive: coupon.isActive },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: `'${coupon.code}' kuponu ${coupon.isActive ? "aktif" : "pasif"} duruma getirildi.`,
@@ -125,10 +141,20 @@ export async function POST(req: NextRequest) {
     // 3. Kuponu Sil
     if (action === "delete") {
       const { id } = body;
+      const coupons = db.getCoupons();
+      const targetCoupon = coupons.find((c) => c.id === id);
       const ok = await db.deleteCoupon(id);
       if (!ok) {
         return NextResponse.json({ success: false, error: "Kupon bulunamadı veya silinemedi." }, { status: 404 });
       }
+
+      await db.addLog({
+        category: "COUPON",
+        level: "WARN",
+        action: "COUPON_DELETED",
+        details: `'${targetCoupon?.code || id}' kuponu silindi.`,
+        metadata: { id, code: targetCoupon?.code },
+      }).catch(() => {});
 
       return NextResponse.json({
         success: true,

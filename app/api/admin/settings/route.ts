@@ -41,6 +41,13 @@ export async function POST(req: NextRequest) {
     // Özel işlem: TCMB canlı kurunu anında yeniden çek
     if (body.action === "refresh_tcmb") {
       const live = await tcmb.getLiveRate(true);
+      await db.addLog({
+        category: "ADMIN",
+        level: "INFO",
+        action: "TCMB_MANUAL_REFRESH",
+        details: `Yönetici TCMB canlı kurunu manuel güncelledi. Yeni Kur: ₺${live.rate.toFixed(4)} (${live.source})`,
+        metadata: { rate: live.rate, source: live.source },
+      }).catch(() => {});
       return NextResponse.json({
         success: true,
         message: `TCMB Kuru başarıyla güncellendi: ₺${live.rate.toFixed(4)}`,
@@ -64,6 +71,13 @@ export async function POST(req: NextRequest) {
         const text = await res.text();
         if (text.startsWith("ACCESS_BALANCE:")) {
           const balance = parseFloat(text.replace("ACCESS_BALANCE:", "").trim());
+          await db.addLog({
+            category: "ADMIN",
+            level: "SUCCESS",
+            action: "HERO_SMS_KEY_TESTED",
+            details: `Hero-SMS API anahtarı doğrulandı. Sağlayıcı bakiyesi: ${balance} ₽`,
+            metadata: { balance },
+          }).catch(() => {});
           return NextResponse.json({
             success: true,
             balance: isNaN(balance) ? 0 : balance,
@@ -95,6 +109,25 @@ export async function POST(req: NextRequest) {
       const testKey = (body.transferKey || db.getSettings().cryptoSettings?.apironeTransferKey || "").trim();
       const testRes = await testApironeConnection(testAcc, testKey);
       if (testRes.success) {
+        // Test başarılı olunca silinmemesi için hemen DB'ye kaydet
+        if (testAcc) {
+          const curSettings = db.getSettings();
+          await db.updateSettings({
+            cryptoSettings: {
+              ...(curSettings.cryptoSettings || {}),
+              apironeAccount: testAcc,
+              ...(testKey ? { apironeTransferKey: testKey } : {}),
+            },
+          });
+        }
+        await db.addLog({
+          category: "CRYPTO",
+          level: "SUCCESS",
+          action: "APIRONE_ACCOUNT_TESTED",
+          details: `Apirone hesabı (${testAcc}) başarıyla test edildi ve kaydedildi.`,
+          metadata: { account: testAcc },
+        }).catch(() => {});
+
         return NextResponse.json({
           success: true,
           message: testRes.message || "Apirone bağlantısı başarılı ve hesap aktif!",
@@ -112,6 +145,14 @@ export async function POST(req: NextRequest) {
       const { createApironeAccount } = await import("@/lib/apirone");
       const result = await createApironeAccount();
       if (result.success) {
+        await db.addLog({
+          category: "CRYPTO",
+          level: "SUCCESS",
+          action: "APIRONE_ACCOUNT_CREATED",
+          details: `Yeni Apirone hesabı oluşturuldu (ID: ${result.account}).`,
+          metadata: { account: result.account },
+        }).catch(() => {});
+
         return NextResponse.json({
           success: true,
           message: result.message || "Apirone hesabı başarıyla oluşturuldu!",
@@ -136,6 +177,26 @@ export async function POST(req: NextRequest) {
       const curr = (body.currency || "usdt@trx").trim();
 
       const res = await setApironeForwarding(acc, key, curr, dest);
+      if (res.success && acc && key) {
+        // Bilgilerin silinmesini önlemek için veritabanına ve buluta hemen kalıcı olarak kaydet
+        const curSettings = db.getSettings();
+        await db.updateSettings({
+          cryptoSettings: {
+            ...(curSettings.cryptoSettings || {}),
+            apironeAccount: acc,
+            apironeTransferKey: key,
+            usdtTrc20Address: dest,
+          },
+        });
+
+        await db.addLog({
+          category: "CRYPTO",
+          level: "SUCCESS",
+          action: "APIRONE_FORWARDING_ENABLED",
+          details: `Apirone otomatik yönlendirme (Forwarding) ${dest} adresine bağlandı (Hesap: ${acc}).`,
+          metadata: { account: acc, destinationAddress: dest, currency: curr },
+        }).catch(() => {});
+      }
       return NextResponse.json(res);
     }
 
@@ -159,6 +220,50 @@ export async function POST(req: NextRequest) {
     const updated = await db.updateSettings(body);
     if (body.heroSmsApiKey !== undefined) {
       heroSms.clearCache();
+    }
+
+    // İşlem tipine göre detaylı log kaydı oluştur
+    if (body.cryptoSettings) {
+      await db.addLog({
+        category: "CRYPTO",
+        level: "INFO",
+        action: "CRYPTO_SETTINGS_UPDATED",
+        details: `Kripto cüzdan ve Apirone ayarları kaydedildi (Apirone ID: ${body.cryptoSettings.apironeAccount || "Yok"}).`,
+        metadata: {
+          usdtTrc20Address: body.cryptoSettings.usdtTrc20Address,
+          trxAddress: body.cryptoSettings.trxAddress,
+          apironeAccount: body.cryptoSettings.apironeAccount,
+        },
+      }).catch(() => {});
+    } else if (body.bankInfo) {
+      await db.addLog({
+        category: "BANK",
+        level: "INFO",
+        action: "BANK_INFO_UPDATED",
+        details: `Banka havale/EFT bilgileri güncellendi (${body.bankInfo.bankName || "Banka"}).`,
+        metadata: body.bankInfo,
+      }).catch(() => {});
+    } else if (body.globalMarginPercent !== undefined || body.exchangeRateToTry !== undefined) {
+      await db.addLog({
+        category: "PRICING",
+        level: "INFO",
+        action: "PRICING_SETTINGS_UPDATED",
+        details: `Kâr marjı (%${body.globalMarginPercent ?? updated.globalMarginPercent}), sabit ücret (₺${body.globalFixedFee ?? updated.globalFixedFee}) ve kur ayarları kaydedildi.`,
+        metadata: {
+          marginPercent: body.globalMarginPercent,
+          fixedFee: body.globalFixedFee,
+          rateToTry: body.exchangeRateToTry,
+          mockMode: body.mockMode,
+          useTcmbAutoRate: body.useTcmbAutoRate,
+        },
+      }).catch(() => {});
+    } else {
+      await db.addLog({
+        category: "ADMIN",
+        level: "INFO",
+        action: "SYSTEM_SETTINGS_UPDATED",
+        details: "Sistem genel ayarları güncellendi.",
+      }).catch(() => {});
     }
 
     return NextResponse.json({

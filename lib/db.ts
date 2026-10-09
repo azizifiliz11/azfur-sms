@@ -377,7 +377,32 @@ export const db = {
 
   async updateSettings(partial: Partial<SystemSettings>): Promise<SystemSettings> {
     const data = loadDb();
-    data.settings = { ...data.settings, ...partial };
+
+    // Nested ayar objelerini derin birleştir (Deep Merge) - Apirone ve cüzdan bilgilerinin silinmesini kesinlikle önler
+    const mergedCrypto = partial.cryptoSettings
+      ? { ...(data.settings.cryptoSettings || DEFAULT_SETTINGS.cryptoSettings), ...partial.cryptoSettings }
+      : data.settings.cryptoSettings;
+
+    const mergedBank = partial.bankInfo
+      ? { ...(data.settings.bankInfo || DEFAULT_SETTINGS.bankInfo), ...partial.bankInfo }
+      : data.settings.bankInfo;
+
+    const mergedBackup = partial.backupSettings
+      ? { ...(data.settings.backupSettings || DEFAULT_SETTINGS.backupSettings), ...partial.backupSettings }
+      : data.settings.backupSettings;
+
+    const mergedVip = partial.vipSettings
+      ? { ...(data.settings.vipSettings || DEFAULT_SETTINGS.vipSettings), ...partial.vipSettings }
+      : data.settings.vipSettings;
+
+    data.settings = {
+      ...data.settings,
+      ...partial,
+      ...(mergedCrypto ? { cryptoSettings: mergedCrypto } : {}),
+      ...(mergedBank ? { bankInfo: mergedBank } : {}),
+      ...(mergedBackup ? { backupSettings: mergedBackup } : {}),
+      ...(mergedVip ? { vipSettings: mergedVip } : {}),
+    };
     await saveDb(data);
     return data.settings;
   },
@@ -1115,6 +1140,7 @@ export const db = {
     coupon?: Coupon;
     addedBalance?: number;
     newBalance?: number;
+    activeDiscount?: any;
   }> {
     const data = loadDb();
     if (!data.coupons) data.coupons = {};
@@ -1166,42 +1192,77 @@ export const db = {
       };
     }
 
-    // Kullanıcıyı al veya oluştur
-    let user = this.getUser(telegramId);
+    // Kullanıcıyı data üzerinde doğrudan bul veya oluştur (çift saveDb ezmesini önler)
+    const cleanId = String(telegramId).trim();
+    let foundKey = Object.keys(data.users).find(
+      (k) => String(k).trim() === cleanId || String(data.users[k]?.telegramId).trim() === cleanId
+    );
+    let user = foundKey ? data.users[foundKey] : null;
+
     if (!user) {
-      user = await this.getOrCreateUser(telegramId);
+      user = {
+        telegramId: Number(cleanId),
+        username: "",
+        firstName: "Telegram Kullanıcısı",
+        balance: 0,
+        spent: 0,
+        role: this.isAdmin(cleanId) ? "admin" : "user",
+        isBanned: false,
+        createdAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
+      data.users[cleanId] = user;
     }
 
     // Kuponu kullanıldı olarak kaydet
     coupon.usedCount = (coupon.usedCount || 0) + 1;
-    coupon.usedByUserIds.push(telegramId);
+    coupon.usedByUserIds.push(Number(cleanId));
 
     // 1. HEDİYE BAKİYE KUPONU (BALANCE)
     if (coupon.type === "BALANCE") {
       const bonus = Number(coupon.value) || 0;
-      await this.updateUserBalance(telegramId, bonus);
-      const updatedUser = this.getUser(telegramId);
+      user.balance = Math.max(0, Number(((user.balance || 0) + bonus).toFixed(2)));
+      user.lastActiveAt = new Date().toISOString();
       await saveDb(data);
+
+      this.addLog({
+        category: "COUPON",
+        level: "SUCCESS",
+        action: "COUPON_REDEEMED",
+        details: `${user.username ? `@${user.username}` : cleanId} kullanıcısı '${coupon.code}' kuponunu kullandı. Hesaba +${bonus.toFixed(2)} ₺ eklendi (Yeni bakiye: ${user.balance.toFixed(2)} ₺).`,
+        telegramId: Number(cleanId),
+        username: user.username,
+        metadata: { code: coupon.code, bonus, newBalance: user.balance },
+      }).catch(() => {});
 
       return {
         success: true,
         message: `🎉 <b>Tebrikler!</b> <code>${coupon.code}</code> kuponu başarıyla kullanıldı ve hesabınıza <b>+₺${bonus.toFixed(2)}</b> hediye bakiye yüklendi!`,
         coupon,
         addedBalance: bonus,
-        newBalance: updatedUser?.balance || 0,
+        newBalance: user.balance,
       };
     }
 
     // 2. İNDİRİM KUPONU (DISCOUNT_PERCENT veya DISCOUNT_FIXED)
     if (coupon.type === "DISCOUNT_PERCENT" || coupon.type === "DISCOUNT_FIXED") {
-      await this.updateUser(telegramId, {
-        activeDiscount: {
-          code: coupon.code,
-          type: coupon.type,
-          value: coupon.value,
-        },
-      });
+      user.activeDiscount = {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+      };
+      user.lastActiveAt = new Date().toISOString();
       await saveDb(data);
+
+      this.addLog({
+        category: "COUPON",
+        level: "SUCCESS",
+        action: "COUPON_REDEEMED",
+        details: `${user.username ? `@${user.username}` : cleanId} kullanıcısı '${coupon.code}' indirim kuponunu tanımladı (${coupon.type === "DISCOUNT_PERCENT" ? `%${coupon.value}` : `₺${coupon.value}`}).`,
+        telegramId: Number(cleanId),
+        username: user.username,
+        metadata: { code: coupon.code, discount: user.activeDiscount },
+      }).catch(() => {});
 
       const label =
         coupon.type === "DISCOUNT_PERCENT"
@@ -1212,6 +1273,7 @@ export const db = {
         success: true,
         message: `🎉 <b>Tebrikler!</b> <code>${coupon.code}</code> kuponu başarıyla tanımlandı!\n\nBir sonraki numara kiralama işleminizde <b>${label}</b> indirim otomatik olarak uygulanacaktır.`,
         coupon,
+        activeDiscount: user.activeDiscount,
       };
     }
 
@@ -1322,6 +1384,15 @@ export const db = {
     }
 
     await saveDb(data);
+
+    this.addLog({
+      category: "SYSTEM",
+      level: "INFO",
+      action: "BACKUP_CREATED",
+      details: `${defaultLabel} oluşturuldu (ID: ${backupId}, Boyut: ${(sizeBytes / 1024).toFixed(1)} KB, Kullanıcı: ${usersCount}).`,
+      metadata: { backupId, type, sizeBytes, usersCount, activationsCount },
+    }).catch(() => {});
+
     return backupRecord;
   },
 
@@ -1475,6 +1546,14 @@ export const db = {
       depositsCount: currentData.deposits.length,
       couponsCount: Object.keys(currentData.coupons).length,
     };
+
+    this.addLog({
+      category: "SYSTEM",
+      level: "WARN",
+      action: "BACKUP_RESTORED",
+      details: `Sistem yedeği geri yüklendi! (${stats.usersCount} kullanıcı, ${stats.activationsCount} sipariş yüklendi).`,
+      metadata: stats,
+    }).catch(() => {});
 
     return {
       success: true,

@@ -8,7 +8,7 @@ interface CouponModalProps {
   isOpen: boolean;
   onClose: () => void;
   telegramId: number;
-  onSuccess?: () => void;
+  onSuccess?: (couponResult?: any) => void;
   activeDiscount?: {
     code: string;
     type: "DISCOUNT_PERCENT" | "DISCOUNT_FIXED";
@@ -63,12 +63,12 @@ export function CouponModal({
       if (data.success) {
         haptic.success();
         let title = "Kupon Başarıyla Tanımlandı!";
-        if (data.type === "BALANCE") {
-          title = `🎉 +${data.value} ₺ Bakiye Eklendi!`;
-        } else if (data.type === "DISCOUNT_PERCENT") {
-          title = `🎉 %${data.value} İndirim Aktif Edildi!`;
-        } else if (data.type === "DISCOUNT_FIXED") {
-          title = `🎉 -${data.value} ₺ İndirim Aktif Edildi!`;
+        if (data.coupon?.type === "BALANCE" || data.addedBalance) {
+          title = `🎉 +${data.addedBalance || data.coupon?.value} ₺ Bakiye Eklendi!`;
+        } else if (data.coupon?.type === "DISCOUNT_PERCENT") {
+          title = `🎉 %${data.coupon?.value} İndirim Aktif Edildi!`;
+        } else if (data.coupon?.type === "DISCOUNT_FIXED") {
+          title = `🎉 -${data.coupon?.value} ₺ İndirim Aktif Edildi!`;
         }
 
         setStatusMsg({
@@ -78,7 +78,7 @@ export function CouponModal({
         });
         setCouponCode("");
         if (onSuccess) {
-          onSuccess();
+          onSuccess(data);
         }
       } else {
         haptic.error();

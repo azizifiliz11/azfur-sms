@@ -237,6 +237,11 @@ export type LogCategory =
   | 'SECURITY'
   | 'SETTINGS'
   | 'BACKUP'
+  | 'COUPON'
+  | 'TICKET'
+  | 'CRYPTO'
+  | 'BANK'
+  | 'PRICING'
   | 'SYSTEM';
 
 export type LogLevel = 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR';

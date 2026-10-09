@@ -98,6 +98,16 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      await db.addLog({
+        category: "TICKET",
+        level: "INFO",
+        action: "TICKET_REPLIED",
+        details: `#${ticketId} nolu destek talebine yönetici yanıtı gönderildi (${ticket?.username ? `@${ticket.username}` : ticket?.telegramId || ""}).`,
+        telegramId: ticket?.telegramId,
+        username: ticket?.username,
+        metadata: { ticketId, replyPreview: message.trim().slice(0, 100) },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: "Yanıt başarıyla gönderildi ve kullanıcı bilgilendirildi.",
@@ -116,6 +126,17 @@ export async function POST(req: NextRequest) {
       }
 
       const updated = await db.updateTicketStatus(ticketId, status);
+
+      await db.addLog({
+        category: "TICKET",
+        level: status === "CLOSED" ? "INFO" : "SUCCESS",
+        action: "TICKET_STATUS_CHANGED",
+        details: `#${ticketId} nolu destek talebi durumu '${status}' olarak güncellendi.`,
+        telegramId: ticket?.telegramId,
+        username: ticket?.username,
+        metadata: { ticketId, status },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: status === "CLOSED" ? "Destek talebi kapatıldı." : "Destek talebi yeniden açıldı.",
@@ -126,6 +147,16 @@ export async function POST(req: NextRequest) {
     // 3. Destek Talebini Kalıcı Olarak Silme
     if (action === "delete") {
       const deleted = await db.deleteTicket(ticketId);
+
+      await db.addLog({
+        category: "TICKET",
+        level: "WARN",
+        action: "TICKET_DELETED",
+        details: `#${ticketId} nolu destek talebi silindi.`,
+        telegramId: ticket?.telegramId,
+        metadata: { ticketId },
+      }).catch(() => {});
+
       return NextResponse.json({
         success: true,
         message: deleted ? "Destek talebi başarıyla silindi." : "Talep silinemedi.",

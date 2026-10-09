@@ -61,54 +61,10 @@ function HomeContent() {
     }
   }, [tgUser]);
 
-  // Bakiye ve kullanıcı verilerini periyodik olarak canlı senkronize et (0 gecikme)
-  useEffect(() => {
-    if (!tgUser) return;
-
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        fetch(`/api/user/me?telegramId=${tgUser.id}`, { cache: "no-store" })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.success && data.user) {
-              if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
-                setAdminUsernames(data.adminUsernames);
-              }
-              setCurrentUser((prev: any) => {
-                if (
-                  !prev ||
-                  prev.balance !== data.user.balance ||
-                  prev.spent !== data.user.spent ||
-                  prev.isBanned !== data.user.isBanned
-                ) {
-                  return { ...prev, ...data.user };
-                }
-                return prev;
-              });
-            }
-          })
-          .catch(() => {});
-      }
-    }, 3000);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        initUser();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [tgUser, initUser]);
-
   // 2. Canlı Katalog ve Fiyatları Getir (Kesintisiz & Yarış Durumu Korumalı)
   const fetchCatalog = useCallback(async (countryId: number = 62) => {
     activeCountryIdRef.current = countryId;
 
-    // Önbellekte varsa anında göster, ekran asla eski fiyata zıplamasın
     if (catalogCacheRef.current[countryId]) {
       setCatalog(catalogCacheRef.current[countryId]);
     } else {
@@ -158,6 +114,75 @@ function HomeContent() {
       console.error("Fetch active orders error:", e);
     }
   }, [tgUser]);
+
+  // Bakiye, kullanıcı verilerini ve aktif siparişleri periyodik olarak canlı senkronize et (0 gecikme)
+  useEffect(() => {
+    if (!tgUser) return;
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        // 1. Kullanıcı Verilerini ve Bakiyeyi Eşitle
+        fetch(`/api/user/me?telegramId=${tgUser.id}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.success && data.user) {
+              if (data.adminUsernames && Array.isArray(data.adminUsernames)) {
+                setAdminUsernames(data.adminUsernames);
+              }
+              setCurrentUser((prev: any) => {
+                if (
+                  !prev ||
+                  prev.balance !== data.user.balance ||
+                  prev.spent !== data.user.spent ||
+                  prev.isBanned !== data.user.isBanned ||
+                  prev.isVip !== data.user.isVip ||
+                  prev.vipDiscountPercent !== data.user.vipDiscountPercent ||
+                  prev.role !== data.user.role ||
+                  JSON.stringify(prev.activeDiscount) !== JSON.stringify(data.user.activeDiscount)
+                ) {
+                  return { ...prev, ...data.user };
+                }
+                return prev;
+              });
+            }
+          })
+          .catch(() => {});
+
+        // 2. Aktif Siparişleri ve Gelen SMS Kodlarını Canlı Eşitle
+        fetchActiveOrders();
+      }
+    }, 3000);
+
+    // 3. Fiyat ve Stok Kataloğunu 12 saniyede bir sessizce canlı güncelle
+    const catalogInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        const countryId = activeCountryIdRef.current || 62;
+        fetch(`/api/sms/catalog?country=${countryId}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.success && activeCountryIdRef.current === countryId && data.catalog) {
+              catalogCacheRef.current[countryId] = data.catalog;
+              setCatalog(data.catalog);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 12000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        initUser();
+        fetchActiveOrders();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(catalogInterval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [tgUser, initUser, fetchActiveOrders]);
 
   // Sayfa yüklendiğinde verileri SADECE bir kez çek
   useEffect(() => {
@@ -430,7 +455,20 @@ function HomeContent() {
         isOpen={couponModalOpen}
         onClose={() => setCouponModalOpen(false)}
         telegramId={tgUser?.id || currentUser?.telegramId || 0}
-        onSuccess={handleRefreshAll}
+        onSuccess={(couponResult) => {
+          if (couponResult?.newBalance !== undefined) {
+            setCurrentUser((prev: any) =>
+              prev
+                ? {
+                    ...prev,
+                    balance: couponResult.newBalance,
+                    activeDiscount: couponResult.activeDiscount ?? prev.activeDiscount,
+                  }
+                : prev
+            );
+          }
+          handleRefreshAll();
+        }}
         activeDiscount={currentUser?.activeDiscount}
       />
 

@@ -2889,6 +2889,26 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"
+                      onClick={handleSaveCryptoSettings}
+                      disabled={savingCrypto || !apironeAccount.trim()}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50"
+                      title="Girdiğiniz Apirone Account ID ve Transfer Key bilgilerini veritabanına ve buluta kalıcı olarak kaydeder"
+                    >
+                      {savingCrypto ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Kaydediliyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Apirone Bilgilerini Kaydet</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={handleTestApironeAccount}
                       disabled={testingApirone || !apironeAccount.trim()}
                       className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"

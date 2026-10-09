@@ -105,7 +105,16 @@ export async function POST(req: NextRequest) {
 
     // 1. Kullanıcı Silme
     if (action === "delete_user") {
+      const existingUser = db.getUser(telegramId);
       await db.deleteUser(telegramId);
+      await db.addLog({
+        category: "ADMIN",
+        level: "WARN",
+        action: "USER_DELETED",
+        details: `${existingUser?.firstName || "Kullanıcı"} (@${existingUser?.username || telegramId}) sistemden tamamen silindi.`,
+        telegramId: Number(telegramId),
+        username: existingUser?.username,
+      }).catch(() => {});
       return NextResponse.json({ success: true, message: "Kullanıcı başarıyla silindi" });
     }
 
@@ -177,6 +186,16 @@ export async function POST(req: NextRequest) {
         note,
         userData,
       });
+
+      await db.addLog({
+        category: "ADMIN",
+        level: isVip ? "SUCCESS" : "INFO",
+        action: "VIP_STATUS_CHANGED",
+        details: `${updated.firstName} (@${updated.username || telegramId}) VIP durumu: ${isVip ? `VIP Yapıldı (%${updated.vipDiscountPercent || 15} İndirim)` : "VIP Kaldırıldı"}.`,
+        telegramId: Number(telegramId),
+        username: updated.username,
+        metadata: { isVip, discountPercent: updated.vipDiscountPercent },
+      }).catch(() => {});
 
       // Telegram üzerinden kullanıcıyı anında bilgilendir
       if (isVip) {

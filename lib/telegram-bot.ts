@@ -1823,14 +1823,16 @@ export function getTelegramBot(): Bot | null {
           await ctx.answerCallbackQuery({ text: "📥 Dosya gönderiliyor..." });
         } catch (e) {}
 
-        const dateStr = new Date(backup.timestamp).toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        const rawDate = backup.createdAt || backup.timestamp;
+        const d = rawDate && !isNaN(new Date(rawDate).getTime()) ? new Date(rawDate) : new Date();
+        const dateStr = d.toISOString().slice(0, 19).replace(/[:T]/g, "-");
         const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
         const jsonBuffer = Buffer.from(JSON.stringify(backup.data, null, 2), "utf8");
 
         await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
           caption:
             `📦 <b>${backup.label}</b>\n` +
-            `🕒 <b>Tarih:</b> ${new Date(backup.timestamp).toLocaleString("tr-TR")}\n` +
+            `🕒 <b>Tarih:</b> ${d.toLocaleString("tr-TR")}\n` +
             `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount || 0}\n` +
             `📁 <b>Boyut:</b> ${(backup.sizeBytes / 1024).toFixed(1)} KB`,
           parse_mode: "HTML",

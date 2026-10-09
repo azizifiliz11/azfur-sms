@@ -296,32 +296,14 @@ export async function createApironeInvoice(params: {
 
     const calculatedMinorAmount = Math.max(1, Math.round(cryptoPayAmount * minorUnits));
 
-    // Callback webhook URL belirle ve doğrula (Yalnızca geçerli bir public HTTPS URL yapılandırılmışsa gönderilir)
+    // Apirone fatura (invoice) oluştururken callback-url parametresini ZORUNLU KILMAZ.
+    // Otomatik üretilen domainler (Vercel vb.) Apirone tarafından 400 veya 500 hatasıyla reddedilebilir.
+    // Bu nedenle callback-url yalnızca yönetici panelinde AÇIKÇA geçerli bir Webhook URL tanımlanmışsa gönderilir.
     let candidateCallback: string | null = null;
     try {
-      const rawUrl = (
-        settings.cryptoSettings?.callbackUrl ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (process.env.VERCEL_PROJECT_PRODUCTION_URL
-          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-          : "") ||
-        ""
-      ).trim();
-
-      if (rawUrl) {
-        const urlObj = new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`);
-        const host = urlObj.hostname.toLowerCase();
-        // Apirone localhost, 127.0.0.1 veya port içeren adresleri reddeder
-        if (
-          urlObj.protocol === "https:" &&
-          host !== "localhost" &&
-          host !== "127.0.0.1" &&
-          host !== "0.0.0.0" &&
-          !host.endsWith(".local") &&
-          !urlObj.port
-        ) {
-          candidateCallback = `${urlObj.origin}/api/user/deposit/crypto-webhook`;
-        }
+      const explicitUrl = (settings.cryptoSettings?.callbackUrl || "").trim();
+      if (explicitUrl && explicitUrl.startsWith("https://")) {
+        candidateCallback = explicitUrl;
       }
     } catch {
       candidateCallback = null;
@@ -354,25 +336,29 @@ export async function createApironeInvoice(params: {
       cache: "no-store",
     });
 
-    let data = await res.json();
-
-    // Otomatik İyileştirme (Self-Healing): Eğer Apirone callback_url hatası verirse
-    // callback-url parametresini kaldırıp ANINDA tekrar dene.
-    if (
-      !res.ok &&
-      invoicePayload["callback-url"] &&
-      (String(data.message || "").toLowerCase().includes("calback") ||
-        String(data.message || "").toLowerCase().includes("callback") ||
-        res.status === 400)
-    ) {
-      delete invoicePayload["callback-url"];
-      res = await fetch(`https://apirone.com/api/v2/accounts/${account}/invoices`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(invoicePayload),
-        cache: "no-store",
-      });
+    let data: any = {};
+    try {
       data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    // Otomatik İyileştirme (Self-Healing): Eğer Apirone herhangi bir hata dönerse
+    // ve istekte callback-url varsa, callback-url'i ANINDA kaldırıp tekrar dene!
+    if ((!res.ok || !data.invoice || !data.address) && invoicePayload["callback-url"]) {
+      delete invoicePayload["callback-url"];
+      try {
+        const retryRes = await fetch(`https://apirone.com/api/v2/accounts/${account}/invoices`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(invoicePayload),
+          cache: "no-store",
+        });
+        if (retryRes.ok) {
+          res = retryRes;
+          data = await retryRes.json();
+        }
+      } catch {}
     }
 
     if (!res.ok || !data.invoice || !data.address) {

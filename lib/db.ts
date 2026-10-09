@@ -101,7 +101,14 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<void> {
   }
 }
 
+let memoryDb: DatabaseSchema | null = null;
+let lastCloudSyncTime = 0;
+const CLOUD_SYNC_TTL_MS = 15000; // 15 saniye içinde tekrarlanan sync istekleri belleğe anında cevap verir (0ms gecikme)
+
 function loadDb(): DatabaseSchema {
+  if (memoryDb) {
+    return memoryDb;
+  }
   ensureDbDirectory();
   if (!fs.existsSync(DB_PATH)) {
     // Vercel ortamında seed dosyasından kopyala
@@ -109,7 +116,8 @@ function loadDb(): DatabaseSchema {
       try {
         const seedRaw = fs.readFileSync(SEED_DB_PATH, "utf8");
         fs.writeFileSync(DB_PATH, seedRaw, "utf8");
-        return JSON.parse(seedRaw);
+        memoryDb = JSON.parse(seedRaw);
+        return memoryDb!;
       } catch (e) {
         // devam et
       }
@@ -124,6 +132,7 @@ function loadDb(): DatabaseSchema {
       coupons: {},
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
+    memoryDb = initialData;
     return initialData;
   }
 
@@ -173,10 +182,11 @@ function loadDb(): DatabaseSchema {
       }
     }
 
+    memoryDb = data;
     return data;
   } catch (err) {
     console.error("Error reading db.json, returning empty defaults:", err);
-    return {
+    const fallback: DatabaseSchema = {
       settings: DEFAULT_SETTINGS,
       users: {},
       activations: {},
@@ -184,10 +194,13 @@ function loadDb(): DatabaseSchema {
       tickets: {},
       coupons: {},
     };
+    memoryDb = fallback;
+    return fallback;
   }
 }
 
-async function saveDb(data: DatabaseSchema): Promise<void> {
+async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promise<void> {
+  memoryDb = data; // Anında belleği güncelle
   ensureDbDirectory();
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
@@ -199,16 +212,19 @@ async function saveDb(data: DatabaseSchema): Promise<void> {
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
-  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için anında Upstash KV'ye yaz
-  try {
-    await saveToCloudKv(data);
-  } catch (e) {
-    console.error("Error saving to cloud KV:", e);
+  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV'ye yaz (non-blocking)
+  if (syncToCloud) {
+    saveToCloudKv(data).catch((e) => console.error("Error saving to cloud KV:", e));
   }
 }
 
 export const db = {
-  async syncFromCloud(): Promise<DatabaseSchema> {
+  async syncFromCloud(force: boolean = false): Promise<DatabaseSchema> {
+    const now = Date.now();
+    // 15 saniye içinde önbellekte varsa ve force değilse hemen bellekten dön (0ms ağ gecikmesi)
+    if (!force && memoryDb && now - lastCloudSyncTime < CLOUD_SYNC_TTL_MS) {
+      return memoryDb;
+    }
     if (!KV_URL || !KV_TOKEN) return loadDb();
     try {
       const res = await fetch(KV_URL, {
@@ -236,14 +252,20 @@ export const db = {
             }
           }
 
+          memoryDb = cloudData;
+          lastCloudSyncTime = now;
+
           // Yerel belleğe ve diske de yaz
-          ensureDbDirectory();
-          fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-          if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
-            try {
-              fs.writeFileSync(SEED_DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-            } catch {}
-          }
+          try {
+            ensureDbDirectory();
+            fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
+            if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
+              try {
+                fs.writeFileSync(SEED_DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
+              } catch {}
+            }
+          } catch {}
+
           return cloudData;
         }
       }
@@ -347,7 +369,8 @@ export const db = {
       if (profile?.username) user.username = profile.username.replace(/^@/, "").trim();
       if (profile?.firstName) user.firstName = profile.firstName.trim();
       if (profile?.lastName !== undefined) user.lastName = profile.lastName ? profile.lastName.trim() : undefined;
-      await saveDb(data);
+      // Bellek ve diski anında güncelle, buluta yazma kuyruğuna sokma (sıfır gecikme)
+      await saveDb(data, false);
     } else if (profile?.firstName) {
       await this.getOrCreateUser(cleanId, {
         username: profile.username,

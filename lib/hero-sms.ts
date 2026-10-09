@@ -12,6 +12,7 @@ let servicesCacheTime = 0;
 
 let cachedPrices: Record<string, Record<string, PriceStockItem>> | null = null;
 let pricesCacheTime = 0;
+let cachedCountryPrices: Record<number, { data: Record<string, Record<string, PriceStockItem>>; time: number }> = {};
 
 // Country metadata is loaded comprehensively from ./country-flags.ts
 
@@ -54,6 +55,7 @@ export const heroSms = {
     servicesCacheTime = 0;
     cachedPrices = null;
     pricesCacheTime = 0;
+    cachedCountryPrices = {};
   },
 
   /**
@@ -187,8 +189,13 @@ export const heroSms = {
    */
   async getPrices(countryId?: number): Promise<Record<string, Record<string, PriceStockItem>>> {
     const now = Date.now();
-    // Cache for 30 seconds for live stock performance
-    if (cachedPrices && now - pricesCacheTime < 30000 && !countryId) {
+    // 30 saniye boyunca önbellekten anında sun (sıfır gecikme)
+    if (countryId !== undefined) {
+      const cached = cachedCountryPrices[countryId];
+      if (cached && now - cached.time < 30000) {
+        return cached.data;
+      }
+    } else if (cachedPrices && now - pricesCacheTime < 30000) {
       return cachedPrices;
     }
 
@@ -201,13 +208,18 @@ export const heroSms = {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
-      if (!countryId) {
+      if (countryId !== undefined) {
+        cachedCountryPrices[countryId] = { data, time: now };
+      } else {
         cachedPrices = data;
         pricesCacheTime = now;
       }
       return data;
     } catch (err) {
       console.error("Hero-SMS getPrices error:", err);
+      if (countryId !== undefined && cachedCountryPrices[countryId]) {
+        return cachedCountryPrices[countryId].data;
+      }
       return cachedPrices || {};
     }
   },

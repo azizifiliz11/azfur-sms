@@ -45,6 +45,9 @@ function getAppUrls() {
   };
 }
 
+// Telegram CDN File ID önbelleği (Start menüsünü 50ms'de anında açmak için)
+let cachedBannerFileId: string | null = null;
+
 export function getAdminUsernamesList(): string[] {
   const settings = db.getSettings();
   const list = new Set<string>();
@@ -188,21 +191,17 @@ export function getTelegramBot(): Bot | null {
     botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN);
 
     // ==========================================
-    // 0. GLOBAL KULLANICI PROFİL SENKRONİZASYON MİDDLEWARE
+    // 0. GLOBAL KULLANICI PROFİL SENKRONİZASYON MİDDLEWARE (SIFIR GECİKME - NON-BLOCKING)
     // ==========================================
     botInstance.use(async (ctx, next) => {
       const from = ctx.from;
       if (from && from.id) {
-        try {
-          await db.syncFromCloud();
-          await db.touchUserActive(from.id, {
-            username: from.username,
-            firstName: from.first_name,
-            lastName: from.last_name,
-          });
-        } catch (e) {
-          console.warn("Global user sync error:", e);
-        }
+        // Kullanıcı aktifliğini arka planda non-blocking güncelle (kullanıcıyı 1 milisaniye bile bekletmez)
+        db.touchUserActive(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }).catch(() => {});
       }
       await next();
     });
@@ -309,18 +308,19 @@ export function getTelegramBot(): Bot | null {
     });
 
     // ==========================================
-    // 1. /start VE /menu KOMUTLARI
+    // 1. /start VE /menu KOMUTLARI (ŞİMŞEK HIZINDA KARŞILAMA)
     // ==========================================
     const sendWelcome = async (ctx: any) => {
       const from = ctx.from;
       if (!from) return;
 
-      await db.syncFromCloud();
-      const user = await db.getOrCreateUser(from.id, {
-        username: from.username,
-        firstName: from.first_name,
-        lastName: from.last_name,
-      });
+      const user =
+        db.getUser(from.id) ||
+        (await db.getOrCreateUser(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }));
 
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
@@ -329,15 +329,31 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-
-      // Fotoğraflı şık karşılama kartı dene
-      if (bannerUrl.startsWith("https://")) {
+      // 1. Eğer Telegram file_id zaten bellekteyse doğrudan file_id ile anında gönder (~30ms)
+      if (cachedBannerFileId) {
         try {
-          await ctx.replyWithPhoto(bannerUrl, {
+          await ctx.replyWithPhoto(cachedBannerFileId, {
             caption: messageText,
             parse_mode: "HTML",
             reply_markup: keyboard,
           });
+          return;
+        } catch (err) {
+          cachedBannerFileId = null; // file_id geçersizse sıfırla
+        }
+      }
+
+      // 2. İlk defa çalışırken URL ile gönder ve dönen file_id'yi sonraki tüm /start'lar için önbelleğe al
+      if (bannerUrl.startsWith("https://")) {
+        try {
+          const sent = await ctx.replyWithPhoto(bannerUrl, {
+            caption: messageText,
+            parse_mode: "HTML",
+            reply_markup: keyboard,
+          });
+          if (sent?.photo && sent.photo.length > 0) {
+            cachedBannerFileId = sent.photo[sent.photo.length - 1].file_id;
+          }
           return;
         } catch (photoErr) {
           // Banner gönderilemezse metin olarak gönder
@@ -448,12 +464,13 @@ export function getTelegramBot(): Bot | null {
       if (!from) return;
       await sendAnimatedVisual(ctx, "🎰");
 
-      await db.syncFromCloud();
-      const user = await db.getOrCreateUser(from.id, {
-        username: from.username,
-        firstName: from.first_name,
-        lastName: from.last_name,
-      });
+      const user =
+        db.getUser(from.id) ||
+        (await db.getOrCreateUser(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }));
       const kb = new InlineKeyboard()
         .text("💳 Bakiye Yükle", "btn_deposit_menu")
         .text("🛒 Numara Al", "btn_buy_menu")
@@ -737,16 +754,17 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      try {
-        await ctx.answerCallbackQuery().catch(() => {});
-      } catch (e) {}
+      // 1. Buton tıklamasını ANINDA Telegram'a bildir ve yükleniyor çemberini kes (Non-blocking, 0ms)
+      ctx.answerCallbackQuery().catch(() => {});
 
-      await db.syncFromCloud();
-      const user = await db.getOrCreateUser(from.id, {
-        username: from.username,
-        firstName: from.first_name,
-        lastName: from.last_name,
-      });
+      // 2. Kullanıcıyı bellekten hemen getir (0ms)
+      const user =
+        db.getUser(from.id) ||
+        (await db.getOrCreateUser(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }));
 
       const { appUrl, adminUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";

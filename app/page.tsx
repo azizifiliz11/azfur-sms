@@ -46,7 +46,7 @@ function HomeContent() {
         localStorage.setItem("azfur_app_build", APP_BUILD_VERSION);
         urlParams.set("v", APP_BUILD_VERSION);
         urlParams.set("t", String(Date.now()));
-        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}${window.location.hash}`;
         if (typeof window !== "undefined" && window.location.replace) {
           window.location.replace(newUrl);
         }

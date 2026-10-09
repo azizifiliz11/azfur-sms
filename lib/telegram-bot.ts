@@ -342,6 +342,78 @@ export function getTelegramBot(): Bot | null {
         return next();
       }
 
+      // Kullanıcı "Durumu Tekrar Kontrol Et" butonuna bastıysa (anında buluttan kontrol et ve karşıla)
+      if (ctx.callbackQuery && ctx.callbackQuery.data === "btn_check_maintenance") {
+        await db.syncFromCloud(true);
+        const freshSettings = db.getSettings();
+
+        if (freshSettings.maintenanceMode) {
+          try {
+            await ctx.answerCallbackQuery({
+              text: "🛠️ Bakım çalışması halen devam ediyor. Numara almak için yöneticilerimizle iletişime geçebilirsiniz.",
+              show_alert: true,
+            });
+          } catch (e) {}
+
+          const adminUsernames = getAdminUsernamesList();
+          const adminsText = adminUsernames.length > 0
+            ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+            : "Yöneticilerimizle doğrudan iletişime geçebilirsiniz.";
+          const customMsg = freshSettings.maintenanceMessage?.trim();
+          const text =
+            customMsg ||
+            (
+              `🛠️ <b>KISA BİR MOLA! SİSTEMİMİZ BAKIMDADIR</b>\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `Değerli Kullanıcımız,\n\n` +
+              `Sizlere daha kaliteli, hızlı ve kesintisiz hizmet sunabilmek amacıyla sistemimizde kısa süreli bir <b>altyapı bakım ve güncelleme çalışması</b> yapmaktayız. ✨\n\n` +
+              `⏳ <b>Bu süreçte botumuz ve web uygulamamız geçici olarak otomatik işlemlere kapalıdır.</b>\n\n` +
+              `📞 <b>Numara almak, bakiye yüklemek veya bilgi almak için lütfen yöneticilerimizle doğrudan iletişime geçiniz:</b>\n\n` +
+              `👑 <b>Yöneticilerimiz:</b>\n` +
+              `${adminsText}\n\n` +
+              `Anlayışınız ve sabrınız için teşekkür ederiz! ❤️`
+            );
+
+          const kb = new InlineKeyboard();
+          for (const u of adminUsernames) {
+            kb.url(`💬 Yöneticiye Yaz (@${u})`, `https://t.me/${u}`).row();
+          }
+          kb.text("🔄 Durumu Tekrar Kontrol Et", "btn_check_maintenance");
+
+          try {
+            await ctx.editMessageText(text, {
+              parse_mode: "HTML",
+              reply_markup: kb,
+            });
+          } catch (e) {}
+          return;
+        } else {
+          // Bakım modu sonlandırılmış! Anında ana menüyü aç
+          try {
+            await ctx.answerCallbackQuery({
+              text: "🎉 Bakım tamamlandı! Sistem yeniden açıldı.",
+              show_alert: false,
+            });
+          } catch (e) {}
+
+          const { appUrl, adminUrl } = getAppUrls();
+          const user =
+            db.getUser(from.id) ||
+            (await db.getOrCreateUser(from.id, {
+              username: from.username,
+              firstName: from.first_name,
+              lastName: from.last_name,
+            }));
+          const isAdmin = db.isAdmin(from.id) || user.role === "admin";
+          const activeOrders = db.getActiveOrders(from.id);
+          const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
+          const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
+
+          await editOrReply(ctx, messageText, keyboard);
+          return;
+        }
+      }
+
       const settings = db.getSettings();
       if (settings.maintenanceMode) {
         const adminUsernames = getAdminUsernamesList();
@@ -371,26 +443,6 @@ export function getTelegramBot(): Bot | null {
         kb.text("🔄 Durumu Tekrar Kontrol Et", "btn_check_maintenance");
 
         if (ctx.callbackQuery) {
-          if (ctx.callbackQuery.data === "btn_check_maintenance") {
-            const fresh = db.getSettings();
-            if (fresh.maintenanceMode) {
-              try {
-                await ctx.answerCallbackQuery({
-                  text: "🛠️ Bakım çalışması halen devam ediyor. Lütfen biraz sonra tekrar deneyin.",
-                  show_alert: true,
-                });
-              } catch (e) {}
-              return;
-            } else {
-              try {
-                await ctx.answerCallbackQuery({
-                  text: "🎉 Bakım tamamlandı! Sistem yeniden açıldı.",
-                  show_alert: false,
-                });
-              } catch (e) {}
-              return next();
-            }
-          }
           try {
             await ctx.answerCallbackQuery({
               text: "🛠️ Sistemimiz şu anda bakımdadır.",
@@ -943,6 +995,30 @@ export function getTelegramBot(): Bot | null {
 
       // --- ANA MENÜYE DÖNÜŞ ---
       if (data === "btn_main_menu" || data === "btn_refresh_menu") {
+        try {
+          await ctx.deleteMessage();
+        } catch {}
+        await sendWelcome(ctx);
+        return;
+      }
+
+      // --- BAKIM DURUMU KONTROL BUTONU ---
+      if (data === "btn_check_maintenance") {
+        await db.syncFromCloud(true);
+        const settings = db.getSettings();
+        if (settings.maintenanceMode && !isAdmin) {
+          try {
+            await ctx.answerCallbackQuery({
+              text: "🛠️ Bakım çalışması halen devam ediyor.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          return;
+        }
+
+        try {
+          await ctx.answerCallbackQuery({ text: "✅ Sistem aktif!" });
+        } catch (e) {}
         try {
           await ctx.deleteMessage();
         } catch {}

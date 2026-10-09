@@ -2489,14 +2489,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* TAB 1: OVERVIEW & METRICS */}
       {activeTab === "overview" && (
         <div className="space-y-4">
-          {/* SİSTEM BAKIM DURUMU & TEK TIKLA BAKIMA ALMA KARTI */}
+          {/* SİSTEM BAKIM DURUMU & ANINDA MESAJ DÜZENLEMELİ BAKIMA ALMA KARTI */}
           <div
             className={`p-4 rounded-2xl border transition-all duration-300 ${
               maintenanceMode
-                ? "bg-gradient-to-br from-red-950/40 via-red-900/20 to-zinc-950/80 border-red-500/50 shadow-lg shadow-red-950/30 ring-1 ring-red-500/30"
-                : "bg-gradient-to-br from-emerald-950/30 via-zinc-950/70 to-zinc-950 border-emerald-500/30 shadow-md shadow-emerald-950/20"
+                ? "bg-gradient-to-br from-red-950/40 via-red-900/25 to-zinc-950/90 border-red-500/50 shadow-xl shadow-red-950/40 ring-1 ring-red-500/30"
+                : "bg-gradient-to-br from-[#12141e] via-[#0e1017] to-zinc-950 border-emerald-500/30 shadow-md shadow-emerald-950/20"
             }`}
           >
+            {/* Kart Başlığı ve Durum Rozeti */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div
@@ -2506,13 +2507,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       : "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
                   }`}
                 >
-                  <Wrench className={`w-5 h-5 ${maintenanceMode ? "text-red-400" : ""}`} />
+                  <Wrench className={`w-5 h-5 ${maintenanceMode ? "text-red-400 animate-pulse" : ""}`} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-bold text-white">Sistem Bakım Modu</h3>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                         maintenanceMode
                           ? "bg-red-500/20 text-red-300 border-red-500/40 animate-pulse"
                           : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
@@ -2528,45 +2529,141 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   </div>
                   <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
                     {maintenanceMode
-                      ? "⚠️ Bakım aktif: Normal kullanıcılar bot ve Mini App'te samimi bakım ekranını ve yöneticilerle iletişim butonlarını görür. Yöneticiler her yere tam erişebilir."
+                      ? "⚠️ Bakım aktif: Normal kullanıcılar bot ve Mini App'te samimi bakım ekranı ile yönetici iletişim butonlarını görür. Yöneticiler her yere tam erişebilir."
                       : "Sistem aktif: Tüm kullanıcılar Telegram botundan ve Mini App'ten kesintisiz işlem yapabilir."}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2 flex-wrap">
+            {/* Bakım Mesajı Düzenleme Alanı (Bakıma Alırken / Bakımdayken Değiştirilebilir) */}
+            <div className="mt-3.5 pt-3 border-t border-white/[0.08] space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Bakım Duyurusu / Mesajı:</span>
+                </label>
+                <span className="text-[10px] text-zinc-500 font-mono">
+                  {maintenanceMessage.length} karakter
+                </span>
+              </div>
+
+              {/* Hızlı Şablon Butonları */}
+              <div className="flex items-center gap-1.5 flex-wrap pb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.selection();
+                    setMaintenanceMessage(
+                      "Değerli Kullanıcımız, altyapımızda kısa süreli bakım ve iyileştirme çalışması yapmaktayız. Numara almak veya bakiye yüklemek için yöneticilerimizle iletişime geçebilirsiniz."
+                    );
+                  }}
+                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                >
+                  ⚡ Standart Bakım
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.selection();
+                    setMaintenanceMessage(
+                      "Sistemimizde hız ve sunucu altyapı güncellemesi yapılmaktadır. Acil numara talepleriniz için lütfen yöneticilerimize doğrudan yazınız."
+                    );
+                  }}
+                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                >
+                  🚀 Altyapı Güncellemesi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.selection();
+                    setMaintenanceMessage(
+                      "SMS sağlayıcı altyapısında geçici bir bakım çalışması mevcuttur. Bilgi ve işlemleriniz için yöneticilerimize hemen ulaşabilirsiniz."
+                    );
+                  }}
+                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                >
+                  🛡️ Sağlayıcı Bakımı
+                </button>
+                {maintenanceMessage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic.selection();
+                      setMaintenanceMessage("");
+                    }}
+                    className="px-2 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/40 border border-red-500/20 text-[10px] text-red-300 transition-colors"
+                  >
+                    🧹 Temizle (Varsayılan)
+                  </button>
+                )}
+              </div>
+
+              <textarea
+                value={maintenanceMessage}
+                onChange={(e) => setMaintenanceMessage(e.target.value)}
+                placeholder="Özel bakım mesajınızı buraya yazınız... (Boş bırakırsanız sistemin samimi varsayılan mesajı gösterilir)"
+                rows={3}
+                className="w-full bg-zinc-900/90 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all leading-relaxed font-sans"
+              />
+              <p className="text-[10px] text-zinc-400">
+                💡 Bu mesaj kullanıcı /start verdiğinde, bot butonlarına tıkladığında ve Mini App bakım ekranında canlı olarak görüntülenir.
+              </p>
+            </div>
+
+            {/* Aksiyon Butonları */}
+            <div className="mt-3 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2 flex-wrap">
               <div className="text-[11px] text-zinc-400">
                 {maintenanceMode ? (
                   <span className="text-amber-300 font-medium flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Yalnızca yöneticiler işlem yapabilir
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Yöneticiler her yere tam erişebilir
                   </span>
                 ) : (
                   <span className="text-zinc-500">
-                    Acil durumlarda veya güncellemede tek tıkla sistemi bakıma alabilirsiniz.
+                    Mesajınızı yazıp tek tıkla sistemi bakıma alabilirsiniz.
                   </span>
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleToggleMaintenance()}
-                disabled={togglingMaintenance}
-                className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md disabled:opacity-50 ${
-                  maintenanceMode
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-                    : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30"
-                }`}
-              >
-                {togglingMaintenance ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Power className="w-3.5 h-3.5" />
-                )}
-                <span>
-                  {maintenanceMode ? "Bakımı Kapat (Sistemi Aç)" : "Sistemi Bakıma Al"}
-                </span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Mesajı Kaydet Butonu */}
+                <button
+                  type="button"
+                  onClick={handleSaveMaintenanceMessage}
+                  disabled={savingMaintenance || togglingMaintenance}
+                  className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
+                  title="Yalnızca mesajı kaydeder"
+                >
+                  {savingMaintenance ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>Mesajı Kaydet</span>
+                </button>
+
+                {/* Bakıma Al / Bakımı Kapat Butonu */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleMaintenance()}
+                  disabled={togglingMaintenance}
+                  className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md disabled:opacity-50 ${
+                    maintenanceMode
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                      : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30"
+                  }`}
+                >
+                  {togglingMaintenance ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Power className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {maintenanceMode ? "Bakımı Kapat (Sistemi Aç)" : "Sistemi Bakıma Al"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
           {/* Servis Sağlayıcı Kasa Monitörü */}

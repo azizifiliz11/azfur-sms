@@ -163,15 +163,19 @@ export interface SystemSettings {
 export interface BackupStats {
   usersCount: number;
   activationsCount: number;
+  ordersCount?: number;
   depositsCount: number;
   ticketsCount: number;
   couponsCount: number;
   totalUserBalance: number;
+  totalBalance?: number;
+  sizeKb?: number;
 }
 
 export interface SystemBackup {
   id: string; // e.g. "backup_1791546000000"
   timestamp: string; // ISO string
+  createdAt?: string; // ISO string uyumluluk alanı
   type: "AUTO" | "MANUAL" | "PRE_RESTORE";
   label?: string;
   sizeBytes: number;

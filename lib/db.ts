@@ -1244,16 +1244,20 @@ export const db = {
     const backupRecord: SystemBackup = {
       id: backupId,
       timestamp: now,
+      createdAt: now,
       type,
       label: label || defaultLabel,
       sizeBytes,
       stats: {
         usersCount,
         activationsCount,
+        ordersCount: activationsCount,
         depositsCount,
         ticketsCount,
         couponsCount,
         totalUserBalance: Number(totalUserBalance.toFixed(2)),
+        totalBalance: Number(totalUserBalance.toFixed(2)),
+        sizeKb: Number((sizeBytes / 1024).toFixed(1)),
       },
       data: snapshotData,
     };
@@ -1295,14 +1299,29 @@ export const db = {
       return [];
     }
     // Liste ekranında çok büyük veri dönmesin diye data alanını hariç tutarak özet listeyi döndür
-    return data.backups.map((b) => ({
-      id: b.id,
-      timestamp: b.timestamp,
-      type: b.type,
-      label: b.label,
-      sizeBytes: b.sizeBytes,
-      stats: b.stats,
-    }));
+    return data.backups.map((b) => {
+      const ts = b.timestamp || b.createdAt || new Date().toISOString();
+      const sz = b.sizeBytes || 0;
+      return {
+        id: b.id,
+        timestamp: ts,
+        createdAt: ts,
+        type: b.type,
+        label: b.label,
+        sizeBytes: sz,
+        stats: {
+          usersCount: b.stats?.usersCount || 0,
+          activationsCount: b.stats?.activationsCount || (b.stats as any)?.ordersCount || 0,
+          ordersCount: b.stats?.activationsCount || (b.stats as any)?.ordersCount || 0,
+          depositsCount: b.stats?.depositsCount || 0,
+          ticketsCount: b.stats?.ticketsCount || 0,
+          couponsCount: b.stats?.couponsCount || 0,
+          totalUserBalance: b.stats?.totalUserBalance || (b.stats as any)?.totalBalance || 0,
+          totalBalance: b.stats?.totalUserBalance || (b.stats as any)?.totalBalance || 0,
+          sizeKb: (b.stats as any)?.sizeKb || Number((sz / 1024).toFixed(1)),
+        },
+      };
+    });
   },
 
   getBackupById(backupId: string): SystemBackup | null {
@@ -1310,7 +1329,14 @@ export const db = {
     if (!data.backups || !Array.isArray(data.backups)) {
       return null;
     }
-    return data.backups.find((b) => b.id === backupId) || null;
+    const b = data.backups.find((item) => item.id === backupId);
+    if (!b) return null;
+    const ts = b.timestamp || b.createdAt || new Date().toISOString();
+    return {
+      ...b,
+      timestamp: ts,
+      createdAt: ts,
+    };
   },
 
   async deleteBackup(backupId: string): Promise<boolean> {

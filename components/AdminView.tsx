@@ -505,6 +505,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
         haptic.success();
         setToastMsg("✅ Sistem yedeği başarıyla oluşturuldu ve buluta kaydedildi!");
         setTimeout(() => setToastMsg(null), 3500);
+        if (data.backup) {
+          setBackups((prev) => [data.backup, ...prev.filter((x) => x.id !== data.backup.id)]);
+        }
         fetchAllData();
       } else {
         haptic.error();
@@ -547,7 +550,7 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
   };
 
   // Kayıtlı Snapshot'ı JSON Olarak İndir
-  const handleDownloadSnapshot = async (backupId: string, createdAt: string) => {
+  const handleDownloadSnapshot = async (backupId: string, rawDate?: string) => {
     haptic.impact("light");
     try {
       const res = await adminFetch(
@@ -561,10 +564,15 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const datePart = new Date(createdAt)
-        .toISOString()
-        .slice(0, 19)
-        .replace(/[:T]/g, "_");
+      let datePart = "backup";
+      try {
+        const d = rawDate ? new Date(rawDate) : new Date();
+        datePart = isNaN(d.getTime())
+          ? new Date().toISOString().slice(0, 10)
+          : d.toISOString().slice(0, 19).replace(/[:T]/g, "_");
+      } catch {
+        datePart = new Date().toISOString().slice(0, 10);
+      }
       a.download = `azfur_yedek_${datePart}.json`;
       document.body.appendChild(a);
       a.click();
@@ -4765,21 +4773,29 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                            <Clock className="w-3 h-3 text-zinc-500" />
-                            <span>{new Date(b.createdAt).toLocaleString("tr-TR")}</span>
-                            <span className="text-zinc-600">•</span>
-                            <span className="text-emerald-400 font-medium">
-                              {formatUserLastActive(b.createdAt)}
-                            </span>
-                          </div>
+                          {(() => {
+                            const bDate = b.createdAt || b.timestamp;
+                            const isValidDate = bDate && !isNaN(new Date(bDate).getTime());
+                            const displayDate = isValidDate ? new Date(bDate).toLocaleString("tr-TR") : new Date().toLocaleString("tr-TR");
+                            const relativeTime = isValidDate ? formatUserLastActive(bDate) : "Yeni oluşturuldu";
+                            return (
+                              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                                <Clock className="w-3 h-3 text-zinc-500" />
+                                <span>{displayDate}</span>
+                                <span className="text-zinc-600">•</span>
+                                <span className="text-emerald-400 font-medium">
+                                  {relativeTime}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Aksiyon Butonları */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           {/* İndir */}
                           <button
-                            onClick={() => handleDownloadSnapshot(b.id, b.createdAt)}
+                            onClick={() => handleDownloadSnapshot(b.id, b.createdAt || b.timestamp)}
                             className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1 transition-all"
                             title="Yedek Dosyasını İndir (.json)"
                           >
@@ -4822,12 +4838,14 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
                           <span className="text-zinc-500 text-[10px]">Bakiye:</span>
                           <span className="font-bold text-emerald-400">
-                            ₺{b.stats?.totalBalance?.toFixed(2) || "0.00"}
+                            ₺{Number(b.stats?.totalUserBalance ?? b.stats?.totalBalance ?? 0).toFixed(2)}
                           </span>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
                           <span className="text-zinc-500 text-[10px]">Sipariş:</span>
-                          <span className="font-bold text-blue-400">{b.stats?.ordersCount || 0}</span>
+                          <span className="font-bold text-blue-400">
+                            {b.stats?.activationsCount ?? b.stats?.ordersCount ?? 0}
+                          </span>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
                           <span className="text-zinc-500 text-[10px]">Yükleme:</span>
@@ -4835,7 +4853,9 @@ export function AdminView({ onBackToApp }: AdminViewProps) {
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
                           <span className="text-zinc-500 text-[10px]">Boyut:</span>
-                          <span className="font-bold text-purple-400">{b.stats?.sizeKb || 0} KB</span>
+                          <span className="font-bold text-purple-400">
+                            {b.stats?.sizeKb ?? (b.sizeBytes ? Number((b.sizeBytes / 1024).toFixed(1)) : 0)} KB
+                          </span>
                         </div>
                       </div>
                     </Card>

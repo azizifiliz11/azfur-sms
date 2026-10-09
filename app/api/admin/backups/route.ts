@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Yedek bulunamadı" }, { status: 404 });
       }
 
-      const cleanDate = backup.timestamp.replace(/[:.]/g, "-");
+      const rawDate = backup.createdAt || backup.timestamp || new Date().toISOString();
+      const cleanDate = rawDate.replace(/[:.]/g, "-");
       const filename = `azfur_backup_${backup.id}_${cleanDate}.json`;
 
       return new NextResponse(JSON.stringify(backup.data, null, 2), {
@@ -114,12 +115,14 @@ export async function POST(req: NextRequest) {
     // 1. Manuel Yedek Oluştur
     if (action === "create") {
       const backup = await db.createBackup("MANUAL", body.label);
+      const ts = backup.timestamp || backup.createdAt || new Date().toISOString();
       return NextResponse.json({
         success: true,
         message: "Sistem yedeği başarıyla oluşturuldu!",
         backup: {
           id: backup.id,
-          timestamp: backup.timestamp,
+          timestamp: ts,
+          createdAt: ts,
           type: backup.type,
           label: backup.label,
           sizeBytes: backup.sizeBytes,

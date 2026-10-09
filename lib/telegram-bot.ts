@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { CONFIG } from "./config";
 import { db } from "./db";
 import { heroSms } from "./hero-sms";
@@ -7,6 +7,7 @@ import { ActivationOrder, User } from "./types";
 import { rateLimiter } from "./rate-limit";
 
 let botInstance: Bot | null = null;
+const pendingRestoreMap = new Map<number, any>();
 
 // Popüler Servis Tanımları
 const POPULAR_SERVICES = [
@@ -386,6 +387,8 @@ export function getTelegramBot(): Bot | null {
         .webApp("🛡️ Yönetici Panelini Aç", adminUrl)
         .row()
         .text("📊 Hızlı İstatistikler", "btn_admin_menu")
+        .text("📦 Yedekleme & Geri Yükleme", "adm_bkp_menu")
+        .row()
         .text("🔙 Ana Menü", "btn_main_menu");
 
       await ctx.reply(
@@ -1598,7 +1601,417 @@ export function getTelegramBot(): Bot | null {
         const kb = new InlineKeyboard()
           .webApp("🛡️ Detaylı Web Admin Paneli", adminUrl)
           .row()
+          .text("📦 Yedekleme & Geri Yükleme", "adm_bkp_menu")
+          .row()
           .text("🔄 Bilgileri Yenile", "btn_admin_menu")
+          .text("🔙 Ana Menü", "btn_main_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- YÖNETİCİ YEDEKLEME MENÜSÜ ---
+      if (data === "adm_bkp_menu") {
+        if (!isAdmin) {
+          try { await ctx.answerCallbackQuery(); } catch (e) {}
+          return;
+        }
+
+        await db.syncFromCloud();
+        const backups = db.getBackups();
+        const settings = db.getSettings();
+        const bs = settings.backupSettings || {
+          autoBackupEnabled: true,
+          autoBackupIntervalHours: 6,
+          maxBackupsCount: 20,
+        };
+
+        const lastBackupStr = bs.lastAutoBackupTime || backups[0]?.timestamp || null;
+        const lastBackupFormatted = lastBackupStr
+          ? new Date(lastBackupStr).toLocaleString("tr-TR")
+          : "Henüz yedek alınmadı";
+
+        const text =
+          `📦 <b>SİSTEM YEDEKLEME & GERİ YÜKLEME</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🤖 <b>Otomatik Yedekleme:</b> ${bs.autoBackupEnabled ? "🟢 Aktif" : "🔴 Kapalı"}\n` +
+          `⏱️ <b>Yedekleme Sıklığı:</b> <code>Her ${bs.autoBackupIntervalHours || 6} Saatte Bir</code>\n` +
+          `🗄️ <b>Kayıtlı Yedek Sayısı:</b> <code>${backups.length} Adet</code> (Maks: ${bs.maxBackupsCount || 20})\n` +
+          `🕒 <b>Son Yedekleme:</b> <code>${lastBackupFormatted}</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👇 <i>Aşağıdaki butonlarla tek dokunuşla anında yedek alabilir, veritabanını indirebilir veya sistemi önceki bir yedeğe döndürebilirsiniz:</i>`;
+
+        const kb = new InlineKeyboard()
+          .text("💾 Şimdi Manuel Yedek Al", "adm_bkp_create")
+          .row()
+          .text("📥 Canlı Veritabanını İndir (.json)", "adm_bkp_dl_live")
+          .row()
+          .text(`📋 Kayıtlı Yedekler (${backups.length})`, "adm_bkp_list")
+          .row()
+          .text("⚙️ Otomatik Yedek Ayarları", "adm_bkp_settings")
+          .row()
+          .text("👑 Yönetici Menüsü", "btn_admin_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- ŞİMDİ MANUEL YEDEK AL (ANINDA .JSON DOSYASI GÖNDERİR) ---
+      if (data === "adm_bkp_create") {
+        if (!isAdmin) return;
+        try {
+          await ctx.answerCallbackQuery({ text: "⏳ Sistem yedeği oluşturuluyor..." });
+        } catch (e) {}
+
+        const backup = await db.createBackup("MANUAL", `Telegram Bot Yedeği (${from.first_name || "Admin"})`);
+        const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
+        const jsonBuffer = Buffer.from(JSON.stringify(backup.data, null, 2), "utf8");
+
+        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+          caption:
+            `✅ <b>SİSTEM YEDEĞİ BAŞARIYLA OLUŞTURULDU!</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `🏷️ <b>Etiket:</b> ${backup.label}\n` +
+            `🕒 <b>Tarih:</b> ${new Date(backup.timestamp).toLocaleString("tr-TR")}\n` +
+            `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount} kişi\n` +
+            `💰 <b>Toplam Bakiye:</b> ${backup.stats?.totalUserBalance?.toFixed(2)} ₺\n` +
+            `📦 <b>Toplam Sipariş:</b> ${backup.stats?.activationsCount} adet\n` +
+            `📁 <b>Dosya Boyutu:</b> ${(backup.sizeBytes / 1024).toFixed(1)} KB\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💾 <i>Yedek dosyanız yukarıda hazır! İndirip cihazınızda saklayabilirsiniz.</i>`,
+          parse_mode: "HTML",
+          reply_markup: new InlineKeyboard()
+            .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
+            .row()
+            .text("🔙 Ana Menü", "btn_main_menu"),
+        });
+        return;
+      }
+
+      // --- CANLI VERİTABANINI İNDİR (.JSON OLARAK DOĞRUDAN SOHBETE ATAR) ---
+      if (data === "adm_bkp_dl_live") {
+        if (!isAdmin) return;
+        try {
+          await ctx.answerCallbackQuery({ text: "📥 Canlı veritabanı hazırlanıyor..." });
+        } catch (e) {}
+
+        await db.syncFromCloud();
+        const liveSnapshot = db.getFullDatabaseSnapshot();
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const fileName = `azfur_canli_veritabani_${dateStr}.json`;
+        const jsonBuffer = Buffer.from(JSON.stringify(liveSnapshot, null, 2), "utf8");
+
+        const usersCount = Object.keys(liveSnapshot.users || {}).length;
+        const activationsCount = Object.keys(liveSnapshot.activations || {}).length;
+
+        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+          caption:
+            `📥 <b>CANLI VERİTABANI YEDEĞİ</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `🕒 <b>Tarih:</b> ${new Date().toLocaleString("tr-TR")}\n` +
+            `👥 <b>Kayıtlı Kullanıcı:</b> ${usersCount} kişi\n` +
+            `📦 <b>Siparişler:</b> ${activationsCount} adet\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💾 <i>Mevcut tüm ayarlar ve veritabanı içeriği .json olarak eklenmiştir.</i>`,
+          parse_mode: "HTML",
+          reply_markup: new InlineKeyboard()
+            .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
+            .row()
+            .text("🔙 Ana Menü", "btn_main_menu"),
+        });
+        return;
+      }
+
+      // --- KAYITLI YEDEKLER LİSTESİ ---
+      if (data === "adm_bkp_list") {
+        if (!isAdmin) return;
+        await db.syncFromCloud();
+        const backups = db.getBackups();
+
+        if (backups.length === 0) {
+          await editOrReply(
+            ctx,
+            `📋 <b>KAYITLI YEDEK BULUNAMADI</b>\n\nHenüz sistemde kayıtlı bir snapshot bulunmuyor. Hemen bir yedek alabilirsiniz:`,
+            new InlineKeyboard()
+              .text("💾 Şimdi Yedek Al", "adm_bkp_create")
+              .row()
+              .text("🔙 Yedekleme Menüsü", "adm_bkp_menu")
+          );
+          return;
+        }
+
+        const recent = backups.slice(0, 5);
+        let listText = `📋 <b>KAYITLI SİSTEM YEDEKLERİ (${backups.length})</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+
+        const kb = new InlineKeyboard();
+        recent.forEach((b, idx) => {
+          const typeIcon = b.type === "AUTO" ? "🤖" : b.type === "PRE_RESTORE" ? "🛡️" : "👤";
+          const dateShort = new Date(b.timestamp).toLocaleDateString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          listText += `${idx + 1}. ${typeIcon} <b>${b.label}</b>\n   🕒 ${dateShort} • ${(b.sizeBytes / 1024).toFixed(1)} KB • 👥 ${b.stats?.usersCount || 0} Kullanıcı\n\n`;
+
+          kb.text(`📥 ${idx + 1}. İndir`, `adm_bkp_dl:${b.id}`)
+            .text(`🔄 Geri Yükle`, `adm_bkp_rst_ask:${b.id}`)
+            .row();
+        });
+
+        kb.text("🔙 Yedekleme Menüsü", "adm_bkp_menu");
+
+        await editOrReply(ctx, listText, kb);
+        return;
+      }
+
+      // --- TEKİL YEDEĞİ İNDİR (TELEGRAM DOSYASI OLARAK) ---
+      if (data.startsWith("adm_bkp_dl:")) {
+        if (!isAdmin) return;
+        const bId = data.split(":")[1];
+        const backup = db.getBackupById(bId);
+        if (!backup || !backup.data) {
+          try {
+            await ctx.answerCallbackQuery({ text: "❌ Yedek bulunamadı!", show_alert: true });
+          } catch (e) {}
+          return;
+        }
+
+        try {
+          await ctx.answerCallbackQuery({ text: "📥 Dosya gönderiliyor..." });
+        } catch (e) {}
+
+        const dateStr = new Date(backup.timestamp).toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
+        const jsonBuffer = Buffer.from(JSON.stringify(backup.data, null, 2), "utf8");
+
+        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+          caption:
+            `📦 <b>${backup.label}</b>\n` +
+            `🕒 <b>Tarih:</b> ${new Date(backup.timestamp).toLocaleString("tr-TR")}\n` +
+            `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount || 0}\n` +
+            `📁 <b>Boyut:</b> ${(backup.sizeBytes / 1024).toFixed(1)} KB`,
+          parse_mode: "HTML",
+          reply_markup: new InlineKeyboard()
+            .text("📋 Yedek Listesi", "adm_bkp_list")
+            .text("🔙 Yedekleme Menüsü", "adm_bkp_menu"),
+        });
+        return;
+      }
+
+      // --- GERİ YÜKLEME SORUSU ---
+      if (data.startsWith("adm_bkp_rst_ask:")) {
+        if (!isAdmin) return;
+        const bId = data.split(":")[1];
+        const backup = db.getBackupById(bId);
+        if (!backup) {
+          try {
+            await ctx.answerCallbackQuery({ text: "Yedek bulunamadı!", show_alert: true });
+          } catch (e) {}
+          return;
+        }
+
+        const text =
+          `⚠️ <b>GERİ YÜKLEME ONAYI</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Bu işlem mevcut veritabanını aşağıdaki yedeğin durumuna geri döndürecektir:\n\n` +
+          `🏷️ <b>Hedef Yedek:</b> ${backup.label}\n` +
+          `🕒 <b>Yedek Tarihi:</b> ${new Date(backup.timestamp).toLocaleString("tr-TR")}\n` +
+          `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount || 0}\n` +
+          `💰 <b>Bakiye Toplamı:</b> ${backup.stats?.totalUserBalance || 0} ₺\n\n` +
+          `🛡️ <i>İşlem öncesinde mevcut durumun otomatik güvenlik yedeği (PRE_RESTORE) alınacaktır. Asla veri kaybı yaşanmaz.</i>\n\n` +
+          `Geri yüklemeyi onaylıyor musunuz?`;
+
+        const kb = new InlineKeyboard()
+          .text("✅ Evet, Geri Yükle", `adm_bkp_rst_do:${backup.id}`)
+          .row()
+          .text("❌ Vazgeç", "adm_bkp_list");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- GERİ YÜKLEME İCRA ET ---
+      if (data.startsWith("adm_bkp_rst_do:")) {
+        if (!isAdmin) return;
+        const bId = data.split(":")[1];
+        const backup = db.getBackupById(bId);
+        if (!backup || !backup.data) {
+          try {
+            await ctx.answerCallbackQuery({ text: "Yedek bulunamadı veya hasarlı!", show_alert: true });
+          } catch (e) {}
+          return;
+        }
+
+        try {
+          await ctx.answerCallbackQuery({ text: "🔄 Geri yükleme yapılıyor..." });
+        } catch (e) {}
+
+        const result = await db.restoreBackup(backup.data);
+
+        const text =
+          `🎉 <b>SİSTEM BAŞARIYLA GERİ YÜKLENDİ!</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `✅ ${result.message}\n\n` +
+          `👥 <b>Aktif Kullanıcı:</b> ${result.details?.usersCount || 0}\n` +
+          `📦 <b>Siparişler:</b> ${result.details?.activationsCount || 0}\n` +
+          `💳 <b>Bakiye Talepleri:</b> ${result.details?.depositsCount || 0}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🛡️ <i>Mevcut durumun güvenlik yedeği (PRE_RESTORE) başarıyla kaydedildi.</i>`;
+
+        const kb = new InlineKeyboard()
+          .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
+          .row()
+          .text("🔙 Ana Menü", "btn_main_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- OTOMATİK YEDEK AYARLARI ---
+      if (data === "adm_bkp_settings") {
+        if (!isAdmin) return;
+        const settings = db.getSettings();
+        const bs = settings.backupSettings || {
+          autoBackupEnabled: true,
+          autoBackupIntervalHours: 6,
+          maxBackupsCount: 20,
+        };
+
+        const text =
+          `⚙️ <b>OTOMATİK YEDEKLEME AYARLARI</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Otomatik Yedekleme: ${bs.autoBackupEnabled ? "🟢 AÇIK" : "🔴 KAPALI"}\n` +
+          `Mevcut Periyot: <code>Her ${bs.autoBackupIntervalHours || 6} Saatte Bir</code>\n` +
+          `Maksimum Yedek: <code>${bs.maxBackupsCount || 20} Adet</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Aşağıdaki butonlarla ayarları anında değiştirebilirsiniz:`;
+
+        const kb = new InlineKeyboard()
+          .text(bs.autoBackupEnabled ? "🔴 Otomatiği Kapat" : "🟢 Otomatiği Aç", "adm_bkp_toggle_auto")
+          .row()
+          .text("⏱️ 1 Saat", "adm_bkp_set_int:1")
+          .text("⏱️ 3 Saat", "adm_bkp_set_int:3")
+          .text("⏱️ 6 Saat ⭐", "adm_bkp_set_int:6")
+          .row()
+          .text("⏱️ 12 Saat", "adm_bkp_set_int:12")
+          .text("⏱️ 24 Saat", "adm_bkp_set_int:24")
+          .row()
+          .text("🔙 Yedekleme Menüsü", "adm_bkp_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      if (data === "adm_bkp_toggle_auto") {
+        if (!isAdmin) return;
+        const settings = db.getSettings();
+        const cur = settings.backupSettings?.autoBackupEnabled ?? true;
+        await db.updateBackupSettings({ autoBackupEnabled: !cur });
+        try {
+          await ctx.answerCallbackQuery({
+            text: !cur ? "🟢 Otomatik yedekleme açıldı" : "🔴 Otomatik yedekleme kapatıldı",
+          });
+        } catch (e) {}
+
+        const updatedBs = db.getSettings().backupSettings || {
+          autoBackupEnabled: !cur,
+          autoBackupIntervalHours: 6,
+          maxBackupsCount: 20,
+        };
+        const text =
+          `⚙️ <b>OTOMATİK YEDEKLEME AYARLARI</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Otomatik Yedekleme: ${updatedBs.autoBackupEnabled ? "🟢 AÇIK" : "🔴 KAPALI"}\n` +
+          `Mevcut Periyot: <code>Her ${updatedBs.autoBackupIntervalHours || 6} Saatte Bir</code>\n` +
+          `Maksimum Yedek: <code>${updatedBs.maxBackupsCount || 20} Adet</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Aşağıdaki butonlarla ayarları anında değiştirebilirsiniz:`;
+
+        const kb = new InlineKeyboard()
+          .text(updatedBs.autoBackupEnabled ? "🔴 Otomatiği Kapat" : "🟢 Otomatiği Aç", "adm_bkp_toggle_auto")
+          .row()
+          .text("⏱️ 1 Saat", "adm_bkp_set_int:1")
+          .text("⏱️ 3 Saat", "adm_bkp_set_int:3")
+          .text("⏱️ 6 Saat ⭐", "adm_bkp_set_int:6")
+          .row()
+          .text("⏱️ 12 Saat", "adm_bkp_set_int:12")
+          .text("⏱️ 24 Saat", "adm_bkp_set_int:24")
+          .row()
+          .text("🔙 Yedekleme Menüsü", "adm_bkp_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      if (data.startsWith("adm_bkp_set_int:")) {
+        if (!isAdmin) return;
+        const h = parseInt(data.split(":")[1]) || 6;
+        await db.updateBackupSettings({ autoBackupIntervalHours: h });
+        try {
+          await ctx.answerCallbackQuery({
+            text: `⏱️ Yedekleme aralığı her ${h} saat olarak ayarlandı!`,
+          });
+        } catch (e) {}
+
+        const updatedBs = db.getSettings().backupSettings;
+        const text =
+          `⚙️ <b>OTOMATİK YEDEKLEME AYARLARI</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Otomatik Yedekleme: ${updatedBs?.autoBackupEnabled ? "🟢 AÇIK" : "🔴 KAPALI"}\n` +
+          `Mevcut Periyot: <code>Her ${h} Saatte Bir</code>\n` +
+          `Maksimum Yedek: <code>${updatedBs?.maxBackupsCount || 20} Adet</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Aşağıdaki butonlarla ayarları anında değiştirebilirsiniz:`;
+
+        const kb = new InlineKeyboard()
+          .text(updatedBs?.autoBackupEnabled ? "🔴 Otomatiği Kapat" : "🟢 Otomatiği Aç", "adm_bkp_toggle_auto")
+          .row()
+          .text(h === 1 ? "✅ 1 Saat" : "⏱️ 1 Saat", "adm_bkp_set_int:1")
+          .text(h === 3 ? "✅ 3 Saat" : "⏱️ 3 Saat", "adm_bkp_set_int:3")
+          .text(h === 6 ? "✅ 6 Saat ⭐" : "⏱️ 6 Saat ⭐", "adm_bkp_set_int:6")
+          .row()
+          .text(h === 12 ? "✅ 12 Saat" : "⏱️ 12 Saat", "adm_bkp_set_int:12")
+          .text(h === 24 ? "✅ 24 Saat" : "⏱️ 24 Saat", "adm_bkp_set_int:24")
+          .row()
+          .text("🔙 Yedekleme Menüsü", "adm_bkp_menu");
+
+        await editOrReply(ctx, text, kb);
+        return;
+      }
+
+      // --- YÜKLENEN DOSYADAN GERİ YÜKLEME ---
+      if (data === "adm_bkp_restore_uploaded") {
+        if (!isAdmin) return;
+        const pending = pendingRestoreMap.get(from.id);
+        if (!pending) {
+          try {
+            await ctx.answerCallbackQuery({ text: "❌ Bekleyen yedek dosyası bulunamadı!", show_alert: true });
+          } catch (e) {}
+          return;
+        }
+
+        try {
+          await ctx.answerCallbackQuery({ text: "🔄 Dosyadan geri yükleme yapılıyor..." });
+        } catch (e) {}
+
+        const result = await db.restoreBackup(pending);
+        pendingRestoreMap.delete(from.id);
+
+        const text =
+          `🎉 <b>YEDEK DOSYASI BAŞARIYLA GERİ YÜKLENDİ!</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `✅ ${result.message}\n\n` +
+          `👥 <b>Kullanıcı Sayısı:</b> ${result.details?.usersCount || 0}\n` +
+          `📦 <b>Sipariş Sayısı:</b> ${result.details?.activationsCount || 0}\n` +
+          `💳 <b>Yükleme Sayısı:</b> ${result.details?.depositsCount || 0}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🛡️ <i>Mevcut durumun güvenlik yedeği (PRE_RESTORE) başarıyla kaydedilmiştir.</i>`;
+
+        const kb = new InlineKeyboard()
+          .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
+          .row()
           .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
@@ -1630,6 +2043,64 @@ export function getTelegramBot(): Bot | null {
 
       // Tanımsız callback
       await editOrReply(ctx, `Bilinmeyen komut.`, new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu"));
+    });
+
+    // ==========================================
+    // ADMİN YEDEK DOSYASI YÜKLEME DİNLEYİCİSİ (.JSON)
+    // ==========================================
+    botInstance.on("message:document", async (ctx) => {
+      const from = ctx.from;
+      if (!from) return;
+
+      const isAdmin = db.isAdmin(from.id);
+      if (!isAdmin) return;
+
+      const doc = ctx.message?.document;
+      if (!doc || !doc.file_name?.toLowerCase().endsWith(".json")) return;
+
+      try {
+        const file = await ctx.getFile();
+        const fileUrl = `https://api.telegram.org/file/bot${CONFIG.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+        const res = await fetch(fileUrl);
+        const content = await res.text();
+        const parsed = JSON.parse(content);
+
+        let dbData = parsed;
+        if (
+          parsed.data &&
+          typeof parsed.data === "object" &&
+          (parsed.data.users || parsed.data.settings)
+        ) {
+          dbData = parsed.data;
+        }
+
+        if (!dbData.users) {
+          await ctx.reply("❌ Gönderilen .json dosyası geçerli bir AzFur yedek veritabanı formatı değil.");
+          return;
+        }
+
+        pendingRestoreMap.set(from.id, dbData);
+
+        const usersCount = Object.keys(dbData.users).length;
+        const kb = new InlineKeyboard()
+          .text("✅ Evet, Bu Yedeği Geri Yükle", "adm_bkp_restore_uploaded")
+          .row()
+          .text("❌ İptal", "btn_main_menu");
+
+        await ctx.reply(
+          `📥 <b>YEDEK DOSYASI ALINDI!</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `📄 <b>Dosya Adı:</b> <code>${doc.file_name}</code>\n` +
+            `👥 <b>Kullanıcı Sayısı:</b> ${usersCount} kişi\n` +
+            `📁 <b>Dosya Boyutu:</b> ${((doc.file_size || 0) / 1024).toFixed(1)} KB\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `⚠️ <b>DİKKAT:</b> Bu dosyayı sisteme geri yüklemek istiyor musunuz?\n\n` +
+            `<i>(İşlem öncesinde mevcut veritabanının otomatik güvenlik yedeği alınacaktır)</i>`,
+          { parse_mode: "HTML", reply_markup: kb }
+        );
+      } catch (err: any) {
+        await ctx.reply(`❌ Dosya okunamadı: ${err.message || "Geçersiz JSON"}`);
+      }
     });
   }
 

@@ -223,6 +223,7 @@ function loadDb(): DatabaseSchema {
 
 async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promise<void> {
   memoryDb = data; // Anında belleği güncelle
+  lastCloudSyncTime = Date.now(); // Senkronizasyon zamanını hemen güncelle ki anında gelen istekler belleği ezmesin
   ensureDbDirectory();
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
@@ -234,9 +235,13 @@ async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promis
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
-  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV'ye yaz (non-blocking)
+  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV'ye yaz (AWAIT EDİLİR - Vercel donmasını önler)
   if (syncToCloud) {
-    saveToCloudKv(data).catch((e) => console.error("Error saving to cloud KV:", e));
+    try {
+      await saveToCloudKv(data);
+    } catch (e) {
+      console.error("Error saving to cloud KV:", e);
+    }
   }
 }
 
@@ -270,6 +275,26 @@ export const db = {
                 cloudData.settings.adminTelegramIds = cloudData.settings.adminTelegramIds.filter(
                   (id: string) => String(id).trim() !== String(delId).trim()
                 );
+              }
+            }
+          }
+
+          // Backups koruması: Bellekteki yeni yedekleri bulutun eski verisiyle ASLA ezme!
+          if (Array.isArray(memoryDb?.backups) && memoryDb.backups.length > 0) {
+            if (!Array.isArray(cloudData.backups) || cloudData.backups.length === 0) {
+              cloudData.backups = memoryDb.backups;
+              saveToCloudKv(cloudData).catch(() => {});
+            } else {
+              const cloudIds = new Set(cloudData.backups.map((b) => b.id));
+              let hasNew = false;
+              for (const mb of memoryDb.backups) {
+                if (!cloudIds.has(mb.id)) {
+                  cloudData.backups.unshift(mb);
+                  hasNew = true;
+                }
+              }
+              if (hasNew) {
+                saveToCloudKv(cloudData).catch(() => {});
               }
             }
           }

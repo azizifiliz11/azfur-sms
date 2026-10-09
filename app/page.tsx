@@ -18,7 +18,7 @@ function HomeContent() {
   const { isReady, user: tgUser } = useTelegram();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [adminUsernames, setAdminUsernames] = useState<string[]>(["olanak"]);
+  const [adminUsernames, setAdminUsernames] = useState<string[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [catalog, setCatalog] = useState<CalculatedCatalogItem[]>([]);
@@ -314,15 +314,9 @@ function HomeContent() {
                 </a>
               ))
             ) : (
-              <a
-                href="https://t.me/olanak"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/50 text-white transition-all group"
-              >
-                <span className="text-sm font-semibold">@olanak</span>
-                <span className="text-xs text-emerald-400">Mesaj At →</span>
-              </a>
+              <p className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/50 text-sm text-zinc-400">
+                Destek yöneticisi bilgisi henüz tanımlanmamış.
+              </p>
             )}
           </div>
         </div>
@@ -357,17 +351,19 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0f] text-zinc-100">
-      {/* Top Header */}
-      <Header
-        user={displayUser}
-        onOpenDeposit={() => setDepositModalOpen(true)}
-        onOpenCoupon={() => setCouponModalOpen(true)}
-        onOpenSupport={() => setSupportModalOpen(true)}
-        onRefreshBalance={handleRefreshAll}
-        isAdmin={isAdmin}
-        onToggleAdminView={() => setAdminViewActive(!adminViewActive)}
-        adminViewActive={adminViewActive}
-      />
+      {/* Kullanıcı bakiyesi ve profil bilgileri yönetici panelinde gösterilmez. */}
+      {!adminViewActive && (
+        <Header
+          user={displayUser}
+          onOpenDeposit={() => setDepositModalOpen(true)}
+          onOpenCoupon={() => setCouponModalOpen(true)}
+          onOpenSupport={() => setSupportModalOpen(true)}
+          onRefreshBalance={handleRefreshAll}
+          isAdmin={isAdmin}
+          onToggleAdminView={() => setAdminViewActive(true)}
+          adminViewActive={false}
+        />
+      )}
 
       <main className="flex-1 w-full max-w-md mx-auto p-4 space-y-5">
         {adminViewActive ? (

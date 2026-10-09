@@ -31,9 +31,7 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, [isReady, tgUser]);
 
-  const isAdmin =
-    currentUser?.role === "admin" ||
-    (tgUser && String(tgUser.id).trim() === "8614398114");
+  const isAdmin = currentUser?.role === "admin";
 
   return (
     <ClientOnly>

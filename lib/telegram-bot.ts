@@ -78,11 +78,7 @@ export function getAdminUsernamesList(): string[] {
     }
   }
 
-  const result = Array.from(list);
-  if (result.length === 0) {
-    return ["olanak"];
-  }
-  return result;
+  return Array.from(list);
 }
 
 // ==========================================
@@ -238,10 +234,9 @@ export function getTelegramBot(): Bot | null {
       const user = db.getUser(from.id);
       if (user && user.isBanned) {
         const adminUsernames = getAdminUsernamesList();
-        const adminsText =
-          adminUsernames.length > 0
-            ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
-            : "• <b>@olanak</b>";
+        const adminsText = adminUsernames.length > 0
+          ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+          : "Henüz bir destek yöneticisi tanımlanmamış.";
 
         const text =
           `🚫 <b>HESABINIZ ENGELLENDİ (BANLANDINIZ)</b>\n` +

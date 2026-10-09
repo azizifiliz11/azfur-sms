@@ -8,10 +8,10 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud(true);
+    await db.syncFromCloud();
     const reqAdminTgId = req.headers.get("x-telegram-id") || db.getSettings().adminTelegramId;
     if (reqAdminTgId) {
       await db.touchUserActive(reqAdminTgId);
@@ -80,10 +80,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
-    await db.syncFromCloud(true);
+    await db.syncFromCloud();
     const body = await req.json();
     const { action, telegramId, userData } = body;
 
@@ -127,10 +127,9 @@ export async function POST(req: NextRequest) {
       if (isBanned) {
         try {
           const adminUsernames = getAdminUsernamesList();
-          const adminsText =
-            adminUsernames.length > 0
-              ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
-              : "• <b>@olanak</b>";
+          const adminsText = adminUsernames.length > 0
+            ? adminUsernames.map((u) => `• <b>@${u}</b>`).join("\n")
+            : "Henüz bir destek yöneticisi tanımlanmamış.";
 
           const banMsg =
             `🚫 <b>HESABINIZ ENGELLENDİ (BANLANDINIZ)</b>\n` +

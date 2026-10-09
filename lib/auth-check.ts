@@ -1,5 +1,4 @@
 import { db } from "./db";
-import { CONFIG } from "./config";
 
 export interface AdminAuthResult {
   authorized: boolean;
@@ -79,8 +78,8 @@ export function checkAdminAuthWithRateLimit(req: Request): AdminAuthResult {
 
   try {
     const settings = db.getSettings();
-    const adminPin = (settings.adminSecurityPin || "2026").trim();
-    const allowedPins = [adminPin, "2026", "05377243623"].filter(Boolean);
+    const adminPin = (settings.adminSecurityPin || "").trim();
+    const allowedPins = adminPin ? [adminPin] : [];
 
     const headerPin = req.headers.get("x-admin-pin")?.trim();
     const headerTgId = req.headers.get("x-telegram-id")?.trim();
@@ -157,6 +156,7 @@ export function checkAdminAuthWithRateLimit(req: Request): AdminAuthResult {
 /**
  * Geriye dönük uyumluluk için boolean döndüren standart admin kontrolü
  */
-export function isAuthorizedAdmin(req: Request): boolean {
+export async function isAuthorizedAdmin(req: Request): Promise<boolean> {
+  await db.syncFromCloud();
   return checkAdminAuthWithRateLimit(req).authorized;
 }

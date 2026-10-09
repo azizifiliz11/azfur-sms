@@ -219,7 +219,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const [restoreConfirmModalOpen, setRestoreConfirmModalOpen] = useState<boolean>(false);
   const [restoreTargetType, setRestoreTargetType] = useState<"snapshot" | "file">("snapshot");
-  const [backupSecurityPin, setBackupSecurityPin] = useState<string>("2026");
+  const [backupSecurityPin, setBackupSecurityPin] = useState<string>("");
 
   // Sistem Logları (Audit Logs) Durumları
   const [logs, setLogs] = useState<any[]>([]);
@@ -240,13 +240,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const [savingVipSettings, setSavingVipSettings] = useState<boolean>(false);
 
   // Güvenli Admin Başlıkları (Dahili Admin Doğrulaması)
-  const getAdminHeaders = () => {
+  const getAdminTelegramId = () => {
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
-    const tgId = tg?.initDataUnsafe?.user?.id;
+    return tg?.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "";
+  };
+
+  const getAdminHeaders = () => {
+    const tgId = getAdminTelegramId();
     return {
       "x-admin-request": "true",
-      "x-admin-pin": "2026",
-      ...(tgId ? { "x-telegram-id": String(tgId) } : {}),
+      ...(tgId ? { "x-telegram-id": tgId } : {}),
     };
   };
 
@@ -554,9 +557,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   // Canlı Veritabanını JSON Olarak İndir
   const handleDownloadCurrentDatabase = async () => {
     haptic.impact("light");
-    const pin = "2026";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const downloadUrl = `${origin}/api/admin/backups?action=download_current&pin=${pin}`;
+    const telegramId = getAdminTelegramId();
+    const authQuery = telegramId ? `&telegramId=${encodeURIComponent(telegramId)}` : "";
+    const downloadUrl = `${origin}/api/admin/backups?action=download_current${authQuery}`;
 
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
 
@@ -612,9 +616,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   // Kayıtlı Snapshot'ı JSON Olarak İndir
   const handleDownloadSnapshot = async (backupId: string, rawDate?: string) => {
     haptic.impact("light");
-    const pin = "2026";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const downloadUrl = `${origin}/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}&pin=${pin}`;
+    const telegramId = getAdminTelegramId();
+    const authQuery = telegramId ? `&telegramId=${encodeURIComponent(telegramId)}` : "";
+    const downloadUrl = `${origin}/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}${authQuery}`;
 
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
 
@@ -6105,7 +6110,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="password"
                 value={backupSecurityPin}
                 onChange={(e) => setBackupSecurityPin(e.target.value)}
-                placeholder="Yönetici PIN Kodu (Örn: 2026)"
+                placeholder="Yönetici PIN kodu (veritabanında tanımlıysa)"
                 className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
               />
               <p className="text-[10px] text-zinc-500">

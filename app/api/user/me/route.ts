@@ -123,9 +123,12 @@ export async function GET(req: NextRequest) {
     }
 
     const adminUsernames = getAdminUsernamesList();
+    const responseUser = user && db.isAdmin(telegramId) && user.role !== "admin"
+      ? { ...user, role: "admin" as const }
+      : user;
 
     return NextResponse.json(
-      { success: true, user, adminUsernames },
+      { success: true, user: responseUser, adminUsernames },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

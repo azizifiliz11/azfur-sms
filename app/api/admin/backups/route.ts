@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const auth = checkAdminAuthWithRateLimit(req);
     if (!auth.authorized) {
       return NextResponse.json(
@@ -101,6 +102,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    await db.syncFromCloud();
     const auth = checkAdminAuthWithRateLimit(req);
     if (!auth.authorized) {
       return NextResponse.json(

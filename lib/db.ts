@@ -16,7 +16,6 @@ import {
   LogCategory,
   LogLevel,
 } from "./types";
-import { CONFIG } from "./config";
 
 export interface DatabaseSchema {
   settings: SystemSettings;
@@ -29,10 +28,9 @@ export interface DatabaseSchema {
   logs?: SystemLog[];
 }
 
-const SEED_DB_PATH = path.join(process.cwd(), "data", "db.json");
 const DB_PATH = process.env.VERCEL
   ? path.join("/tmp", "db.json")
-  : SEED_DB_PATH;
+  : path.join(process.cwd(), "data", "db.json");
 
 const DEFAULT_BACKUP_SETTINGS: BackupSettings = {
   autoBackupEnabled: true,
@@ -51,8 +49,9 @@ const DEFAULT_SETTINGS: SystemSettings = {
   lastTcmbFetchTime: new Date().toISOString(),
   currencySymbol: "₺",
   mockMode: false, // Default to live API
-  adminTelegramId: CONFIG.ADMIN_TELEGRAM_ID,
-  adminSecurityPin: "2026",
+  adminTelegramId: "",
+  adminTelegramIds: [],
+  adminSecurityPin: "",
   hiddenServices: [],
   hiddenCountries: [],
   serviceCustomMargins: {},
@@ -652,18 +651,6 @@ function loadDb(): DatabaseSchema {
   }
   ensureDbDirectory();
   if (!fs.existsSync(DB_PATH)) {
-    // Vercel ortamında seed dosyasından kopyala
-    if (fs.existsSync(SEED_DB_PATH)) {
-      try {
-        const seedRaw = fs.readFileSync(SEED_DB_PATH, "utf8");
-        fs.writeFileSync(DB_PATH, seedRaw, "utf8");
-        memoryDb = JSON.parse(seedRaw);
-        return memoryDb!;
-      } catch (e) {
-        // devam et
-      }
-    }
-
     const initialData: DatabaseSchema = {
       settings: DEFAULT_SETTINGS,
       users: {},
@@ -697,15 +684,9 @@ function loadDb(): DatabaseSchema {
         : [];
     }
     if (data.settings.heroSmsApiKey === undefined) {
-      data.settings.heroSmsApiKey = process.env.HERO_SMS_API_KEY || "e1006858662edcAd8d348c9f07dfe8c5";
-    }
-    if (!data.settings.adminSecurityPin) {
-      data.settings.adminSecurityPin = "2026";
+      data.settings.heroSmsApiKey = process.env.HERO_SMS_API_KEY || "";
     }
     if (!data.users) data.users = {};
-    if (data.users["100001"]) {
-      delete data.users["100001"];
-    }
     if (!data.activations) data.activations = {};
     if (!data.deposits) data.deposits = [];
     if (!data.tickets) data.tickets = {};
@@ -761,11 +742,6 @@ async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promis
   ensureDbDirectory();
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
-    if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
-      try {
-        fs.writeFileSync(SEED_DB_PATH, JSON.stringify(data, null, 2), "utf8");
-      } catch {}
-    }
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
@@ -839,11 +815,6 @@ export const db = {
         try {
           ensureDbDirectory();
           fs.writeFileSync(DB_PATH, JSON.stringify(sqlData, null, 2), "utf8");
-          if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
-            try {
-              fs.writeFileSync(SEED_DB_PATH, JSON.stringify(sqlData, null, 2), "utf8");
-            } catch {}
-          }
         } catch {}
 
         return sqlData;
@@ -966,11 +937,6 @@ export const db = {
           try {
             ensureDbDirectory();
             fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-            if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
-              try {
-                fs.writeFileSync(SEED_DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-              } catch {}
-            }
           } catch {}
 
           return cloudData;

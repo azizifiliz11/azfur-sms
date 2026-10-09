@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json(
         { success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." },
         { status: 403 }
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json(
         { success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." },
         { status: 403 }

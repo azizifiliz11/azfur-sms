@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
@@ -120,7 +120,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();

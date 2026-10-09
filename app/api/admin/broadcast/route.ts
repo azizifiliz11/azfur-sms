@@ -5,7 +5,7 @@ import { isAuthorizedAdmin } from "@/lib/auth-check";
 
 export async function POST(req: NextRequest) {
   try {
-    if (!isAuthorizedAdmin(req)) {
+    if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     const { target, telegramId, message } = await req.json();

@@ -51,12 +51,13 @@ npm install
 ### 2. Ortam Değişkenleri (`.env.local`)
 `.env.local` dosyasında API anahtarlarınızı yapılandırın:
 ```env
-HERO_SMS_API_KEY=e1006858662edcAd8d348c9f07dfe8c5
+HERO_SMS_API_KEY=YOUR_HERO_SMS_API_KEY_HERE
 HERO_SMS_BASE_URL=https://hero-sms.com/stubs/handler_api.php
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN_HERE
-ADMIN_TELEGRAM_ID=8614398114
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 ```
+
+Yönetici Telegram kimlikleri, PIN ve destek kullanıcı adları sistem ayarlarından veritabanında yönetilir.
 
 ### 3. Geliştirme Sunucusunu Başlatma
 ```bash

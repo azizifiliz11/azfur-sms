@@ -3,22 +3,21 @@
     "globalMarginPercent": 40,
     "globalFixedFee": 6,
     "exchangeRateToTry": 49.2152,
-    "currencySymbol": "₺",
-    "mockMode": false,
-    "adminTelegramId": "8614398114",
-    "adminTelegramIds": [
-      "8614398114"
-    ],
-    "hiddenServices": [],
-    "hiddenCountries": [],
-    "serviceCustomMargins": {},
     "useTcmbAutoRate": true,
     "lastTcmbRate": 49.2152,
     "lastTcmbFetchTime": "2026-10-09T12:04:19.949Z",
+    "currencySymbol": "₺",
+    "mockMode": false,
+    "adminTelegramId": "8614398114",
+    "adminSecurityPin": "05377243623",
+    "hiddenServices": [],
+    "hiddenCountries": [],
+    "serviceCustomMargins": {},
+    "customPriceRules": {},
     "bankInfo": {
+      "iban": "TR00 0000 0000 0000 0000 0000 00",
       "bankName": "Ziraat Bankası",
       "accountHolder": "AzFur SMS",
-      "iban": "TR00 0000 0000 0000 0000 0000 00",
       "descriptionNote": "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız."
     },
     "cryptoSettings": {
@@ -26,48 +25,59 @@
       "trxAddress": "",
       "apironeAccount": "",
       "apironeTransferKey": "",
+      "callbackUrl": "",
       "oxapayApiKey": "",
       "cryptoBotToken": "",
       "autoVerifyEnabled": true
     },
-    "useBannerPhoto": true,
     "supportTelegramUsername": "",
     "supportTelegramUsernames": [],
     "customStickerFileId": "",
     "heroSmsApiKey": "e1006858662edcAd8d348c9f07dfe8c5",
-    "adminSecurityPin": "05377243623",
+    "backupSettings": {
+      "maxBackupsCount": 20,
+      "autoBackupEnabled": true,
+      "lastAutoBackupTime": "2026-10-09T12:06:04.641Z",
+      "autoBackupIntervalHours": 6
+    },
+    "useBannerPhoto": true,
+    "vipSettings": {
+      "enabled": true,
+      "autoVipOnDepositAmount": 500,
+      "defaultDiscountPercent": 15
+    },
     "botInfo": {
       "id": 8820776949,
       "is_bot": true,
-      "first_name": "En Ucuz SMS",
       "username": "cokucuzsms_bot",
+      "first_name": "En Ucuz SMS",
       "can_join_groups": true,
-      "can_read_all_group_messages": false,
-      "supports_inline_queries": false,
-      "supports_guest_queries": false,
-      "can_connect_to_business": false,
+      "can_manage_bots": false,
       "has_main_web_app": false,
       "has_topics_enabled": false,
+      "supports_guest_queries": false,
+      "can_connect_to_business": false,
+      "supports_inline_queries": false,
+      "can_read_all_group_messages": false,
       "allows_users_to_create_topics": false,
-      "can_manage_bots": false,
       "supports_join_request_queries": false
     },
-    "backupSettings": {
-      "autoBackupEnabled": true,
-      "autoBackupIntervalHours": 6,
-      "maxBackupsCount": 20,
-      "lastAutoBackupTime": "2026-10-09T12:06:04.641Z"
-    }
+    "adminTelegramIds": [
+      "8614398114"
+    ]
   },
   "users": {
     "8614398114": {
       "telegramId": 8614398114,
       "username": "olanak",
       "firstName": "Beyazdx",
+      "lastName": "",
       "balance": 0,
       "spent": 0,
       "role": "admin",
       "isBanned": false,
+      "isVip": false,
+      "vipExpiresAt": null,
       "createdAt": "2026-10-08T21:11:48.253Z",
       "lastActiveAt": "2026-10-08T21:14:59.554Z"
     },
@@ -75,17 +85,21 @@
       "telegramId": 7619776444,
       "username": "azizifiliz",
       "firstName": "Aziz",
+      "lastName": "",
       "balance": 0,
       "spent": 0,
       "role": "admin",
       "isBanned": false,
+      "isVip": false,
+      "vipExpiresAt": null,
       "createdAt": "2026-10-08T21:14:02.165Z",
-      "lastActiveAt": "2026-10-08T22:45:00.000Z"
+      "lastActiveAt": "2026-10-09T16:31:46.070Z"
     }
   },
   "activations": {},
   "deposits": [],
   "tickets": {},
   "coupons": {},
-  "backups": []
+  "backups": [],
+  "logs": []
 }

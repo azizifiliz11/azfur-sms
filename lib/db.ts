@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { neon } from "@neondatabase/serverless";
 import {
   User,
   ActivationOrder,
@@ -106,6 +107,439 @@ const KV_TOKEN =
 
 const KV_KEY = "azfur_sms_db_v1";
 const KV_APIRONE_KEY = "azfur_sms_apirone_creds";
+
+const POSTGRES_URL =
+  process.env.POSTGRES_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  "postgresql://neondb_owner:npg_F3ZvuyiU5abt@ep-dry-feather-bacqjppv-pooler.c-8.eu-central-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+
+let sqlClient: ReturnType<typeof neon> | null = null;
+function getSql() {
+  if (!sqlClient && POSTGRES_URL) {
+    try {
+      sqlClient = neon(POSTGRES_URL);
+    } catch (e) {
+      console.error("[Postgres Init Error]:", e);
+    }
+  }
+  return sqlClient;
+}
+
+async function saveUserToSql(u: User): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    const tgId = BigInt(u.telegramId);
+    await sql`
+      INSERT INTO users (
+        telegram_id, username, first_name, last_name, balance, spent,
+        role, is_banned, is_vip, vip_since, vip_expires_at, vip_discount_percent,
+        vip_note, active_discount, created_at, last_active_at
+      )
+      VALUES (
+        ${tgId},
+        ${u.username || ""},
+        ${u.firstName || ""},
+        ${u.lastName || ""},
+        ${Number(u.balance) || 0},
+        ${Number(u.spent) || 0},
+        ${u.role || "user"},
+        ${Boolean(u.isBanned)},
+        ${Boolean(u.isVip)},
+        ${u.vipSince ? new Date(u.vipSince) : null},
+        ${u.vipExpiresAt ? new Date(u.vipExpiresAt) : null},
+        ${u.vipDiscountPercent || null},
+        ${u.vipNote || null},
+        ${u.activeDiscount ? JSON.stringify(u.activeDiscount) : null},
+        ${u.createdAt ? new Date(u.createdAt) : new Date()},
+        ${u.lastActiveAt ? new Date(u.lastActiveAt) : new Date()}
+      )
+      ON CONFLICT (telegram_id) DO UPDATE SET
+        username = EXCLUDED.username,
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name,
+        balance = EXCLUDED.balance,
+        spent = EXCLUDED.spent,
+        role = EXCLUDED.role,
+        is_banned = EXCLUDED.is_banned,
+        is_vip = EXCLUDED.is_vip,
+        vip_since = EXCLUDED.vip_since,
+        vip_expires_at = EXCLUDED.vip_expires_at,
+        vip_discount_percent = EXCLUDED.vip_discount_percent,
+        vip_note = EXCLUDED.vip_note,
+        active_discount = EXCLUDED.active_discount,
+        last_active_at = EXCLUDED.last_active_at;
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveUser Error]:", err);
+  }
+}
+
+async function saveSettingsToSql(settings: SystemSettings): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`
+      INSERT INTO system_settings (id, data, updated_at)
+      VALUES (1, ${JSON.stringify(settings)}, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        data = EXCLUDED.data,
+        updated_at = NOW();
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveSettings Error]:", err);
+  }
+}
+
+async function saveActivationToSql(a: ActivationOrder): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`
+      INSERT INTO activations (
+        id, telegram_id, service_code, service_name, country_id,
+        country_name, country_flag, phone_number, original_cost, charged_price,
+        status, sms_code, sms_text, created_at, expires_at, notified_bot
+      )
+      VALUES (
+        ${a.id},
+        ${BigInt(a.telegramId)},
+        ${a.serviceCode || ""},
+        ${a.serviceName || ""},
+        ${Number(a.countryId) || 0},
+        ${a.countryName || ""},
+        ${a.countryFlag || ""},
+        ${a.phoneNumber || ""},
+        ${Number(a.originalCost) || 0},
+        ${Number(a.chargedPrice) || 0},
+        ${a.status || "WAIT_CODE"},
+        ${a.smsCode || null},
+        ${a.smsText || null},
+        ${a.createdAt || Date.now()},
+        ${a.expiresAt || Date.now() + 15 * 60 * 1000},
+        ${Boolean(a.notifiedBot)}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = EXCLUDED.status,
+        sms_code = EXCLUDED.sms_code,
+        sms_text = EXCLUDED.sms_text,
+        notified_bot = EXCLUDED.notified_bot;
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveActivation Error]:", err);
+  }
+}
+
+async function saveDepositToSql(d: DepositRequest): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    const anyD = d as any;
+    await sql`
+      INSERT INTO deposits (
+        id, telegram_id, amount, method, status, receipt_url,
+        tx_id, invoice_id, currency, crypto_amount, created_at, approved_at
+      )
+      VALUES (
+        ${d.id},
+        ${BigInt(d.telegramId)},
+        ${Number(d.amount) || 0},
+        ${d.method || "BANK"},
+        ${d.status || "PENDING"},
+        ${anyD.receiptUrl || null},
+        ${d.txid || anyD.txId || null},
+        ${anyD.invoiceId || null},
+        ${anyD.currency || "TRY"},
+        ${anyD.cryptoAmount ? Number(anyD.cryptoAmount) : null},
+        ${d.createdAt ? new Date(d.createdAt) : new Date()},
+        ${anyD.approvedAt ? new Date(anyD.approvedAt) : null}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = EXCLUDED.status,
+        approved_at = EXCLUDED.approved_at,
+        tx_id = COALESCE(EXCLUDED.tx_id, deposits.tx_id);
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveDeposit Error]:", err);
+  }
+}
+
+async function saveTicketToSql(t: Ticket): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`
+      INSERT INTO tickets (
+        id, telegram_id, subject, status, messages, created_at, updated_at
+      )
+      VALUES (
+        ${t.id},
+        ${BigInt(t.telegramId)},
+        ${t.subject || "Destek Talebi"},
+        ${t.status || "OPEN"},
+        ${JSON.stringify(t.messages || [])},
+        ${t.createdAt ? new Date(t.createdAt) : new Date()},
+        ${t.updatedAt ? new Date(t.updatedAt) : new Date()}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = EXCLUDED.status,
+        messages = EXCLUDED.messages,
+        updated_at = NOW();
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveTicket Error]:", err);
+  }
+}
+
+async function saveCouponToSql(c: Coupon): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    const anyC = c as any;
+    await sql`
+      INSERT INTO coupons (
+        code, type, value, usage_limit, used_count, used_by, expires_at, created_at
+      )
+      VALUES (
+        ${c.code},
+        ${c.type || "BALANCE"},
+        ${Number(c.value) || 0},
+        ${Number(c.maxUses || anyC.usageLimit) || 1},
+        ${Number(c.usedCount) || 0},
+        ${JSON.stringify(c.usedByUserIds || anyC.usedBy || [])},
+        ${c.expiresAt ? new Date(c.expiresAt) : null},
+        ${c.createdAt ? new Date(c.createdAt) : new Date()}
+      )
+      ON CONFLICT (code) DO UPDATE SET
+        used_count = EXCLUDED.used_count,
+        used_by = EXCLUDED.used_by;
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveCoupon Error]:", err);
+  }
+}
+
+async function saveLogToSql(log: SystemLog): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`
+      INSERT INTO logs (
+        id, timestamp, category, level, action, details, metadata
+      )
+      VALUES (
+        ${log.id},
+        ${log.timestamp ? new Date(log.timestamp) : new Date()},
+        ${log.category},
+        ${log.level},
+        ${log.action},
+        ${log.details || null},
+        ${log.metadata ? JSON.stringify(log.metadata) : null}
+      )
+      ON CONFLICT (id) DO NOTHING;
+    `;
+  } catch (err) {
+    // ignore
+  }
+}
+
+async function saveBackupToSql(b: SystemBackup): Promise<void> {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`
+      INSERT INTO backups (id, timestamp, note, data)
+      VALUES (
+        ${b.id},
+        ${b.timestamp ? new Date(b.timestamp) : new Date()},
+        ${b.label || null},
+        ${JSON.stringify(b)}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        timestamp = EXCLUDED.timestamp,
+        note = EXCLUDED.note,
+        data = EXCLUDED.data;
+    `;
+  } catch (err) {
+    console.error("[PostgreSQL saveBackup Error]:", err);
+  }
+}
+
+async function syncFromSql(): Promise<DatabaseSchema | null> {
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    const [settingsRows, usersRows, activationsRows, depositsRows, ticketsRows, couponsRows, logsRows, backupsRows] = (await Promise.all([
+      sql`SELECT data FROM system_settings WHERE id = 1`,
+      sql`SELECT * FROM users`,
+      sql`SELECT * FROM activations ORDER BY created_at DESC LIMIT 1000`,
+      sql`SELECT * FROM deposits ORDER BY created_at DESC LIMIT 500`,
+      sql`SELECT * FROM tickets ORDER BY updated_at DESC LIMIT 200`,
+      sql`SELECT * FROM coupons`,
+      sql`SELECT * FROM logs ORDER BY timestamp DESC LIMIT 300`,
+      sql`SELECT * FROM backups ORDER BY timestamp DESC LIMIT 30`,
+    ])) as any[];
+
+    let parsedSettings = DEFAULT_SETTINGS;
+    if (settingsRows.length > 0 && settingsRows[0].data) {
+      parsedSettings = {
+        ...DEFAULT_SETTINGS,
+        ...settingsRows[0].data,
+        cryptoSettings: {
+          ...DEFAULT_SETTINGS.cryptoSettings,
+          ...(settingsRows[0].data.cryptoSettings || {}),
+        },
+      };
+    }
+
+    const parsedUsers: Record<string, User> = {};
+    for (const r of usersRows) {
+      const tgIdStr = String(r.telegram_id);
+      parsedUsers[tgIdStr] = {
+        telegramId: Number(r.telegram_id),
+        username: r.username || "",
+        firstName: r.first_name || "",
+        lastName: r.last_name || "",
+        balance: parseFloat(r.balance) || 0,
+        spent: parseFloat(r.spent) || 0,
+        role: r.role || "user",
+        isBanned: Boolean(r.is_banned),
+        isVip: Boolean(r.is_vip),
+        vipSince: r.vip_since ? new Date(r.vip_since).toISOString() : undefined,
+        vipExpiresAt: r.vip_expires_at ? new Date(r.vip_expires_at).toISOString() : null,
+        vipDiscountPercent: r.vip_discount_percent ? Number(r.vip_discount_percent) : undefined,
+        vipNote: r.vip_note || undefined,
+        activeDiscount: r.active_discount ? (typeof r.active_discount === "string" ? JSON.parse(r.active_discount) : r.active_discount) : undefined,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        lastActiveAt: r.last_active_at ? new Date(r.last_active_at).toISOString() : new Date().toISOString(),
+      };
+    }
+
+    const parsedActivations: Record<string, ActivationOrder> = {};
+    for (const a of activationsRows) {
+      parsedActivations[a.id] = {
+        id: a.id,
+        telegramId: Number(a.telegram_id),
+        serviceCode: a.service_code,
+        serviceName: a.service_name || "",
+        countryId: Number(a.country_id),
+        countryName: a.country_name || "",
+        countryFlag: a.country_flag || "",
+        phoneNumber: a.phone_number || "",
+        originalCost: parseFloat(a.original_cost) || 0,
+        chargedPrice: parseFloat(a.charged_price) || 0,
+        status: a.status,
+        smsCode: a.sms_code || null,
+        smsText: a.sms_text || null,
+        createdAt: Number(a.created_at) || Date.now(),
+        expiresAt: Number(a.expires_at) || Date.now(),
+        notifiedBot: Boolean(a.notified_bot),
+      };
+    }
+
+    const parsedDeposits: DepositRequest[] = depositsRows.map((d: any) => ({
+      id: d.id,
+      telegramId: Number(d.telegram_id),
+      username: d.username || "",
+      amount: parseFloat(d.amount) || 0,
+      method: d.method || "Havale/EFT",
+      status: d.status || "PENDING",
+      referenceCode: d.reference_code || d.id,
+      txid: d.tx_id || undefined,
+      createdAt: d.created_at ? new Date(d.created_at).toISOString() : new Date().toISOString(),
+    }));
+
+    const parsedTickets: Record<string, Ticket> = {};
+    for (const t of ticketsRows) {
+      parsedTickets[t.id] = {
+        id: t.id,
+        telegramId: Number(t.telegram_id),
+        username: t.username || undefined,
+        userFirstName: t.user_first_name || undefined,
+        subject: t.subject || "Destek Talebi",
+        category: (t.category as any) || "GENERAL",
+        status: t.status || "OPEN",
+        messages: Array.isArray(t.messages) ? t.messages : (typeof t.messages === "string" ? JSON.parse(t.messages) : []),
+        createdAt: t.created_at ? new Date(t.created_at).toISOString() : new Date().toISOString(),
+        updatedAt: t.updated_at ? new Date(t.updated_at).toISOString() : new Date().toISOString(),
+      };
+    }
+
+    const parsedCoupons: Record<string, Coupon> = {};
+    for (const c of couponsRows) {
+      parsedCoupons[c.code] = {
+        id: c.id || `cp_${c.code}`,
+        code: c.code,
+        type: c.type || "BALANCE",
+        value: parseFloat(c.value) || 0,
+        description: c.description || undefined,
+        minOrderAmount: c.min_order_amount ? parseFloat(c.min_order_amount) : undefined,
+        maxUses: c.usage_limit || 1,
+        usedCount: c.used_count || 0,
+        usedByUserIds: Array.isArray(c.used_by) ? c.used_by : (typeof c.used_by === "string" ? JSON.parse(c.used_by) : []),
+        isActive: c.is_active !== undefined ? Boolean(c.is_active) : true,
+        expiresAt: c.expires_at ? new Date(c.expires_at).toISOString() : undefined,
+        createdAt: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+      };
+    }
+
+    const parsedLogs: SystemLog[] = logsRows.map((l: any) => ({
+      id: l.id,
+      timestamp: l.timestamp ? new Date(l.timestamp).toISOString() : new Date().toISOString(),
+      category: l.category,
+      level: l.level,
+      action: l.action,
+      details: l.details || "",
+      metadata: l.metadata ? (typeof l.metadata === "string" ? JSON.parse(l.metadata) : l.metadata) : undefined,
+    }));
+
+    const parsedBackups: SystemBackup[] = backupsRows.map((b: any) => {
+      if (b.data && typeof b.data === "object") {
+        return b.data;
+      } else if (typeof b.data === "string") {
+        try {
+          return JSON.parse(b.data);
+        } catch {}
+      }
+      return {
+        id: b.id,
+        timestamp: b.timestamp ? new Date(b.timestamp).toISOString() : new Date().toISOString(),
+        createdAt: b.timestamp ? new Date(b.timestamp).toISOString() : new Date().toISOString(),
+        label: b.note || "Yedek",
+        type: "MANUAL",
+        sizeBytes: 0,
+        stats: {
+          usersCount: 0,
+          activationsCount: 0,
+          ordersCount: 0,
+          depositsCount: 0,
+          ticketsCount: 0,
+          couponsCount: 0,
+          totalUserBalance: 0,
+          totalBalance: 0,
+          sizeKb: 0,
+        },
+      };
+    });
+
+    const sqlData: DatabaseSchema = {
+      settings: parsedSettings,
+      users: parsedUsers,
+      activations: parsedActivations,
+      deposits: parsedDeposits,
+      tickets: parsedTickets,
+      coupons: parsedCoupons,
+      backups: parsedBackups.length > 0 ? parsedBackups : (memoryDb?.backups || []),
+      logs: parsedLogs.length > 0 ? parsedLogs : (memoryDb?.logs || []),
+    };
+
+    return sqlData;
+  } catch (err) {
+    console.error("[PostgreSQL syncFromSql Error]:", err);
+    return null;
+  }
+}
 
 function ensureDbDirectory() {
   const dir = path.dirname(DB_PATH);
@@ -335,12 +769,15 @@ async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promis
   } catch (err) {
     console.error("Error writing db.json:", err);
   }
-  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV'ye yaz (AWAIT EDİLİR - Vercel donmasını önler)
+  // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV ve PostgreSQL'e yaz (AWAIT EDİLİR - Vercel donmasını önler)
   if (syncToCloud) {
     try {
-      await saveToCloudKv(data);
+      await Promise.allSettled([
+        saveToCloudKv(data),
+        saveSettingsToSql(data.settings),
+      ]);
     } catch (e) {
-      console.error("Error saving to cloud KV:", e);
+      console.error("Error saving to cloud KV / PostgreSQL:", e);
     }
   }
 }
@@ -348,10 +785,73 @@ async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promis
 export const db = {
   async syncFromCloud(force: boolean = false): Promise<DatabaseSchema> {
     const now = Date.now();
-    // 15 saniye içinde önbellekte varsa ve force değilse hemen bellekten dön (0ms ağ gecikmesi)
+    // 2 saniye içinde önbellekte varsa ve force değilse hemen bellekten dön (0ms ağ gecikmesi)
     if (!force && memoryDb && now - lastCloudSyncTime < CLOUD_SYNC_TTL_MS) {
       return memoryDb;
     }
+
+    // 1. Önce PostgreSQL'den oku (Birincil SQL Veritabanı)
+    try {
+      const sqlData = await syncFromSql();
+      if (sqlData) {
+        // Kara listedeki silinmiş kullanıcıları temizle
+        if (Array.isArray(sqlData.settings.deletedTelegramIds)) {
+          for (const delId of sqlData.settings.deletedTelegramIds) {
+            delete sqlData.users[delId];
+            if (Array.isArray(sqlData.settings.adminTelegramIds)) {
+              sqlData.settings.adminTelegramIds = sqlData.settings.adminTelegramIds.filter(
+                (id: string) => String(id).trim() !== String(delId).trim()
+              );
+            }
+          }
+        }
+
+        // Apirone hesabı koruması
+        if (!sqlData.settings.cryptoSettings) {
+          sqlData.settings.cryptoSettings = { ...DEFAULT_SETTINGS.cryptoSettings };
+        }
+        const crypto = sqlData.settings.cryptoSettings;
+
+        if (
+          memoryDb?.settings?.cryptoSettings?.apironeAccount &&
+          !crypto.apironeAccount
+        ) {
+          crypto.apironeAccount = memoryDb.settings.cryptoSettings.apironeAccount;
+          crypto.apironeTransferKey = memoryDb.settings.cryptoSettings.apironeTransferKey || "";
+        }
+        if (!crypto.apironeAccount) {
+          try {
+            const dedicated = await getApironeFromDedicatedKv();
+            if (dedicated && dedicated.apironeAccount) {
+              crypto.apironeAccount = dedicated.apironeAccount;
+              if (dedicated.apironeTransferKey) crypto.apironeTransferKey = dedicated.apironeTransferKey;
+              if (dedicated.usdtTrc20Address && !crypto.usdtTrc20Address) crypto.usdtTrc20Address = dedicated.usdtTrc20Address;
+              if (dedicated.trxAddress && !crypto.trxAddress) crypto.trxAddress = dedicated.trxAddress;
+              saveSettingsToSql(sqlData.settings).catch(() => {});
+            }
+          } catch {}
+        }
+
+        memoryDb = sqlData;
+        lastCloudSyncTime = now;
+
+        // Yerel belleğe ve diske de yaz
+        try {
+          ensureDbDirectory();
+          fs.writeFileSync(DB_PATH, JSON.stringify(sqlData, null, 2), "utf8");
+          if (DB_PATH !== SEED_DB_PATH && fs.existsSync(path.dirname(SEED_DB_PATH))) {
+            try {
+              fs.writeFileSync(SEED_DB_PATH, JSON.stringify(sqlData, null, 2), "utf8");
+            } catch {}
+          }
+        } catch {}
+
+        return sqlData;
+      }
+    } catch (sqlErr) {
+      console.error("[Neon PostgreSQL Sync Error]:", sqlErr);
+    }
+
     if (!KV_URL || !KV_TOKEN) return loadDb();
     try {
       const res = await fetch(KV_URL, {
@@ -552,6 +1052,7 @@ export const db = {
       }).catch(() => {});
     }
 
+    await saveSettingsToSql(data.settings);
     await saveDb(data, true);
     return data.settings;
   },
@@ -638,8 +1139,9 @@ export const db = {
       if (profile?.username) user.username = profile.username.replace(/^@/, "").trim();
       if (profile?.firstName) user.firstName = profile.firstName.trim();
       if (profile?.lastName !== undefined) user.lastName = profile.lastName ? profile.lastName.trim() : undefined;
-      // Bellek ve diski anında güncelle, buluta yazma kuyruğuna sokma (sıfır gecikme)
+      // Bellek ve diski anında güncelle
       await saveDb(data, false);
+      saveUserToSql(user).catch(() => {});
     } else if (profile?.firstName) {
       await this.getOrCreateUser(cleanId, {
         username: profile.username,
@@ -710,6 +1212,7 @@ export const db = {
     }
 
     await saveDb(data);
+    await saveUserToSql(user);
     return user;
   },
 
@@ -721,6 +1224,7 @@ export const db = {
     }
     data.users[cleanId] = user;
     await saveDb(data);
+    await saveUserToSql(user);
   },
 
   async getOrCreateUser(telegramId: number | string, defaults?: Partial<User>): Promise<User> {
@@ -755,6 +1259,7 @@ export const db = {
       };
       data.users[cleanId] = newUser;
       await saveDb(data);
+      await saveUserToSql(newUser);
       return newUser;
     } else {
       const user = data.users[foundKey];
@@ -785,6 +1290,7 @@ export const db = {
       }
       if (changed) {
         await saveDb(data);
+        await saveUserToSql(user);
       }
       return user;
     }
@@ -800,6 +1306,20 @@ export const db = {
       data.users[key].spent = 0;
     }
     await saveDb(data);
+
+    const sql = getSql();
+    if (sql) {
+      try {
+        await Promise.allSettled([
+          sql`DELETE FROM activations`,
+          sql`DELETE FROM deposits`,
+          sql`UPDATE users SET spent = 0`,
+        ]);
+      } catch (e) {
+        console.error("[PostgreSQL resetStats Error]:", e);
+      }
+    }
+
     return { activationsReset: actCount, depositsReset: depCount };
   },
 
@@ -866,6 +1386,7 @@ export const db = {
     }
     user.lastActiveAt = new Date().toISOString();
     await saveDb(data, true);
+    await saveUserToSql(user);
     return user;
   },
 
@@ -923,6 +1444,7 @@ export const db = {
 
     user.lastActiveAt = new Date().toISOString();
     await saveDb(data, true);
+    await saveUserToSql(user);
     return user;
   },
 
@@ -975,6 +1497,7 @@ export const db = {
     }
 
     await saveDb(data);
+    await saveUserToSql(user);
     return user;
   },
 
@@ -997,6 +1520,7 @@ export const db = {
     } else {
       user.isBanned = isBanned;
       await saveDb(data);
+      await saveUserToSql(user);
     }
     return user;
   },
@@ -1015,6 +1539,7 @@ export const db = {
     if (!foundKey || !data.users[foundKey]) return null;
     data.users[foundKey] = { ...data.users[foundKey], ...updates };
     await saveDb(data);
+    await saveUserToSql(data.users[foundKey]);
     return data.users[foundKey];
   },
 
@@ -1057,6 +1582,16 @@ export const db = {
     }
 
     await saveDb(data);
+
+    const sql = getSql();
+    if (sql) {
+      try {
+        await sql`DELETE FROM users WHERE telegram_id = ${BigInt(cleanId)}`;
+      } catch (e) {
+        console.error("[PostgreSQL deleteUser Error]:", e);
+      }
+    }
+
     return true;
   },
 
@@ -1131,6 +1666,7 @@ export const db = {
     const data = loadDb();
     data.activations[order.id] = order;
     await saveDb(data);
+    await saveActivationToSql(order);
   },
 
   async updateActivation(id: string, updates: Partial<ActivationOrder>): Promise<ActivationOrder | null> {
@@ -1138,6 +1674,7 @@ export const db = {
     if (!data.activations[id]) return null;
     data.activations[id] = { ...data.activations[id], ...updates };
     await saveDb(data);
+    await saveActivationToSql(data.activations[id]);
     return data.activations[id];
   },
 
@@ -1145,6 +1682,7 @@ export const db = {
     const data = loadDb();
     data.deposits.unshift(deposit);
     await saveDb(data);
+    await saveDepositToSql(deposit);
 
     this.addLog({
       category: "DEPOSIT",
@@ -1232,6 +1770,14 @@ export const db = {
     }
 
     await saveDb(data);
+    await saveDepositToSql(dep);
+    if (status === "APPROVED") {
+      const cleanId = String(dep.telegramId).trim();
+      const updatedUser = this.getUser(cleanId);
+      if (updatedUser) {
+        await saveUserToSql(updatedUser);
+      }
+    }
     return dep;
   },
 
@@ -1268,6 +1814,7 @@ export const db = {
     if (!data.tickets) data.tickets = {};
     data.tickets[ticket.id] = ticket;
     await saveDb(data);
+    await saveTicketToSql(ticket);
     return ticket;
   },
 
@@ -1285,6 +1832,7 @@ export const db = {
       ticket.status = newStatus;
     }
     await saveDb(data);
+    await saveTicketToSql(ticket);
     return ticket;
   },
 
@@ -1295,6 +1843,7 @@ export const db = {
     ticket.status = status;
     ticket.updatedAt = new Date().toISOString();
     await saveDb(data);
+    await saveTicketToSql(ticket);
     return ticket;
   },
 
@@ -1303,6 +1852,12 @@ export const db = {
     if (!data.tickets || !data.tickets[ticketId]) return false;
     delete data.tickets[ticketId];
     await saveDb(data);
+    const sql = getSql();
+    if (sql) {
+      try {
+        await sql`DELETE FROM tickets WHERE id = ${ticketId}`;
+      } catch (e) {}
+    }
     return true;
   },
 
@@ -1333,14 +1888,22 @@ export const db = {
     coupon.code = coupon.code.trim().toUpperCase();
     data.coupons[coupon.id] = coupon;
     await saveDb(data);
+    await saveCouponToSql(coupon);
     return coupon;
   },
 
   async deleteCoupon(id: string): Promise<boolean> {
     const data = loadDb();
     if (!data.coupons || !data.coupons[id]) return false;
+    const cleanCode = id.trim().toUpperCase();
     delete data.coupons[id];
     await saveDb(data);
+    const sql = getSql();
+    if (sql) {
+      try {
+        await sql`DELETE FROM coupons WHERE code = ${cleanCode}`;
+      } catch (e) {}
+    }
     return true;
   },
 
@@ -1437,6 +2000,10 @@ export const db = {
       user.balance = Math.max(0, Number(((user.balance || 0) + bonus).toFixed(2)));
       user.lastActiveAt = new Date().toISOString();
       await saveDb(data);
+      await Promise.allSettled([
+        saveCouponToSql(coupon),
+        saveUserToSql(user),
+      ]);
 
       this.addLog({
         category: "COUPON",
@@ -1466,6 +2033,10 @@ export const db = {
       };
       user.lastActiveAt = new Date().toISOString();
       await saveDb(data);
+      await Promise.allSettled([
+        saveCouponToSql(coupon),
+        saveUserToSql(user),
+      ]);
 
       this.addLog({
         category: "COUPON",
@@ -1491,6 +2062,10 @@ export const db = {
     }
 
     await saveDb(data);
+    await Promise.allSettled([
+      saveCouponToSql(coupon),
+      saveUserToSql(user),
+    ]);
     return { success: true, message: `Kupon başarıyla uygulandı!`, coupon };
   },
 
@@ -1597,6 +2172,7 @@ export const db = {
     }
 
     await saveDb(data);
+    await saveBackupToSql(backupRecord);
 
     this.addLog({
       category: "SYSTEM",
@@ -1687,6 +2263,12 @@ export const db = {
     }
 
     await saveDb(data, true);
+    const sql = getSql();
+    if (sql) {
+      try {
+        await sql`DELETE FROM backups WHERE id = ${backupId}`;
+      } catch (e) {}
+    }
 
     // Silme işlemini logla
     this.addLog({
@@ -1813,6 +2395,7 @@ export const db = {
     }
     // Arka planda kaydet (UI/API akışını bloklama)
     saveDb(data).catch(() => {});
+    saveLogToSql(logItem).catch(() => {});
     return logItem;
   },
 
@@ -1855,6 +2438,12 @@ export const db = {
     const count = (data.logs || []).length;
     data.logs = [];
     await saveDb(data);
+    const sql = getSql();
+    if (sql) {
+      try {
+        await sql`DELETE FROM logs`;
+      } catch (e) {}
+    }
     return { count };
   },
 
@@ -1897,6 +2486,7 @@ export const db = {
     }
 
     await saveDb(data);
+    await saveUserToSql(user);
 
     // Otomatik log kaydı
     this.addLog({

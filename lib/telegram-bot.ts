@@ -211,11 +211,6 @@ export function getTelegramBot(): Bot | null {
     const botInfo = cachedBotInfo || settings.botInfo;
     botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, {
       ...(botInfo ? { botInfo } : {}),
-      // Welcome text or the hosted banner can be returned as Telegram's
-      // webhook response, avoiding an extra Bot API round trip.
-      client: {
-        canUseWebhookReply: (method) => method === "sendMessage" || method === "sendPhoto",
-      },
     });
 
     // ==========================================
@@ -486,20 +481,13 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      const existingUser = db.getUser(from.id);
-      const now = new Date().toISOString();
-      const user: User = existingUser || {
-        telegramId: from.id,
-        username: from.username || "",
-        firstName: from.first_name || "Telegram Kullanıcısı",
-        lastName: from.last_name,
-        balance: 0,
-        spent: 0,
-        role: db.isAdmin(from.id) ? "admin" : "user",
-        isBanned: false,
-        createdAt: now,
-        lastActiveAt: now,
-      };
+      const user =
+        db.getUser(from.id) ||
+        (await db.getOrCreateUser(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }));
 
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
@@ -508,13 +496,19 @@ export function getTelegramBot(): Bot | null {
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      // Use the public URL so this stays JSON-only and can be sent directly
-      // in Telegram's webhook response without uploading a photo from Vercel.
-      await ctx.replyWithPhoto(bannerUrl, {
-        caption: messageText,
-        parse_mode: "HTML",
-        reply_markup: keyboard,
-      });
+      try {
+        await ctx.replyWithPhoto(bannerUrl, {
+          caption: messageText,
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        });
+      } catch (photoErr: any) {
+        console.warn("sendWelcome banner photo gönderilemedi, metin moduna geçiliyor:", photoErr?.message || photoErr);
+        await ctx.reply(messageText, {
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        });
+      }
 
       if (ctx.chat?.type === "private") {
         const menuButton = {
@@ -976,6 +970,24 @@ export function getTelegramBot(): Bot | null {
 
       // --- ANA MENÜYE DÖNÜŞ ---
       if (data === "btn_main_menu" || data === "btn_refresh_menu") {
+        if (ctx.callbackQuery?.message?.photo) {
+          try {
+            const activeOrders = db.getActiveOrders(from.id);
+            const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
+            const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
+            await ctx.editMessageCaption({
+              caption: messageText,
+              parse_mode: "HTML",
+              reply_markup: keyboard,
+            });
+            return;
+          } catch (editErr: any) {
+            if (String(editErr?.message || "").includes("message is not modified")) {
+              return;
+            }
+          }
+        }
+
         try {
           await ctx.deleteMessage();
         } catch {}

@@ -1959,18 +1959,41 @@ export const db = {
     return coupon;
   },
 
-  async deleteCoupon(id: string): Promise<boolean> {
+  async deleteCoupon(identifier: string): Promise<boolean> {
     const data = loadDb();
-    if (!data.coupons || !data.coupons[id]) return false;
-    const cleanCode = id.trim().toUpperCase();
-    delete data.coupons[id];
-    await saveDb(data);
+    if (!data.coupons) return false;
+
+    const cleanIdentifier = String(identifier || "").trim();
+    const normalizedIdentifier = cleanIdentifier.toUpperCase();
+    const couponEntries = Object.entries(data.coupons);
+    const target = couponEntries.find(([key, coupon]) =>
+      key === cleanIdentifier ||
+      coupon.id === cleanIdentifier ||
+      String(coupon.code || "").trim().toUpperCase() === normalizedIdentifier
+    );
+    if (!target) return false;
+
+    const [, targetCoupon] = target;
+    const cleanCode = String(targetCoupon.code || cleanIdentifier).trim().toUpperCase();
     const sql = getSql();
     if (sql) {
-      try {
-        await sql`DELETE FROM coupons WHERE code = ${cleanCode}`;
-      } catch (e) {}
+      // SQL'den yüklenen kuponlar kod ile anahtarlanabilir; UI ise id gönderir.
+      // Kalıcı silme için her zaman kupon kodunu kullan ve SQL hatasını gizleme.
+      await sql`DELETE FROM coupons WHERE UPPER(TRIM(code)) = ${cleanCode}`;
     }
+
+    // Eski yerel kayıtlar id, yenileri ise kupon kodu anahtarıyla tutulmuş olabilir.
+    // Aynı kupona ait olası farklı anahtarları da temizle.
+    for (const [key, coupon] of couponEntries) {
+      if (
+        key === cleanIdentifier ||
+        coupon.id === targetCoupon.id ||
+        String(coupon.code || "").trim().toUpperCase() === cleanCode
+      ) {
+        delete data.coupons[key];
+      }
+    }
+    await saveDb(data);
     return true;
   },
 

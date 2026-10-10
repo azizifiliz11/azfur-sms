@@ -527,9 +527,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         setCoupons((prev) => prev.filter((c) => c.id !== couponId));
         setToastMsg("🗑️ Kupon başarıyla silindi.");
         setTimeout(() => setToastMsg(null), 3000);
+      } else {
+        haptic.error();
+        alert(data.error || "Kupon silinemedi. Lütfen tekrar deneyin.");
       }
     } catch (e) {
       console.error(e);
+      haptic.error();
+      alert("Kupon silinirken sunucuya ulaşılamadı. Lütfen tekrar deneyin.");
     }
   };
 

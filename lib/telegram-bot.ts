@@ -2091,7 +2091,13 @@ export function getTelegramBot(): Bot | null {
           maxBackupsCount: 20,
         };
 
-        const lastBackupStr = bs.lastAutoBackupTime || backups[0]?.timestamp || null;
+        const lastBackupStr =
+          bs.lastBackupAt ||
+          bs.lastBackupTime ||
+          bs.lastAutoBackupTime ||
+          backups[0]?.createdAt ||
+          backups[0]?.timestamp ||
+          null;
         const lastBackupFormatted = lastBackupStr
           ? new Date(lastBackupStr).toLocaleString("tr-TR")
           : "Henüz yedek alınmadı";
@@ -2109,7 +2115,7 @@ export function getTelegramBot(): Bot | null {
         const kb = new InlineKeyboard()
           .text("💾 Şimdi Manuel Yedek Al", "adm_bkp_create")
           .row()
-          .text("📥 Canlı Veritabanını İndir (.json)", "adm_bkp_dl_live")
+          .text("📥 Canlı SQL Veritabanını İndir (.sql)", "adm_bkp_dl_live")
           .row()
           .text(`📋 Kayıtlı Yedekler (${backups.length})`, "adm_bkp_list")
           .row()
@@ -2121,7 +2127,7 @@ export function getTelegramBot(): Bot | null {
         return;
       }
 
-      // --- ŞİMDİ MANUEL YEDEK AL (ANINDA .JSON DOSYASI GÖNDERİR) ---
+      // --- ŞİMDİ MANUEL YEDEK AL (ANINDA .SQL DOSYASI GÖNDERİR) ---
       if (data === "adm_bkp_create") {
         if (!isAdmin) return;
         try {
@@ -2130,10 +2136,11 @@ export function getTelegramBot(): Bot | null {
 
         const backup = await db.createBackup("MANUAL", `Telegram Bot Yedeği (${from.first_name || "Admin"})`);
         const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
-        const jsonBuffer = Buffer.from(JSON.stringify(backup.data, null, 2), "utf8");
+        const fileName = `azfur_yedek_${backup.id}_${dateStr}.sql`;
+        const sqlContent = await db.generateSqlDump(backup.data);
+        const sqlBuffer = Buffer.from(sqlContent, "utf8");
 
-        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+        await ctx.replyWithDocument(new InputFile(sqlBuffer, fileName), {
           caption:
             `✅ <b>SİSTEM YEDEĞİ BAŞARIYLA OLUŞTURULDU!</b>\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2142,9 +2149,9 @@ export function getTelegramBot(): Bot | null {
             `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount} kişi\n` +
             `💰 <b>Toplam Bakiye:</b> ${backup.stats?.totalUserBalance?.toFixed(2)} ₺\n` +
             `📦 <b>Toplam Sipariş:</b> ${backup.stats?.activationsCount} adet\n` +
-            `📁 <b>Dosya Boyutu:</b> ${(backup.sizeBytes / 1024).toFixed(1)} KB\n` +
+            `📁 <b>Dosya Boyutu:</b> ${(Buffer.byteLength(sqlContent, "utf8") / 1024).toFixed(1)} KB\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💾 <i>Yedek dosyanız yukarıda hazır! İndirip cihazınızda saklayabilirsiniz.</i>`,
+            `💾 <i>PostgreSQL SQL formatındaki yedek dosyanız yukarıda hazır! İndirip cihazınızda saklayabilirsiniz.</i>`,
           parse_mode: "HTML",
           reply_markup: new InlineKeyboard()
             .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
@@ -2154,18 +2161,18 @@ export function getTelegramBot(): Bot | null {
         return;
       }
 
-      // --- CANLI VERİTABANINI İNDİR (.JSON OLARAK DOĞRUDAN SOHBETE ATAR) ---
+      // --- CANLI VERİTABANINI İNDİR (.SQL OLARAK DOĞRUDAN SOHBETE ATAR) ---
       if (data === "adm_bkp_dl_live") {
         if (!isAdmin) return;
         try {
-          await ctx.answerCallbackQuery({ text: "📥 Canlı veritabanı hazırlanıyor..." });
+          await ctx.answerCallbackQuery({ text: "📥 Canlı SQL veritabanı hazırlanıyor..." });
         } catch (e) {}
 
         db.addLog({
           category: "SYSTEM",
           level: "WARN",
           action: "BOT_LIVE_DB_DOWNLOADED",
-          details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) bot üzerinden canlı veritabanını indirdi.`,
+          details: `Yönetici ${from.first_name || ""} (@${from.username || from.id}) bot üzerinden canlı PostgreSQL veritabanını (.sql) indirdi.`,
           telegramId: from.id,
           username: from.username,
         }).catch(() => {});
@@ -2173,21 +2180,22 @@ export function getTelegramBot(): Bot | null {
         await db.syncFromCloud();
         const liveSnapshot = db.getFullDatabaseSnapshot();
         const dateStr = new Date().toISOString().slice(0, 10);
-        const fileName = `azfur_canli_veritabani_${dateStr}.json`;
-        const jsonBuffer = Buffer.from(JSON.stringify(liveSnapshot, null, 2), "utf8");
+        const fileName = `azfur_canli_veritabani_${dateStr}.sql`;
+        const sqlContent = await db.generateSqlDump();
+        const sqlBuffer = Buffer.from(sqlContent, "utf8");
 
         const usersCount = Object.keys(liveSnapshot.users || {}).length;
         const activationsCount = Object.keys(liveSnapshot.activations || {}).length;
 
-        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+        await ctx.replyWithDocument(new InputFile(sqlBuffer, fileName), {
           caption:
-            `📥 <b>CANLI VERİTABANI YEDEĞİ</b>\n` +
+            `📥 <b>CANLI POSTGRESQL VERİTABANI YEDEĞİ</b>\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `🕒 <b>Tarih:</b> ${new Date().toLocaleString("tr-TR")}\n` +
             `👥 <b>Kayıtlı Kullanıcı:</b> ${usersCount} kişi\n` +
             `📦 <b>Siparişler:</b> ${activationsCount} adet\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💾 <i>Mevcut tüm ayarlar ve veritabanı içeriği .json olarak eklenmiştir.</i>`,
+            `💾 <i>Mevcut tüm ayarlar ve veritabanı içeriği PostgreSQL .sql formatında eklenmiştir.</i>`,
           parse_mode: "HTML",
           reply_markup: new InlineKeyboard()
             .text("📦 Yedekleme Menüsü", "adm_bkp_menu")
@@ -2260,16 +2268,18 @@ export function getTelegramBot(): Bot | null {
         const rawDate = backup.createdAt || backup.timestamp;
         const d = rawDate && !isNaN(new Date(rawDate).getTime()) ? new Date(rawDate) : new Date();
         const dateStr = d.toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        const fileName = `azfur_yedek_${backup.id}_${dateStr}.json`;
-        const downloadData = backup.data || db.getFullDatabaseSnapshot();
-        const jsonBuffer = Buffer.from(JSON.stringify(downloadData, null, 2), "utf8");
+        const fileName = `azfur_yedek_${backup.id}_${dateStr}.sql`;
+        const sqlContent = await db.generateSqlDump(backup.data);
+        const sqlBuffer = Buffer.from(sqlContent, "utf8");
 
-        await ctx.replyWithDocument(new InputFile(jsonBuffer, fileName), {
+        await ctx.replyWithDocument(new InputFile(sqlBuffer, fileName), {
           caption:
             `📦 <b>${backup.label}</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
             `🕒 <b>Tarih:</b> ${d.toLocaleString("tr-TR")}\n` +
-            `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount || 0}\n` +
-            `📁 <b>Boyut:</b> ${(backup.sizeBytes / 1024).toFixed(1)} KB`,
+            `👥 <b>Kullanıcı Sayısı:</b> ${backup.stats?.usersCount || 0} kişi\n` +
+            `📁 <b>Boyut:</b> ${(Buffer.byteLength(sqlContent, "utf8") / 1024).toFixed(1)} KB\n` +
+            `💾 <i>PostgreSQL (.sql) formatında sistem snapshot yedeği.</i>`,
           parse_mode: "HTML",
           reply_markup: new InlineKeyboard()
             .text("📋 Yedek Listesi", "adm_bkp_list")

@@ -36,7 +36,9 @@ const DEFAULT_BACKUP_SETTINGS: BackupSettings = {
   autoBackupEnabled: true,
   autoBackupIntervalHours: 6,
   maxBackupsCount: 20,
-  lastAutoBackupTime: new Date().toISOString(),
+  lastAutoBackupTime: undefined,
+  lastBackupAt: undefined,
+  lastBackupTime: undefined,
   deletedBackupIds: [],
 };
 
@@ -778,6 +780,52 @@ async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promis
   }
 }
 
+// ==========================================
+// SQL VERİTABANI DIŞA AKTARMA (SQL DUMP HELPERS)
+// ==========================================
+
+function escSqlStr(val: any): string {
+  if (val === null || val === undefined) return "NULL";
+  const str = String(val).replace(/\0/g, "");
+  return `'${str.replace(/'/g, "''")}'`;
+}
+
+function escSqlNum(val: any, fallback = 0): string {
+  if (val === null || val === undefined || isNaN(Number(val))) return String(fallback);
+  return String(Number(val));
+}
+
+function escSqlBigInt(val: any): string {
+  if (val === null || val === undefined) return "0";
+  const cleaned = String(val).replace(/[^0-9-]/g, "");
+  return cleaned || "0";
+}
+
+function escSqlBool(val: any): string {
+  return val ? "TRUE" : "FALSE";
+}
+
+function escSqlDate(val: any): string {
+  if (!val) return "NULL";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "NULL";
+    return `'${d.toISOString()}'::timestamptz`;
+  } catch {
+    return "NULL";
+  }
+}
+
+function escSqlJson(val: any): string {
+  if (val === null || val === undefined) return "NULL";
+  try {
+    const str = typeof val === "string" ? val : JSON.stringify(val);
+    return `'${str.replace(/\0/g, "").replace(/'/g, "''")}'::jsonb`;
+  } catch {
+    return "NULL";
+  }
+}
+
 export const db = {
   async syncFromCloud(force: boolean = false): Promise<DatabaseSchema> {
     const now = Date.now();
@@ -982,6 +1030,19 @@ export const db = {
 
   getSettings(): SystemSettings {
     const data = loadDb();
+    if (!data.settings.backupSettings) {
+      data.settings.backupSettings = { ...DEFAULT_BACKUP_SETTINGS };
+    }
+    if (!data.settings.backupSettings.lastBackupAt) {
+      const latest =
+        data.settings.backupSettings.lastAutoBackupTime ||
+        data.backups?.[0]?.createdAt ||
+        data.backups?.[0]?.timestamp;
+      if (latest) {
+        data.settings.backupSettings.lastBackupAt = latest;
+        data.settings.backupSettings.lastBackupTime = latest;
+      }
+    }
     return data.settings;
   },
 
@@ -2091,6 +2152,257 @@ export const db = {
     };
   },
 
+  async generateSqlDump(customSnapshot?: DatabaseSchema | any): Promise<string> {
+    const data = loadDb();
+    const snapshot: DatabaseSchema = customSnapshot || {
+      settings: JSON.parse(JSON.stringify(data.settings)),
+      users: JSON.parse(JSON.stringify(data.users)),
+      activations: JSON.parse(JSON.stringify(data.activations || {})),
+      deposits: JSON.parse(JSON.stringify(data.deposits || [])),
+      tickets: JSON.parse(JSON.stringify(data.tickets || {})),
+      coupons: JSON.parse(JSON.stringify(data.coupons || {})),
+    };
+
+    const usersList: User[] = Object.values(snapshot.users || {});
+    const activationsList: ActivationOrder[] = Object.values(snapshot.activations || {});
+    const depositsList: DepositRequest[] = Array.isArray(snapshot.deposits)
+      ? snapshot.deposits
+      : Object.values(snapshot.deposits || {});
+    const ticketsList: Ticket[] = Object.values(snapshot.tickets || {});
+    const couponsList: Coupon[] = Object.values(snapshot.coupons || {});
+    const logsList: SystemLog[] = Array.isArray(customSnapshot?.logs)
+      ? customSnapshot.logs
+      : Array.isArray(data.logs)
+      ? data.logs
+      : [];
+    const backupsList: any[] = Array.isArray(customSnapshot?.backups)
+      ? customSnapshot.backups
+      : Array.isArray(data.backups)
+      ? data.backups.map((b) => ({
+          id: b.id,
+          timestamp: b.timestamp,
+          label: b.label,
+          type: b.type,
+          sizeBytes: b.sizeBytes,
+          stats: b.stats,
+        }))
+      : [];
+
+    const nowIso = new Date().toISOString();
+    const lines: string[] = [];
+
+    lines.push(
+      `-- ============================================================`,
+      `-- AzFur SMS Onay - PostgreSQL Veritabanı Yedeği (.sql)`,
+      `-- Yedekleme Zamanı: ${nowIso}`,
+      `-- Veritabanı Motoru: Neon Serverless PostgreSQL`,
+      `-- Toplam Kullanıcı: ${usersList.length} | Sipariş: ${activationsList.length} | Bakiye Talebi: ${depositsList.length}`,
+      `-- ============================================================`,
+      ``,
+      `SET statement_timeout = 0;`,
+      `SET client_encoding = 'UTF8';`,
+      `SET standard_conforming_strings = on;`,
+      ``,
+      `-- 1. Tablo Tanımları (DDL - Şema)`,
+      `CREATE TABLE IF NOT EXISTS system_settings (`,
+      `  id INT PRIMARY KEY DEFAULT 1,`,
+      `  data JSONB NOT NULL,`,
+      `  updated_at TIMESTAMPTZ DEFAULT NOW()`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS users (`,
+      `  telegram_id BIGINT PRIMARY KEY,`,
+      `  username TEXT,`,
+      `  first_name TEXT,`,
+      `  last_name TEXT,`,
+      `  balance NUMERIC(14, 4) DEFAULT 0,`,
+      `  spent NUMERIC(14, 4) DEFAULT 0,`,
+      `  role TEXT DEFAULT 'user',`,
+      `  is_banned BOOLEAN DEFAULT false,`,
+      `  is_vip BOOLEAN DEFAULT false,`,
+      `  vip_since TIMESTAMPTZ,`,
+      `  vip_expires_at TIMESTAMPTZ,`,
+      `  vip_discount_percent INT,`,
+      `  vip_note TEXT,`,
+      `  active_discount JSONB,`,
+      `  created_at TIMESTAMPTZ DEFAULT NOW(),`,
+      `  last_active_at TIMESTAMPTZ DEFAULT NOW()`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS activations (`,
+      `  id TEXT PRIMARY KEY,`,
+      `  telegram_id BIGINT NOT NULL,`,
+      `  service_code TEXT NOT NULL,`,
+      `  service_name TEXT,`,
+      `  country_id INT NOT NULL,`,
+      `  country_name TEXT,`,
+      `  country_flag TEXT,`,
+      `  phone_number TEXT,`,
+      `  original_cost NUMERIC(12, 4) DEFAULT 0,`,
+      `  charged_price NUMERIC(12, 4) DEFAULT 0,`,
+      `  status TEXT NOT NULL DEFAULT 'WAIT_CODE',`,
+      `  sms_code TEXT,`,
+      `  sms_text TEXT,`,
+      `  created_at BIGINT,`,
+      `  expires_at BIGINT,`,
+      `  notified_bot BOOLEAN DEFAULT false`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS deposits (`,
+      `  id TEXT PRIMARY KEY,`,
+      `  telegram_id BIGINT NOT NULL,`,
+      `  amount NUMERIC(14, 4) NOT NULL,`,
+      `  method TEXT NOT NULL,`,
+      `  status TEXT NOT NULL DEFAULT 'PENDING',`,
+      `  receipt_url TEXT,`,
+      `  tx_id TEXT,`,
+      `  invoice_id TEXT,`,
+      `  currency TEXT,`,
+      `  crypto_amount NUMERIC(18, 8),`,
+      `  created_at TIMESTAMPTZ DEFAULT NOW(),`,
+      `  approved_at TIMESTAMPTZ`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS tickets (`,
+      `  id TEXT PRIMARY KEY,`,
+      `  telegram_id BIGINT NOT NULL,`,
+      `  subject TEXT NOT NULL,`,
+      `  status TEXT NOT NULL DEFAULT 'OPEN',`,
+      `  messages JSONB DEFAULT '[]'::jsonb,`,
+      `  created_at TIMESTAMPTZ DEFAULT NOW(),`,
+      `  updated_at TIMESTAMPTZ DEFAULT NOW()`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS coupons (`,
+      `  code TEXT PRIMARY KEY,`,
+      `  type TEXT NOT NULL,`,
+      `  value NUMERIC(12, 4) NOT NULL,`,
+      `  usage_limit INT DEFAULT 1,`,
+      `  used_count INT DEFAULT 0,`,
+      `  used_by JSONB DEFAULT '[]'::jsonb,`,
+      `  expires_at TIMESTAMPTZ,`,
+      `  created_at TIMESTAMPTZ DEFAULT NOW()`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS logs (`,
+      `  id TEXT PRIMARY KEY,`,
+      `  timestamp TIMESTAMPTZ DEFAULT NOW(),`,
+      `  category TEXT NOT NULL,`,
+      `  level TEXT NOT NULL,`,
+      `  action TEXT NOT NULL,`,
+      `  details TEXT,`,
+      `  metadata JSONB`,
+      `);`,
+      ``,
+      `CREATE TABLE IF NOT EXISTS backups (`,
+      `  id TEXT PRIMARY KEY,`,
+      `  timestamp TIMESTAMPTZ DEFAULT NOW(),`,
+      `  note TEXT,`,
+      `  data JSONB NOT NULL`,
+      `);`,
+      ``
+    );
+
+    // 2. system_settings
+    lines.push(`-- 2. Sistem Ayarları`);
+    lines.push(
+      `INSERT INTO system_settings (id, data, updated_at) VALUES (1, ${escSqlJson(
+        snapshot.settings
+      )}, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();`,
+      ``
+    );
+
+    // 3. users
+    lines.push(`-- 3. Kullanıcılar (${usersList.length} kayıt)`);
+    for (const u of usersList) {
+      lines.push(
+        `INSERT INTO users (telegram_id, username, first_name, last_name, balance, spent, role, is_banned, is_vip, vip_since, vip_expires_at, vip_discount_percent, vip_note, active_discount, created_at, last_active_at) ` +
+        `VALUES (${escSqlBigInt(u.telegramId)}, ${escSqlStr(u.username)}, ${escSqlStr(u.firstName)}, ${escSqlStr(u.lastName)}, ${escSqlNum(u.balance)}, ${escSqlNum(u.spent)}, ${escSqlStr(u.role || 'user')}, ${escSqlBool(u.isBanned)}, ${escSqlBool(u.isVip)}, ${escSqlDate(u.vipSince)}, ${escSqlDate(u.vipExpiresAt)}, ${u.vipDiscountPercent ? Number(u.vipDiscountPercent) : 'NULL'}, ${escSqlStr(u.vipNote)}, ${u.activeDiscount ? escSqlJson(u.activeDiscount) : 'NULL'}, ${escSqlDate(u.createdAt)}, ${escSqlDate(u.lastActiveAt)}) ` +
+        `ON CONFLICT (telegram_id) DO UPDATE SET username = EXCLUDED.username, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, balance = EXCLUDED.balance, spent = EXCLUDED.spent, role = EXCLUDED.role, is_banned = EXCLUDED.is_banned, is_vip = EXCLUDED.is_vip, vip_since = EXCLUDED.vip_since, vip_expires_at = EXCLUDED.vip_expires_at, vip_discount_percent = EXCLUDED.vip_discount_percent, vip_note = EXCLUDED.vip_note, active_discount = EXCLUDED.active_discount, last_active_at = EXCLUDED.last_active_at;`
+      );
+    }
+    lines.push(``);
+
+    // 4. activations
+    lines.push(`-- 4. Siparişler ve Aktivasyonlar (${activationsList.length} kayıt)`);
+    for (const a of activationsList) {
+      lines.push(
+        `INSERT INTO activations (id, telegram_id, service_code, service_name, country_id, country_name, country_flag, phone_number, original_cost, charged_price, status, sms_code, sms_text, created_at, expires_at, notified_bot) ` +
+        `VALUES (${escSqlStr(a.id)}, ${escSqlBigInt(a.telegramId)}, ${escSqlStr(a.serviceCode)}, ${escSqlStr(a.serviceName)}, ${escSqlNum(a.countryId)}, ${escSqlStr(a.countryName)}, ${escSqlStr(a.countryFlag)}, ${escSqlStr(a.phoneNumber)}, ${escSqlNum(a.originalCost)}, ${escSqlNum(a.chargedPrice)}, ${escSqlStr(a.status || 'WAIT_CODE')}, ${escSqlStr(a.smsCode)}, ${escSqlStr(a.smsText)}, ${escSqlNum(a.createdAt)}, ${escSqlNum(a.expiresAt)}, ${escSqlBool(a.notifiedBot)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, sms_code = EXCLUDED.sms_code, sms_text = EXCLUDED.sms_text, notified_bot = EXCLUDED.notified_bot;`
+      );
+    }
+    lines.push(``);
+
+    // 5. deposits
+    lines.push(`-- 5. Bakiye Yükleme Talepleri (${depositsList.length} kayıt)`);
+    for (const d of depositsList) {
+      const anyD = d as any;
+      lines.push(
+        `INSERT INTO deposits (id, telegram_id, amount, method, status, receipt_url, tx_id, invoice_id, currency, crypto_amount, created_at, approved_at) ` +
+        `VALUES (${escSqlStr(d.id)}, ${escSqlBigInt(d.telegramId)}, ${escSqlNum(d.amount)}, ${escSqlStr(d.method)}, ${escSqlStr(d.status)}, ${escSqlStr(anyD.receiptUrl)}, ${escSqlStr(d.txid || anyD.txId)}, ${escSqlStr(anyD.invoiceId)}, ${escSqlStr(anyD.currency || 'TRY')}, ${escSqlNum(anyD.cryptoAmount)}, ${escSqlDate(d.createdAt)}, ${escSqlDate(anyD.approvedAt)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, approved_at = EXCLUDED.approved_at, tx_id = COALESCE(EXCLUDED.tx_id, deposits.tx_id);`
+      );
+    }
+    lines.push(``);
+
+    // 6. tickets
+    lines.push(`-- 6. Destek Talepleri (${ticketsList.length} kayıt)`);
+    for (const t of ticketsList) {
+      lines.push(
+        `INSERT INTO tickets (id, telegram_id, subject, status, messages, created_at, updated_at) ` +
+        `VALUES (${escSqlStr(t.id)}, ${escSqlBigInt(t.telegramId)}, ${escSqlStr(t.subject)}, ${escSqlStr(t.status)}, ${escSqlJson(t.messages || [])}, ${escSqlDate(t.createdAt)}, ${escSqlDate((t as any).updatedAt)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, messages = EXCLUDED.messages, updated_at = NOW();`
+      );
+    }
+    lines.push(``);
+
+    // 7. coupons
+    lines.push(`-- 7. İndirim ve Bakiye Kuponları (${couponsList.length} kayıt)`);
+    for (const c of couponsList) {
+      const anyC = c as any;
+      lines.push(
+        `INSERT INTO coupons (code, type, value, usage_limit, used_count, used_by, expires_at, created_at) ` +
+        `VALUES (${escSqlStr(c.code)}, ${escSqlStr(c.type || 'BALANCE')}, ${escSqlNum(c.value)}, ${escSqlNum(c.maxUses || anyC.usageLimit || 1)}, ${escSqlNum(c.usedCount || 0)}, ${escSqlJson(c.usedByUserIds || anyC.usedBy || [])}, ${escSqlDate(c.expiresAt)}, ${escSqlDate(c.createdAt)}) ` +
+        `ON CONFLICT (code) DO UPDATE SET used_count = EXCLUDED.used_count, used_by = EXCLUDED.used_by;`
+      );
+    }
+    lines.push(``);
+
+    // 8. logs
+    lines.push(`-- 8. Sistem Logları (${logsList.length} kayıt)`);
+    for (const l of logsList) {
+      lines.push(
+        `INSERT INTO logs (id, timestamp, category, level, action, details, metadata) ` +
+        `VALUES (${escSqlStr(l.id)}, ${escSqlDate(l.timestamp)}, ${escSqlStr(l.category)}, ${escSqlStr(l.level)}, ${escSqlStr(l.action)}, ${escSqlStr(l.details)}, ${l.metadata ? escSqlJson(l.metadata) : 'NULL'}) ` +
+        `ON CONFLICT (id) DO NOTHING;`
+      );
+    }
+    lines.push(``);
+
+    // 9. backups
+    lines.push(`-- 9. Sistem Yedekleme Kayıtları (${backupsList.length} kayıt)`);
+    for (const b of backupsList) {
+      lines.push(
+        `INSERT INTO backups (id, timestamp, note, data) ` +
+        `VALUES (${escSqlStr(b.id)}, ${escSqlDate(b.timestamp || b.createdAt)}, ${escSqlStr(b.label || (b as any).note)}, ${escSqlJson(b)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET timestamp = EXCLUDED.timestamp, note = EXCLUDED.note, data = EXCLUDED.data;`
+      );
+    }
+    lines.push(``);
+
+    // 10. Embedded JSON Metadata for seamless Mini App Restore
+    lines.push(
+      `-- ============================================================`,
+      `-- AZFUR_SNAPSHOT_JSON_BEGIN`,
+      `-- ${JSON.stringify(snapshot)}`,
+      `-- AZFUR_SNAPSHOT_JSON_END`,
+      `-- ============================================================`
+    );
+
+    return lines.join("\n");
+  },
+
   async createBackup(
     type: "AUTO" | "MANUAL" | "PRE_RESTORE" = "MANUAL",
     label?: string
@@ -2163,16 +2475,20 @@ export const db = {
       data.backups = data.backups.slice(0, maxCount);
     }
 
-    // Eğer otomatik yedekse son otomatik yedekleme zamanını güncelle
-    if (type === "AUTO") {
-      if (!data.settings.backupSettings) {
-        data.settings.backupSettings = {
-          autoBackupEnabled: true,
-          autoBackupIntervalHours: 6,
-          maxBackupsCount: 20,
-          lastAutoBackupTime: now,
-        };
-      } else {
+    // Yedekleme zamanını hem lastBackupAt hem de gerekiyorsa lastAutoBackupTime olarak kaydet
+    if (!data.settings.backupSettings) {
+      data.settings.backupSettings = {
+        autoBackupEnabled: true,
+        autoBackupIntervalHours: 6,
+        maxBackupsCount: 20,
+        lastBackupAt: now,
+        lastBackupTime: now,
+        ...(type === "AUTO" ? { lastAutoBackupTime: now } : {}),
+      };
+    } else {
+      data.settings.backupSettings.lastBackupAt = now;
+      data.settings.backupSettings.lastBackupTime = now;
+      if (type === "AUTO") {
         data.settings.backupSettings.lastAutoBackupTime = now;
       }
     }
@@ -2306,6 +2622,23 @@ export const db = {
   },
 
   async restoreBackup(backupPayload: any): Promise<{ success: boolean; message: string; details: any }> {
+    if (typeof backupPayload === "string") {
+      const match = backupPayload.match(/-- AZFUR_SNAPSHOT_JSON_BEGIN\s*\n-- ([\s\S]*?)\s*\n-- AZFUR_SNAPSHOT_JSON_END/);
+      if (match && match[1]) {
+        try {
+          backupPayload = JSON.parse(match[1]);
+        } catch {
+          throw new Error("SQL dosyasındaki yedek metadataları okunamadı.");
+        }
+      } else {
+        try {
+          backupPayload = JSON.parse(backupPayload);
+        } catch {
+          throw new Error("Geçersiz dosya formatı! Lütfen geçerli bir .sql veya .json AzFur yedeği yükleyin.");
+        }
+      }
+    }
+
     if (!backupPayload || typeof backupPayload !== "object") {
       throw new Error("Geçersiz yedek dosyası formatı!");
     }

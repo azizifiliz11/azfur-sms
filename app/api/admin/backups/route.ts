@@ -33,46 +33,40 @@ export async function GET(req: NextRequest) {
     const action = searchParams.get("action");
     const backupId = searchParams.get("id");
 
-    // 1. Belirli bir yedeği JSON dosyası olarak indir
+    // 1. Belirli bir yedeği SQL dosyası olarak indir (.sql)
     if (action === "download" && backupId) {
       const backup = db.getBackupById(backupId);
       if (!backup) {
         return NextResponse.json({ success: false, error: "Yedek bulunamadı" }, { status: 404 });
       }
 
-      const downloadPayload = backup.data || {
-        ...db.getFullDatabaseSnapshot(),
-        id: backup.id,
-        timestamp: backup.timestamp,
-        label: backup.label,
-        stats: backup.stats,
-      };
-
+      const sqlContent = await db.generateSqlDump(backup.data);
       const rawDate = backup.createdAt || backup.timestamp || new Date().toISOString();
       const cleanDate = rawDate.replace(/[:.]/g, "-");
-      const filename = `azfur_backup_${backup.id}_${cleanDate}.json`;
+      const filename = `azfur_yedek_${backup.id}_${cleanDate}.sql`;
 
-      return new NextResponse(JSON.stringify(downloadPayload, null, 2), {
+      return new NextResponse(sqlContent, {
         status: 200,
         headers: {
-          "Content-Type": "application/json; charset=utf-8",
+          "Content-Type": "application/sql; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
           "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       });
     }
 
-    // 2. Canlı veritabanını anında JSON dosyası olarak indir
-    if (action === "download_current") {
-      const snapshot = db.getFullDatabaseSnapshot();
+    // 2. Canlı PostgreSQL veritabanını anında SQL dosyası olarak indir (.sql)
+    if (action === "download_current" || action === "download_sql") {
+      const sqlContent = await db.generateSqlDump();
       const cleanDate = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `azfur_live_backup_${cleanDate}.json`;
+      const filename = `azfur_canli_veritabani_${cleanDate}.sql`;
 
-      return new NextResponse(JSON.stringify(snapshot, null, 2), {
+      return new NextResponse(sqlContent, {
         status: 200,
         headers: {
-          "Content-Type": "application/json; charset=utf-8",
+          "Content-Type": "application/sql; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       });
     }
@@ -81,11 +75,28 @@ export async function GET(req: NextRequest) {
     const backups = db.getBackups();
     const settings = db.getSettings();
 
+    const latestBackupTime =
+      settings.backupSettings?.lastBackupAt ||
+      settings.backupSettings?.lastAutoBackupTime ||
+      backups[0]?.createdAt ||
+      backups[0]?.timestamp ||
+      null;
+
+    const backupSettingsWithTimestamp = {
+      ...(settings.backupSettings || {
+        autoBackupEnabled: true,
+        autoBackupIntervalHours: 6,
+        maxBackupsCount: 20,
+      }),
+      lastBackupAt: latestBackupTime,
+      lastBackupTime: latestBackupTime,
+    };
+
     return NextResponse.json(
       {
         success: true,
         backups,
-        backupSettings: settings.backupSettings,
+        backupSettings: backupSettingsWithTimestamp,
       },
       {
         headers: {
@@ -127,6 +138,7 @@ export async function POST(req: NextRequest) {
     if (action === "create") {
       const backup = await db.createBackup("MANUAL", body.label);
       const ts = backup.timestamp || backup.createdAt || new Date().toISOString();
+      const settings = db.getSettings();
       return NextResponse.json({
         success: true,
         message: "Sistem yedeği başarıyla oluşturuldu!",
@@ -138,6 +150,11 @@ export async function POST(req: NextRequest) {
           label: backup.label,
           sizeBytes: backup.sizeBytes,
           stats: backup.stats,
+        },
+        backupSettings: {
+          ...settings.backupSettings,
+          lastBackupAt: ts,
+          lastBackupTime: ts,
         },
       });
     }

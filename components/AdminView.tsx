@@ -216,6 +216,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     autoBackupIntervalHours: number;
     maxBackupsCount: number;
     lastBackupAt?: string;
+    lastBackupTime?: string;
+    lastAutoBackupTime?: string;
   }>({
     autoBackupEnabled: true,
     autoBackupIntervalHours: 6,
@@ -627,6 +629,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         if (data.backup) {
           setBackups((prev) => [data.backup, ...prev.filter((x) => x.id !== data.backup.id)]);
         }
+        if (data.backupSettings) {
+          setBackupSettings(data.backupSettings);
+        } else if (data.backup?.createdAt || data.backup?.timestamp) {
+          const ts = data.backup.createdAt || data.backup.timestamp;
+          setBackupSettings((prev) => ({
+            ...prev,
+            lastBackupAt: ts,
+            lastBackupTime: ts,
+          }));
+        }
         fetchAllData();
       } else {
         haptic.error();
@@ -640,7 +652,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     }
   };
 
-  // Canlı Veritabanını JSON Olarak İndir
+  // Canlı Veritabanını SQL Olarak İndir (.sql)
   const handleDownloadCurrentDatabase = async () => {
     haptic.impact("light");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -654,7 +666,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     if (tg?.openLink) {
       try {
         tg.openLink(downloadUrl);
-        setToastMsg("📥 Canlı veritabanı indirme bağlantısı tarayıcınızda açıldı!");
+        setToastMsg("📥 Canlı SQL veritabanı indirme bağlantısı tarayıcınızda açıldı!");
         setTimeout(() => setToastMsg(null), 3500);
         return;
       } catch (err) {
@@ -674,7 +686,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       const a = document.createElement("a");
       a.href = url;
       const datePart = new Date().toISOString().slice(0, 10);
-      a.download = `azfur_veritabani_canli_${datePart}.json`;
+      a.download = `azfur_veritabani_canli_${datePart}.sql`;
       document.body.appendChild(a);
       a.click();
 
@@ -687,7 +699,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       }, 60000);
 
       haptic.success();
-      setToastMsg("📥 Canlı veritabanı JSON yedeği başarıyla indirildi!");
+      setToastMsg("📥 Canlı PostgreSQL veritabanı SQL yedeği başarıyla indirildi!");
       setTimeout(() => setToastMsg(null), 3500);
     } catch {
       try {
@@ -699,7 +711,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     }
   };
 
-  // Kayıtlı Snapshot'ı JSON Olarak İndir
+  // Kayıtlı Snapshot'ı SQL Olarak İndir (.sql)
   const handleDownloadSnapshot = async (backupId: string, rawDate?: string) => {
     haptic.impact("light");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -713,7 +725,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     if (tg?.openLink) {
       try {
         tg.openLink(downloadUrl);
-        setToastMsg("📥 Yedek indirme bağlantısı tarayıcınızda açıldı!");
+        setToastMsg("📥 SQL yedek indirme bağlantısı tarayıcınızda açıldı!");
         setTimeout(() => setToastMsg(null), 3500);
         return;
       } catch (err) {
@@ -743,7 +755,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       } catch {
         datePart = new Date().toISOString().slice(0, 10);
       }
-      a.download = `azfur_yedek_${datePart}.json`;
+      a.download = `azfur_yedek_${datePart}.sql`;
       document.body.appendChild(a);
       a.click();
 
@@ -756,7 +768,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       }, 60000);
 
       haptic.success();
-      setToastMsg("📥 Yedek dosyası başarıyla indirildi!");
+      setToastMsg("📥 SQL yedek dosyası başarıyla indirildi!");
       setTimeout(() => setToastMsg(null), 3500);
     } catch {
       try {
@@ -829,13 +841,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     }
   };
 
-  // Bilgisayardan/Telefondan Yedek Dosyası Seç (.json)
+  // Bilgisayardan/Telefondan Yedek Dosyası Seç (.sql / .json)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith(".json")) {
-      alert("Lütfen yalnızca .json uzantılı yedek dosyası seçiniz!");
+    const lowerName = file.name.toLowerCase();
+    const isSql = lowerName.endsWith(".sql");
+    const isJson = lowerName.endsWith(".json");
+
+    if (!isSql && !isJson) {
+      alert("Lütfen yalnızca .sql veya .json uzantılı yedek dosyası seçiniz!");
       e.target.value = "";
       return;
     }
@@ -844,16 +860,25 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const parsed = JSON.parse(text);
+        let dbData: any = null;
 
-        // Desteklenen formatlar: doğrudan DatabaseSchema veya SystemBackup wrapper { id, data, ... }
-        let dbData = parsed;
-        if (
-          parsed.data &&
-          typeof parsed.data === "object" &&
-          (parsed.data.users || parsed.data.settings)
-        ) {
-          dbData = parsed.data;
+        if (isSql) {
+          const match = text.match(/-- AZFUR_SNAPSHOT_JSON_BEGIN\s*\n-- ([\s\S]*?)\s*\n-- AZFUR_SNAPSHOT_JSON_END/);
+          if (match && match[1]) {
+            dbData = JSON.parse(match[1]);
+          } else {
+            throw new Error("Seçilen SQL dosyası içerisinde AzFur veritabanı yedeği verileri bulunamadı.");
+          }
+        } else {
+          const parsed = JSON.parse(text);
+          dbData = parsed;
+          if (
+            parsed.data &&
+            typeof parsed.data === "object" &&
+            (parsed.data.users || parsed.data.settings)
+          ) {
+            dbData = parsed.data;
+          }
         }
 
         if (!dbData.users) {
@@ -869,7 +894,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         haptic.selection();
       } catch (err: any) {
         haptic.error();
-        alert("Geçersiz yedek dosyası: " + (err?.message || "JSON okunamadı"));
+        alert("Geçersiz yedek dosyası: " + (err?.message || "Dosya okunamadı"));
       } finally {
         e.target.value = "";
       }
@@ -5109,7 +5134,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
                 <span className="text-[10px] text-zinc-400 block">Son Yedek Zamanı</span>
                 <span className="text-xs font-semibold text-amber-300 mt-0.5 block truncate">
-                  {backupSettings.lastBackupAt ? formatUserLastActive(backupSettings.lastBackupAt) : "Henüz alınmadı"}
+                  {(() => {
+                    const latest =
+                      backupSettings?.lastBackupAt ||
+                      backupSettings?.lastBackupTime ||
+                      backupSettings?.lastAutoBackupTime ||
+                      backups[0]?.createdAt ||
+                      backups[0]?.timestamp;
+                    return latest ? formatUserLastActive(latest) : "Henüz alınmadı";
+                  })()}
                 </span>
               </div>
             </div>
@@ -5156,15 +5189,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               </button>
             </Card>
 
-            {/* Kart 2: Canlı Veritabanını İndir (.json) */}
+            {/* Kart 2: Canlı SQL Veritabanını İndir (.sql) */}
             <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-blue-500/40 transition-all">
               <div className="space-y-1.5">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
                   <ArrowDownToLine className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-white">Canlı Veritabanını İndir</h4>
+                <h4 className="text-sm font-bold text-white">Canlı SQL Veritabanını İndir</h4>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Şu anki canlı veritabanını cihazınıza <code className="text-blue-300 font-mono">.json</code> dosyası olarak indirir.
+                  Şu anki canlı PostgreSQL veritabanını cihazınıza <code className="text-blue-300 font-mono">.sql</code> dosyası olarak indirir.
                 </p>
               </div>
 
@@ -5173,11 +5206,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                <span>📥 JSON Olarak İndir</span>
+                <span>📥 SQL Olarak İndir (.sql)</span>
               </button>
             </Card>
 
-            {/* Kart 3: Dosyadan Geri Yükle (.json Yükle) */}
+            {/* Kart 3: Dosyadan Geri Yükle (.sql / .json Yükle) */}
             <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-purple-500/40 transition-all">
               <div className="space-y-1.5">
                 <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
@@ -5185,14 +5218,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </div>
                 <h4 className="text-sm font-bold text-white">Dosyadan Geri Yükle</h4>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  İndirmiş olduğunuz bir <code className="text-purple-300 font-mono">.json</code> yedek dosyasını yükleyip sistemi geri yükleyin.
+                  İndirmiş olduğunuz bir <code className="text-purple-300 font-mono">.sql</code> veya <code className="text-purple-300 font-mono">.json</code> yedek dosyasını yükleyip sistemi geri yükleyin.
                 </p>
               </div>
 
               <div>
                 <input
                   type="file"
-                  accept=".json"
+                  accept=".sql,.json"
                   id="backup-file-uploader"
                   onChange={handleFileUpload}
                   className="hidden"
@@ -5202,7 +5235,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
                 >
                   <Upload className="w-4 h-4" />
-                  <span>📤 Yedek Dosyası Seç (.json)</span>
+                  <span>📤 Yedek Dosyası Seç (.sql / .json)</span>
                 </label>
               </div>
             </Card>
@@ -5391,10 +5424,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                           <button
                             onClick={() => handleDownloadSnapshot(b.id, b.createdAt || b.timestamp)}
                             className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1 transition-all"
-                            title="Yedek Dosyasını İndir (.json)"
+                            title="SQL Yedeğini İndir (.sql)"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">İndir</span>
+                            <span className="hidden sm:inline">SQL İndir</span>
                           </button>
 
                           {/* Geri Yükle */}

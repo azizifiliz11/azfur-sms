@@ -192,6 +192,8 @@ export interface BackupSettings {
   autoBackupIntervalHours: number; // e.g. 1, 3, 6, 12, 24
   maxBackupsCount: number; // e.g. 20
   lastAutoBackupTime?: string;
+  lastBackupAt?: string;
+  lastBackupTime?: string;
   deletedBackupIds?: string[]; // Silinen yedeklerin kara listesi (asla tekrar geri gelmez)
 }
 

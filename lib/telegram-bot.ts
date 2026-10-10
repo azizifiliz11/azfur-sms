@@ -46,12 +46,8 @@ function getAppUrls() {
   return {
     appUrl: `${baseUrl}?v=${vTag}`,
     adminUrl: `${baseUrl}/admin?v=${vTag}`,
-    bannerUrl: `${baseUrl}/azfur-banner.jpg`,
   };
 }
-
-// Telegram CDN File ID önbelleği (Start menüsünü 50ms'de anında açmak için)
-let cachedBannerFileId: string | null = null;
 
 export function getAdminUsernamesList(): string[] {
   const settings = db.getSettings();
@@ -212,7 +208,12 @@ export function getTelegramBot(): Bot | null {
   if (!botInstance) {
     const settings = db.getSettings();
     const botInfo = cachedBotInfo || settings.botInfo;
-    botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, botInfo ? { botInfo } : undefined);
+    botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, {
+      ...(botInfo ? { botInfo } : {}),
+      // /start can be returned as Telegram's webhook response, avoiding an
+      // additional outbound Bot API request for the welcome message.
+      client: { canUseWebhookReply: (method) => method === "sendMessage" },
+    });
 
     // ==========================================
     // 0. GLOBAL KULLANICI PROFİL SENKRONİZASYON MİDDLEWARE (SIFIR GECİKME - NON-BLOCKING)
@@ -497,65 +498,19 @@ export function getTelegramBot(): Bot | null {
         lastActiveAt: now,
       };
 
-      const { appUrl, adminUrl, bannerUrl } = getAppUrls();
+      const { appUrl, adminUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
 
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      const settings = db.getSettings();
-
-      // Banner fotoğrafı: kayıtlı file_id, yerel azfur-banner.jpg dosyası veya cdn url
-      let menuSent = false;
-      if (settings.useBannerPhoto !== false) {
-        let photoToUse: any = settings.bannerFileId || cachedBannerFileId;
-        if (!photoToUse) {
-          const bannerPath = path.join(process.cwd(), "public", "azfur-banner.jpg");
-          if (fs.existsSync(bannerPath)) {
-            photoToUse = new InputFile(bannerPath);
-          } else {
-            photoToUse = bannerUrl;
-          }
-        }
-
-        if (photoToUse) {
-          try {
-            const sent = await ctx.replyWithPhoto(photoToUse, {
-              caption: messageText,
-              parse_mode: "HTML",
-              reply_markup: keyboard,
-            });
-            if (sent?.photo && sent.photo.length > 0) {
-              const fId = sent.photo[sent.photo.length - 1].file_id;
-              cachedBannerFileId = fId;
-              if (!settings.bannerFileId) {
-                db.updateSettings({ bannerFileId: fId }).catch(() => {});
-              }
-            }
-            menuSent = true;
-          } catch (photoErr) {
-            console.warn("Banner gönderilemedi, metin moduna geçiliyor:", photoErr);
-          }
-        }
-      }
-
-      if (!menuSent) {
-        // Send the interactive menu before doing profile or menu-button writes.
-        await ctx.reply(messageText, {
-          parse_mode: "HTML",
-          reply_markup: keyboard,
-        });
-      }
-
-      // These operations are useful but must not sit in front of the welcome menu.
-      if (!existingUser) {
-        db.getOrCreateUser(from.id, {
-          username: from.username,
-          firstName: from.first_name,
-          lastName: from.last_name,
-        }).catch((error) => console.warn("/start kullanıcı kaydı ertelendi:", error));
-      }
+      // Keep /start text-only: Telegram cannot use its webhook shortcut for
+      // photo uploads, and the banner upload was the remaining slow step.
+      await ctx.reply(messageText, {
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      });
 
       if (ctx.chat?.type === "private") {
         const menuButton = {

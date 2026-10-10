@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getTelegramBot } from "@/lib/telegram-bot";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
@@ -6,6 +6,13 @@ import { CONFIG } from "@/lib/config";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const maxDuration = 15;
+
+function isWelcomeCommand(update: any): boolean {
+  const text = update?.message?.text;
+  if (typeof text !== "string") return false;
+  const command = text.trimStart().split(/\s/, 1)[0] || "";
+  return /^\/(?:start|menu)(?:@\w+)?$/i.test(command);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,8 +40,38 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {}
 
-    // GrammY is initialized and shared state is current before processing.
-    await bot.handleUpdate(body);
+    // For /start and /menu, use Telegram's webhook response as sendMessage.
+    // This removes the extra bot -> Telegram HTTP round trip for the menu.
+    const useWebhookReply = isWelcomeCommand(body);
+    let webhookReplyPayload: string | null = null;
+    await bot.handleUpdate(
+      body,
+      useWebhookReply
+        ? { send: (payload) => { webhookReplyPayload = payload; } }
+        : undefined
+    );
+
+    const from = body?.message?.from;
+    if (useWebhookReply && webhookReplyPayload && from?.id) {
+      // Save a first-time user's profile after the menu response is sent.
+      after(async () => {
+        try {
+          await db.getOrCreateUser(from.id, {
+            username: from.username,
+            firstName: from.first_name,
+            lastName: from.last_name,
+          });
+        } catch (error) {
+          console.error("/start kullanıcı kaydı tamamlanamadı:", error);
+        }
+      });
+
+      return new NextResponse(webhookReplyPayload, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("Telegram webhook error:", err);

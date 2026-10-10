@@ -46,6 +46,7 @@ function getAppUrls() {
   return {
     appUrl: `${baseUrl}?v=${vTag}`,
     adminUrl: `${baseUrl}/admin?v=${vTag}`,
+    bannerUrl: `${baseUrl}/azfur-banner.jpg?v=${vTag}`,
   };
 }
 
@@ -210,9 +211,11 @@ export function getTelegramBot(): Bot | null {
     const botInfo = cachedBotInfo || settings.botInfo;
     botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, {
       ...(botInfo ? { botInfo } : {}),
-      // /start can be returned as Telegram's webhook response, avoiding an
-      // additional outbound Bot API request for the welcome message.
-      client: { canUseWebhookReply: (method) => method === "sendMessage" },
+      // Welcome text or the hosted banner can be returned as Telegram's
+      // webhook response, avoiding an extra Bot API round trip.
+      client: {
+        canUseWebhookReply: (method) => method === "sendMessage" || method === "sendPhoto",
+      },
     });
 
     // ==========================================
@@ -498,16 +501,17 @@ export function getTelegramBot(): Bot | null {
         lastActiveAt: now,
       };
 
-      const { appUrl, adminUrl } = getAppUrls();
+      const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
 
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
 
-      // Keep /start text-only: Telegram cannot use its webhook shortcut for
-      // photo uploads, and the banner upload was the remaining slow step.
-      await ctx.reply(messageText, {
+      // Use the public URL so this stays JSON-only and can be sent directly
+      // in Telegram's webhook response without uploading a photo from Vercel.
+      await ctx.replyWithPhoto(bannerUrl, {
+        caption: messageText,
         parse_mode: "HTML",
         reply_markup: keyboard,
       });

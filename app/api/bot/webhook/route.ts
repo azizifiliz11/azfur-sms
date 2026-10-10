@@ -7,11 +7,15 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const maxDuration = 15;
 
-function isWelcomeCommand(update: any): boolean {
+function usesWelcomeWebhookReply(update: any): boolean {
   const text = update?.message?.text;
-  if (typeof text !== "string") return false;
-  const command = text.trimStart().split(/\s/, 1)[0] || "";
-  return /^\/(?:start|menu)(?:@\w+)?$/i.test(command);
+  if (typeof text === "string") {
+    const command = text.trimStart().split(/\s/, 1)[0] || "";
+    if (/^\/(?:start|menu)(?:@\w+)?$/i.test(command)) return true;
+  }
+
+  const callbackData = update?.callback_query?.data;
+  return callbackData === "btn_main_menu" || callbackData === "btn_refresh_menu";
 }
 
 export async function POST(req: NextRequest) {
@@ -40,9 +44,10 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {}
 
-    // For /start and /menu, use Telegram's webhook response as sendMessage.
-    // This removes the extra bot -> Telegram HTTP round trip for the menu.
-    const useWebhookReply = isWelcomeCommand(body);
+    // For /start, /menu and returns to the main menu, use Telegram's webhook
+    // response as sendPhoto. The banner is a public URL, so no multipart upload
+    // or extra bot -> Telegram API round trip is needed.
+    const useWebhookReply = usesWelcomeWebhookReply(body);
     let webhookReplyPayload: string | null = null;
     await bot.handleUpdate(
       body,

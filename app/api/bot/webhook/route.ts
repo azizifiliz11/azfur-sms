@@ -9,25 +9,31 @@ export const maxDuration = 15;
 
 export async function POST(req: NextRequest) {
   try {
-    await db.syncFromCloud(true);
+    // Read the update, refresh shared state (using the DB's short cache), and
+    // initialize grammY concurrently. A forced cloud read on every webhook
+    // update added a database round trip before even inspecting /start.
+    const bodyPromise = req.json();
     const bot = getTelegramBot();
     if (!bot) {
       console.error("Bot token not configured");
       return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 400 });
     }
 
-    // GrammY requires init() before handleUpdate()
-    if (!bot.isInited()) {
-      await bot.init();
-      try {
-        const settings = db.getSettings();
-        if (!settings.botInfo && bot.botInfo) {
-          db.updateSettings({ botInfo: bot.botInfo }).catch(() => {});
-        }
-      } catch (e) {}
-    }
+    const syncPromise = db.syncFromCloud();
+    const initPromise = bot.isInited() ? Promise.resolve() : bot.init();
+    const [body] = await Promise.all([bodyPromise, syncPromise, initPromise]);
 
-    const body = await req.json();
+    try {
+      const settings = db.getSettings();
+      // The bot may have been constructed while the cloud refresh was still
+      // running; prefer the freshly synchronized bot identity when available.
+      if (settings.botInfo) bot.botInfo = settings.botInfo;
+      if (!settings.botInfo && bot.botInfo) {
+        db.updateSettings({ botInfo: bot.botInfo }).catch(() => {});
+      }
+    } catch (e) {}
+
+    // GrammY is initialized and shared state is current before processing.
     await bot.handleUpdate(body);
     return NextResponse.json({ ok: true });
   } catch (err: any) {

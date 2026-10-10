@@ -220,12 +220,18 @@ export function getTelegramBot(): Bot | null {
     botInstance.use(async (ctx, next) => {
       const from = ctx.from;
       if (from && from.id) {
+        const command = ctx.message?.text?.trim().split(/\s/, 1)[0] || "";
+        const isWelcomeCommand = /^\/(?:start|menu)(?:@\w+)?$/i.test(command);
         // Kullanıcı aktifliğini arka planda non-blocking güncelle (kullanıcıyı 1 milisaniye bile bekletmez)
-        db.touchUserActive(from.id, {
-          username: from.username,
-          firstName: from.first_name,
-          lastName: from.last_name,
-        }).catch(() => {});
+        // /start and /menu persist their profile after the menu has been sent,
+        // so a synchronous local snapshot write cannot delay the first reply.
+        if (!isWelcomeCommand) {
+          db.touchUserActive(from.id, {
+            username: from.username,
+            firstName: from.first_name,
+            lastName: from.last_name,
+          }).catch(() => {});
+        }
       }
       await next();
     });
@@ -476,33 +482,23 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      const user =
-        db.getUser(from.id) ||
-        (await db.getOrCreateUser(from.id, {
-          username: from.username,
-          firstName: from.first_name,
-          lastName: from.last_name,
-        }));
+      const existingUser = db.getUser(from.id);
+      const now = new Date().toISOString();
+      const user: User = existingUser || {
+        telegramId: from.id,
+        username: from.username || "",
+        firstName: from.first_name || "Telegram Kullanıcısı",
+        lastName: from.last_name,
+        balance: 0,
+        spent: 0,
+        role: db.isAdmin(from.id) ? "admin" : "user",
+        isBanned: false,
+        createdAt: now,
+        lastActiveAt: now,
+      };
 
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
-
-      if (ctx.chat?.type === "private") {
-        const menuButton = {
-          type: "web_app" as const,
-          text: "AzFur",
-          web_app: { url: appUrl },
-        };
-
-        try {
-          await Promise.all([
-            ctx.api.setChatMenuButton({ menu_button: menuButton }),
-            ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: menuButton }),
-          ]);
-        } catch (error) {
-          console.warn("Telegram Mini App menü bağlantısı yenilenemedi:", error);
-        }
-      }
 
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
@@ -511,6 +507,7 @@ export function getTelegramBot(): Bot | null {
       const settings = db.getSettings();
 
       // Banner fotoğrafı: kayıtlı file_id, yerel azfur-banner.jpg dosyası veya cdn url
+      let menuSent = false;
       if (settings.useBannerPhoto !== false) {
         let photoToUse: any = settings.bannerFileId || cachedBannerFileId;
         if (!photoToUse) {
@@ -536,18 +533,43 @@ export function getTelegramBot(): Bot | null {
                 db.updateSettings({ bannerFileId: fId }).catch(() => {});
               }
             }
-            return;
+            menuSent = true;
           } catch (photoErr) {
             console.warn("Banner gönderilemedi, metin moduna geçiliyor:", photoErr);
           }
         }
       }
 
-      // ŞİMŞEK HIZINDA SAF METİN MENÜ KARTI (0.02 saniyede kullanıcı ekranında belirir)
-      await ctx.reply(messageText, {
-        parse_mode: "HTML",
-        reply_markup: keyboard,
-      });
+      if (!menuSent) {
+        // Send the interactive menu before doing profile or menu-button writes.
+        await ctx.reply(messageText, {
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        });
+      }
+
+      // These operations are useful but must not sit in front of the welcome menu.
+      if (!existingUser) {
+        db.getOrCreateUser(from.id, {
+          username: from.username,
+          firstName: from.first_name,
+          lastName: from.last_name,
+        }).catch((error) => console.warn("/start kullanıcı kaydı ertelendi:", error));
+      }
+
+      if (ctx.chat?.type === "private") {
+        const menuButton = {
+          type: "web_app" as const,
+          text: "AzFur",
+          web_app: { url: appUrl },
+        };
+        // The inline Mini App button is already available in the reply keyboard.
+        // Refresh the chat-level shortcut in the background instead of waiting
+        // for two Telegram API calls before showing /start.
+        ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: menuButton }).catch((error: unknown) => {
+          console.warn("Telegram Mini App menü bağlantısı yenilenemedi:", error);
+        });
+      }
     };
 
     botInstance.command("start", sendWelcome);

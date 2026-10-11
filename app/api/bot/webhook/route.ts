@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
     // Process update directly via grammY outbound API
     await bot.handleUpdate(body);
 
+    // Arka planda otomatik yedekleme kontrolünü tetikle (non-blocking)
+    db.triggerAutoBackupIfNeeded().catch(() => {});
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("Telegram webhook error:", err);

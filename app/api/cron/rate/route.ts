@@ -12,6 +12,10 @@ export const revalidate = 0;
 export async function GET(req: NextRequest) {
   try {
     await db.syncFromCloud();
+    
+    // Zamanı gelmişse otomatik veritabanı yedeğini de al
+    await db.checkAndRunAutoBackup().catch((e) => console.error("Cron rate auto backup error:", e));
+
     const settings = db.getSettings();
 
     if (settings.useTcmbAutoRate === false) {

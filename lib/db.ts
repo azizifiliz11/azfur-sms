@@ -826,11 +826,15 @@ function escSqlJson(val: any): string {
   }
 }
 
+let isAutoBackupRunning = false;
+let lastAutoBackupCheckTime = 0;
+
 export const db = {
   async syncFromCloud(force: boolean = false): Promise<DatabaseSchema> {
     const now = Date.now();
     // 2 saniye içinde önbellekte varsa ve force değilse hemen bellekten dön (0ms ağ gecikmesi)
     if (!force && memoryDb && now - lastCloudSyncTime < CLOUD_SYNC_TTL_MS) {
+      this.triggerAutoBackupIfNeeded().catch(() => {});
       return memoryDb;
     }
 
@@ -1019,12 +1023,14 @@ export const db = {
             fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
           } catch {}
 
+          this.triggerAutoBackupIfNeeded().catch(() => {});
           return cloudData;
         }
       }
     } catch (err) {
       console.error("[Cloud KV Sync Error]:", err);
     }
+    this.triggerAutoBackupIfNeeded().catch(() => {});
     return loadDb();
   },
 
@@ -2626,22 +2632,62 @@ export const db = {
     return true;
   },
 
-  async checkAndRunAutoBackup(): Promise<SystemBackup | null> {
-    const data = loadDb();
-    const bs = data.settings.backupSettings;
-    if (!bs || !bs.autoBackupEnabled) {
+  async checkAndRunAutoBackup(force: boolean = false): Promise<SystemBackup | null> {
+    if (isAutoBackupRunning) {
       return null;
     }
 
-    const intervalHours = bs.autoBackupIntervalHours || 6;
+    const data = loadDb();
+    const bs = data.settings?.backupSettings;
+    if (!force && (!bs || !bs.autoBackupEnabled)) {
+      return null;
+    }
+
+    const intervalHours = bs?.autoBackupIntervalHours || 6;
     const intervalMs = intervalHours * 3600 * 1000;
-    const lastTime = bs.lastAutoBackupTime ? new Date(bs.lastAutoBackupTime).getTime() : 0;
+
+    const lastTimeStr =
+      bs?.lastAutoBackupTime ||
+      bs?.lastBackupAt ||
+      bs?.lastBackupTime ||
+      data.backups?.[0]?.createdAt ||
+      data.backups?.[0]?.timestamp;
+    const lastTime = lastTimeStr ? new Date(lastTimeStr).getTime() : 0;
     const now = Date.now();
 
-    if (now - lastTime >= intervalMs) {
-      return await this.createBackup("AUTO");
+    if (force || now - lastTime >= intervalMs) {
+      try {
+        isAutoBackupRunning = true;
+        // Güncel veritabanı durumunu senkronize et
+        await this.syncFromCloud();
+        const backup = await this.createBackup("AUTO");
+        console.log(`[AutoBackup] Otomatik sistem yedeği başarıyla oluşturuldu: ${backup.id} (${(backup.sizeBytes / 1024).toFixed(1)} KB)`);
+        return backup;
+      } catch (err) {
+        console.error("[AutoBackup] Otomatik yedek alma hatası:", err);
+        return null;
+      } finally {
+        isAutoBackupRunning = false;
+      }
     }
     return null;
+  },
+
+  async triggerAutoBackupIfNeeded(): Promise<void> {
+    const now = Date.now();
+    // En fazla 5 dakikada bir tetikleme kontrolü yap (0ms performans etkisi)
+    if (now - lastAutoBackupCheckTime < 5 * 60 * 1000) {
+      return;
+    }
+    lastAutoBackupCheckTime = now;
+
+    if (isAutoBackupRunning) return;
+
+    try {
+      await this.checkAndRunAutoBackup();
+    } catch (err) {
+      console.error("[AutoBackup Trigger Error]:", err);
+    }
   },
 
   async restoreBackup(backupPayload: any): Promise<{ success: boolean; message: string; details: any }> {
@@ -2855,3 +2901,16 @@ export const db = {
     return user;
   },
 };
+
+// Arka plan periyodik kontrolcüsü (Node.js / LTS / Dev Server ortamları için)
+if (typeof setInterval !== "undefined") {
+  const g = global as any;
+  if (!g.__azfurAutoBackupIntervalStarted) {
+    g.__azfurAutoBackupIntervalStarted = true;
+    setInterval(() => {
+      db.triggerAutoBackupIfNeeded().catch((e) => {
+        console.error("[AutoBackup Interval Error]:", e);
+      });
+    }, 15 * 60 * 1000); // 15 dakikada bir kontrol
+  }
+}

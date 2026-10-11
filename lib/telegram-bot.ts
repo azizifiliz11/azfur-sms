@@ -2076,6 +2076,7 @@ export function getTelegramBot(): Bot | null {
         }
 
         await db.syncFromCloud();
+        await db.checkAndRunAutoBackup().catch(() => {});
         const backups = db.getBackups();
         const settings = db.getSettings();
         const bs = settings.backupSettings || {

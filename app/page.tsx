@@ -542,7 +542,7 @@ function HomeContent() {
             />
 
             {/* Alt Bilgi & Canlı Destek Butonu */}
-            <div className="pt-4 border-t border-white/[0.06] text-center space-y-2 text-zinc-500 text-[11px]">
+            <div className="pt-4 border-t border-white/[0.06] text-center space-y-2.5 text-zinc-500 text-[11px]">
               <div className="flex items-center justify-center gap-3">
                 <div className="flex items-center gap-1.5 text-zinc-400">
                   <Shield className="w-3.5 h-3.5 text-emerald-400" />
@@ -560,6 +560,14 @@ function HomeContent() {
               <p>
                 SMS onay kodunuz gelmediği takdirde tek tıkla iptal edip bakiyenizi anında iade alabilirsiniz.
               </p>
+
+              {/* Yasal Uyarı & Kullanım Şartları */}
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-white/[0.06] text-[10.5px] text-zinc-400 leading-relaxed text-left flex items-start gap-2">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-zinc-300">Yasal Bilgilendirme:</strong> Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
+                </span>
+              </div>
             </div>
           </>
         )}

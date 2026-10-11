@@ -1018,7 +1018,9 @@ export function getTelegramBot(): Bot | null {
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Kullanılabilir Bakiye:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
           `Lütfen SMS onayı almak istediğiniz servisi seçin:\n` +
-          `<i>(Seçtiğiniz servise ait ülke ve fiyat listesi gösterilecektir)</i>`;
+          `<i>(Seçtiğiniz servise ait ülke ve fiyat listesi gösterilecektir)</i>\n\n` +
+          `⚖️ <b>Yasal Bilgilendirme:</b>\n` +
+          `<i>Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.</i>`;
 
         const kb = new InlineKeyboard();
         for (let i = 0; i < POPULAR_SERVICES.length; i += 2) {
@@ -1304,7 +1306,8 @@ export function getTelegramBot(): Bot | null {
           `⏳ <b>Durum:</b> SMS Kodu Bekleniyor...\n` +
           `⏱️ <b>Bekleme Süresi:</b> 15 Dakika\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `💡 <i>İlgili uygulamaya gidip bu numarayı girin. SMS kodu geldiğinde bot otomatik olarak bildirim gönderecektir. Kod gelmezse iptal edip ücretinizi anında geri alabilirsiniz.</i>`;
+          `💡 <i>İlgili uygulamaya gidip bu numarayı girin. SMS kodu geldiğinde bot otomatik olarak bildirim gönderecektir. Kod gelmezse iptal edip ücretinizi anında geri alabilirsiniz.</i>\n\n` +
+          `⚖️ <i>Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.</i>`;
 
         const kb = new InlineKeyboard()
           .text("🔄 Kodu Kontrol Et", `order_chk:${order.id}`)
@@ -1924,6 +1927,8 @@ export function getTelegramBot(): Bot | null {
           `Ortalama 5-30 saniye içinde bot ekranınıza iletilir ve anlık bildirim alırsınız.\n\n` +
           `💰 <b>Kod gelmezse ne olur?</b>\n` +
           `'İptal Et & İade Al' butonuna bastığınız anda paranız %100 eksiksiz bakiyenize geri döner.\n\n` +
+          `⚖️ <b>Yasal Bilgilendirme & Kullanım Şartları:</b>\n` +
+          `Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.\n\n` +
           `⚡ <b>7/24 Kesintisiz Hizmet:</b> Otomatik sistemimiz günün her saati aktiftir.`;
 
         const kb = new InlineKeyboard();

@@ -1062,6 +1062,14 @@ export function RentPanel({
               </span>
             </div>
 
+            {/* Yasal Uyarı & Kullanım Şartları */}
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10.5px] text-amber-200/90 flex items-start gap-2 leading-relaxed">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
+              </span>
+            </div>
+
             {/* Butonlar */}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getPaymentInformation } from "@/lib/oxapay";
+import { getPaymentInformation, evaluateCryptoTolerance } from "@/lib/oxapay";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +44,11 @@ export async function POST(req: Request) {
         d.txid === String(trackId)
     );
 
-    if (payInfo.status === "paid") {
-      let creditedAmount = dep?.amount || 0;
+    const depositAmountTry = dep?.amount || 0;
+    const tolerance = evaluateCryptoTolerance(payInfo, depositAmountTry);
+
+    if (payInfo.status === "paid" || tolerance.isAccepted) {
+      let creditedAmount = depositAmountTry;
       let targetTelegramId = dep?.telegramId || telegramId;
 
       if (dep && dep.status !== "APPROVED") {
@@ -57,11 +60,16 @@ export async function POST(req: Request) {
             const newBal = Number((user.balance + creditedAmount).toFixed(2));
             await db.updateUser(targetTelegramId, { balance: newBal });
 
+            const toleranceNote = tolerance.deficitTry > 0
+              ? `\nℹ️ <i>Küçük yuvarlama farkı toleransı (${tolerance.deficitTry.toFixed(2)} ₺ eksik) onaylandı.</i>\n`
+              : "";
+
             await sendTelegramDirectMessage(
               targetTelegramId,
               `🎉 <b>TEBRİKLER! ÖDEMENİZ ONAYLANDI</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
                 `💰 <b>Yüklenen Tutar:</b> <code>₺${creditedAmount.toFixed(2)}</code>\n` +
                 `💳 <b>Yeni Bakiyeniz:</b> <code>₺${newBal.toFixed(2)}</code>\n` +
+                toleranceNote +
                 `🆔 <b>İşlem No:</b> <code>#${trackId}</code>\n` +
                 `⚡ Bakiyeniz hesabınıza anında aktarılmıştır. Keyifli kullanımlar dileriz!`
             );
@@ -74,7 +82,9 @@ export async function POST(req: Request) {
         isPaid: true,
         status: "paid",
         creditedAmount,
-        message: "Ödemeniz başarıyla onaylandı ve bakiyeniz hesabınıza yüklendi!",
+        message: tolerance.deficitTry > 0
+          ? `Ödemeniz küçük yuvarlama farkı toleransı (${tolerance.deficitTry.toFixed(2)} ₺) ile onaylandı ve bakiyeniz hesabınıza yüklendi!`
+          : "Ödemeniz başarıyla onaylandı ve bakiyeniz hesabınıza yüklendi!",
       });
     }
 
@@ -92,7 +102,8 @@ export async function POST(req: Request) {
         success: true,
         isPaid: false,
         status: "underpaid",
-        message: "Eksik tutar gönderildi. Lütfen kalan tutarı da adrese iletiniz.",
+        deficitTry: tolerance.deficitTry,
+        message: tolerance.message || `Eksik tutar gönderildi (${tolerance.deficitTry.toFixed(2)} ₺ eksik). Kabul edilebilir maksimum tolerans 10 ₺'dir.`,
       });
     }
 

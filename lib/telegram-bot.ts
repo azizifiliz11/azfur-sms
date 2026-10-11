@@ -1674,6 +1674,14 @@ export function getTelegramBot(): Bot | null {
       if (data.startsWith("oxa_pay:") || data.startsWith("cbot_pay:") || data.startsWith("apr_pay:")) {
         const parts = data.split(":");
         const amt = parseFloat(parts[1]) || 100;
+        if (amt < 10) {
+          await editOrReply(
+            ctx,
+            "❌ <b>Geçersiz Tutar</b>\n\nMinimum bakiye yükleme tutarı 10 ₺'dir.",
+            new InlineKeyboard().text("🔙 Kripto Para Seç", "btn_dep_cbot")
+          );
+          return;
+        }
         const payCurrency = (parts[2] || "USDT").toUpperCase();
         const network = (parts[3] || (payCurrency === "USDT" ? "TRC20" : "TRON")).toUpperCase();
         const { getApironePaymentOption } = await import("./crypto-currencies");
@@ -1733,7 +1741,8 @@ export function getTelegramBot(): Bot | null {
           `<code>${payResult.address}</code>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `⏳ <b>Geçerlilik Süresi:</b> 60 Dakika\n` +
-          `ℹ️ Herhangi bir borsadan (Binance, Paribu, BtcTurk vb.) veya cüzdanınızdan (TrustWallet, TronLink) bu adrese transfer yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik olarak</b> hesabınıza yüklenecektir.`;
+          `ℹ️ Herhangi bir borsadan (Binance, Paribu, BtcTurk vb.) veya cüzdanınızdan (TrustWallet, TronLink) bu adrese transfer yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik olarak</b> hesabınıza yüklenecektir.\n` +
+          `💡 <i>Borsa çekim küsuratlarında 10 ₺'ye kadar olan küçük eksiklikler sistemimizce tolere edilir; 10 ₺ altı ödemeler kabul edilmez.</i>`;
 
         const kb = new InlineKeyboard()
           .text("🔄 Ödemeyi Kontrol Et", `oxa_chk:${invoiceId}:${amt}`)
@@ -1769,34 +1778,42 @@ export function getTelegramBot(): Bot | null {
         const trackId = parts[1];
         const amt = parseFloat(parts[2]) || 0;
 
-        const { getPaymentInformation } = await import("./oxapay");
+        const { getPaymentInformation, evaluateCryptoTolerance } = await import("./oxapay");
         const payInfo = await getPaymentInformation(trackId);
 
-        if (payInfo.success && payInfo.status === "paid") {
-          const deposits = db.getDeposits();
-          const dep = deposits.find(
-            (d) =>
-              d.referenceCode === `APR-${trackId}` ||
-              d.referenceCode === `OXA-${trackId}` ||
-              d.txid === String(trackId)
-          );
+        const deposits = db.getDeposits();
+        const dep = deposits.find(
+          (d) =>
+            d.referenceCode === `APR-${trackId}` ||
+            d.referenceCode === `OXA-${trackId}` ||
+            d.txid === String(trackId)
+        );
+        const depositAmountTry = dep?.amount || amt;
+        const tolerance = evaluateCryptoTolerance(payInfo, depositAmountTry);
+
+        if (payInfo.success && (payInfo.status === "paid" || tolerance.isAccepted)) {
           if (dep && dep.status !== "APPROVED") {
             await db.updateDepositStatus(dep.id, "APPROVED");
             const curUser = db.getUser(from.id);
             if (curUser) {
               await db.updateUser(from.id, {
-                balance: Number((curUser.balance + amt).toFixed(2)),
+                balance: Number((curUser.balance + depositAmountTry).toFixed(2)),
               });
             }
           }
 
           const updatedUser = db.getUser(from.id);
+          const toleranceNote = tolerance.deficitTry > 0
+            ? `\nℹ️ <i>Küçük yuvarlama farkı toleransı (${tolerance.deficitTry.toFixed(2)} ₺ eksik) onaylandı ve bakiyeniz tam olarak yüklendi.</i>\n`
+            : "";
+
           await editOrReply(
             ctx,
             `🎉 <b>ÖDEMENİZ ONAYLANDI!</b>\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💰 <b>Yüklenen Tutar:</b> <code>+${amt.toFixed(2)} ₺</code>\n` +
+            `💰 <b>Yüklenen Tutar:</b> <code>+${depositAmountTry.toFixed(2)} ₺</code>\n` +
             `💳 <b>Yeni Bakiyeniz:</b> <code>${(updatedUser?.balance || 0).toFixed(2)} ₺</code>\n` +
+            toleranceNote +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `<i>Bakiyeniz hesabınıza aktarılmıştır. Keyifli alışverişler dileriz!</i>`,
             new InlineKeyboard().text("🛒 Hemen Numara Al", "btn_buy_menu").row().text("🔙 Ana Menü", "btn_main_menu")
@@ -1808,6 +1825,17 @@ export function getTelegramBot(): Bot | null {
           try {
             await ctx.answerCallbackQuery({
               text: "⚡ İşleminiz blokzincirinde tespit edildi! Ağ onayı bekleniyor, lütfen biraz bekleyiniz.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          return;
+        }
+
+        if (payInfo.status === "underpaid") {
+          const deficitStr = tolerance.deficitTry > 0 ? `${tolerance.deficitTry.toFixed(2)} ₺` : "eksik";
+          try {
+            await ctx.answerCallbackQuery({
+              text: `⚠️ Eksik tutar tespit edildi (${deficitStr} eksik)!\nKabul edilebilir maksimum eksiklik toleransı 10 ₺'dir. Lütfen kalan tutarı da adrese gönderiniz.`,
               show_alert: true,
             });
           } catch (e) {}

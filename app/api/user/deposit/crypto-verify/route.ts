@@ -118,6 +118,14 @@ export async function POST(req: NextRequest) {
       creditedAmount = Number(amountTry) || 50;
     }
 
+    // Minimum 10 TL kontrolü (10 TL altındaki ödemeler kabul edilmez)
+    if (creditedAmount < 10) {
+      return NextResponse.json({
+        success: false,
+        error: "Minimum bakiye yükleme tutarı 10 ₺'dir. Gönderilen tutar 10 ₺'nin altında olduğu için onaylanamadı.",
+      }, { status: 400 });
+    }
+
     // 7. Bakiye yükleme kaydı oluştur ve anında ONAYLA
     const deposit: DepositRequest = {
       id: `dep_crypto_${Date.now()}_${Math.floor(Math.random() * 1000)}`,

@@ -373,3 +373,12 @@ export function verifyOxapayWebhook(
     return false;
   }
 }
+
+import { evaluateApironeTolerance } from "./apirone";
+
+/**
+ * Apirone eksik kripto ödemelerinde tolerans ve alt limit kontrolü.
+ * Geriye dönük uyumluluk için evaluateCryptoTolerance adıyla da export edilir.
+ */
+export const evaluateCryptoTolerance = evaluateApironeTolerance;
+

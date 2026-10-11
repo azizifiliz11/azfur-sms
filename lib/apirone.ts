@@ -350,6 +350,7 @@ export async function createApironeInvoice(params: {
         telegramId: String(params.telegramId),
         username: params.username || "",
         orderId,
+        amountTry: params.amountTry,
       },
     };
 
@@ -480,4 +481,121 @@ export async function getApironeInvoiceInfo(invoiceId: string): Promise<ApironeP
       error: `Apirone durum sorgulama hatası: ${err.message || err}`,
     };
   }
+}
+
+/**
+ * Apirone eksik kripto ödemelerinde tolerans ve alt limit kontrolü.
+ * Örneğin 3.507896 USDT yerine kullanıcı 3.50 USDT gönderdiğinde
+ * aradaki fark küçükse (<= 10 TL) ödeme onaylanır.
+ *
+ * Güvenlik ve Kural Kısıtlamaları:
+ * 1. 10 TL altındaki ödemeler kesinlikle KABUL EDİLMEZ.
+ * 2. Eksik tutar (fark) 10 TL'den fazlaysa KABUL EDİLMEZ.
+ */
+export function evaluateApironeTolerance(
+  invoiceData: { status?: string; raw?: any; rawStatus?: string; amount?: number },
+  depositAmountTry: number
+): {
+  isAccepted: boolean;
+  deficitTry: number;
+  paidRatio: number;
+  paidTry: number;
+  message?: string;
+} {
+  const raw = invoiceData.raw || invoiceData;
+  const rawStatus = String(invoiceData.rawStatus || raw?.status || invoiceData.status || "").toLowerCase();
+
+  // Depozit TRY tutarını user-data'dan çekmeyi dene
+  if (depositAmountTry <= 0 && raw?.["user-data"]?.amountTry) {
+    depositAmountTry = Number(raw["user-data"].amountTry) || 0;
+  }
+
+  // 1. Zaten tam ödenmişse veya fazla ödenmişse (paid / completed / overpaid)
+  if (rawStatus === "paid" || rawStatus === "completed" || rawStatus === "overpaid") {
+    return {
+      isAccepted: true,
+      deficitTry: 0,
+      paidRatio: 1,
+      paidTry: depositAmountTry,
+      message: "Ödeme tam olarak tamamlandı.",
+    };
+  }
+
+  // Minimum yükleme tutarı kontrolü: 10 TL altı depozit kabul edilmez
+  if (depositAmountTry < 10) {
+    return {
+      isAccepted: false,
+      deficitTry: depositAmountTry,
+      paidRatio: 0,
+      paidTry: 0,
+      message: "Minimum bakiye yükleme tutarı 10 ₺'dir. 10 ₺ altındaki ödemeler kabul edilmez.",
+    };
+  }
+
+  // 2. Eksik ödeme durumu (partpaid)
+  if (rawStatus === "partpaid" || invoiceData.status === "underpaid") {
+    let expectedUnits = Number(raw?.amount ?? invoiceData.amount) || 0;
+    let paidUnits = 0;
+
+    // Apirone fatura geçmişi (history) veya partpaid alanı
+    if (Array.isArray(raw?.history)) {
+      for (const h of raw.history) {
+        if (h && Number(h.amount) > 0) {
+          paidUnits += Number(h.amount);
+        }
+      }
+    }
+    if (!paidUnits && raw?.partpaid !== undefined) {
+      paidUnits = Number(raw.partpaid) || 0;
+    }
+
+    if (expectedUnits > 0 && paidUnits > 0) {
+      const deficitUnits = Math.max(0, expectedUnits - paidUnits);
+      const deficitRatio = deficitUnits / expectedUnits;
+      const deficitTry = Number((depositAmountTry * deficitRatio).toFixed(2));
+      const paidRatio = Number((paidUnits / expectedUnits).toFixed(4));
+      const paidTry = Number((depositAmountTry * paidRatio).toFixed(2));
+
+      const MAX_ALLOWED_DEFICIT_TRY = 10.0;
+      const MIN_ACCEPTED_PAID_TRY = 10.0;
+
+      // 10 TL altı gönderilmişse kabul etme
+      if (paidTry < MIN_ACCEPTED_PAID_TRY) {
+        return {
+          isAccepted: false,
+          deficitTry,
+          paidRatio,
+          paidTry,
+          message: `Gönderilen tutar (${paidTry.toFixed(2)} ₺) minimum limit olan 10 ₺'nin altındadır. 10 ₺ altı ödemeler kabul edilmez.`,
+        };
+      }
+
+      // Eksik tutar 10 TL veya altındaysa kabul et
+      if (deficitTry <= MAX_ALLOWED_DEFICIT_TRY) {
+        return {
+          isAccepted: true,
+          deficitTry,
+          paidRatio,
+          paidTry,
+          message: `Ödemeniz küçük yuvarlama farkı toleransı (${deficitTry.toFixed(2)} ₺) ile onaylandı.`,
+        };
+      } else {
+        return {
+          isAccepted: false,
+          deficitTry,
+          paidRatio,
+          paidTry,
+          message: `Eksik tutar gönderildi (${deficitTry.toFixed(2)} ₺ eksik). Kabul edilebilir maksimum tolerans 10 ₺'dir.`,
+        };
+      }
+    }
+  }
+
+  return {
+    isAccepted: false,
+    deficitTry: depositAmountTry,
+    paidRatio: 0,
+    paidTry: 0,
+    message: "Ödeme henüz tespit edilmedi veya yetersiz.",
+  };
 }

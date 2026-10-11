@@ -87,12 +87,15 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
         if (data.success && data.isPaid) {
           haptic.success();
           setIsErrorMsg(false);
-          setMessage(`🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz otomatik olarak onaylandı ve hesabınıza yüklendi!`);
+          setMessage(data.message || `🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz otomatik olarak onaylandı ve hesabınıza yüklendi!`);
           onSuccess(activePayment.amountTry);
           clearInterval(interval);
           setTimeout(() => {
             onClose();
           }, 2200);
+        } else if (data.status === "underpaid") {
+          setIsErrorMsg(true);
+          setMessage(data.message || "⚠️ Eksik tutar gönderildi. Kabul edilebilir tolerans 10 ₺'dir.");
         }
       } catch {
         // Hata durumunda sessiz kal
@@ -259,7 +262,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
       if (data.success && data.isPaid) {
         haptic.success();
         setIsErrorMsg(false);
-        setMessage(`🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz başarıyla onaylandı ve hesabınıza yüklendi!`);
+        setMessage(data.message || `🎉 Tebrikler! ₺${activePayment.amountTry.toFixed(2)} bakiyeniz başarıyla onaylandı ve hesabınıza yüklendi!`);
         onSuccess(activePayment.amountTry);
         setTimeout(() => {
           onClose();
@@ -268,10 +271,14 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
         haptic.selection();
         setIsErrorMsg(false);
         setMessage("⚡ İşleminiz blokzincirinde tespit edildi! Ağ onayı bekleniyor, lütfen birkaç saniye bekleyiniz.");
+      } else if (data.status === "underpaid") {
+        haptic.error();
+        setIsErrorMsg(true);
+        setMessage(data.message || "⚠️ Eksik tutar gönderildi. Kabul edilebilir tolerans 10 ₺'dir.");
       } else {
         haptic.selection();
         setIsErrorMsg(false);
-        setMessage("⏳ Transfer henüz blokzincirinde tespit edilmedi. Gönderim yaptıktan sonra 1-2 dakika içinde tekrar deneyiniz.");
+        setMessage(data.message || "⏳ Transfer henüz blokzincirinde tespit edilmedi. Gönderim yaptıktan sonra 1-2 dakika içinde tekrar deneyiniz.");
       }
     } catch {
       setIsErrorMsg(true);
@@ -575,6 +582,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
                     <p className="text-[10px] text-zinc-400 leading-relaxed bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-500/20">
                       ℹ️ Herhangi bir borsadan (Binance, Paribu, vb.) veya cüzdandan bu adrese gönderim yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik yüklenecektir</b>.
+                      <span className="block mt-1 text-emerald-400 font-medium">💡 Borsa çekim küsuratlarında 10 ₺'ye kadar olan küçük eksiklikler sistemimizce tolere edilir; 10 ₺ altı ödemeler kabul edilmez.</span>
                     </p>
 
                     <div className="grid grid-cols-2 gap-2 pt-1">

@@ -73,6 +73,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (action === "resetMenuButton" || action === "reset_menu") {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ menu_button: { type: "default" } }),
+      });
+      const data = await res.json();
+      return NextResponse.json({
+        ok: data.ok ?? true,
+        message: "Bot menü butonu BotFather varsayılanına sıfırlandı.",
+        telegramResponse: data,
+      });
+    } catch (err: any) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+    }
+  }
+
   // Varsayılan bilgi
   try {
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);

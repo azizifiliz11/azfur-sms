@@ -511,17 +511,9 @@ export function getTelegramBot(): Bot | null {
       }
 
       if (ctx.chat?.type === "private") {
-        const menuButton = {
-          type: "web_app" as const,
-          text: "AzFur",
-          web_app: { url: appUrl },
-        };
-        // The inline Mini App button is already available in the reply keyboard.
-        // Refresh the chat-level shortcut in the background instead of waiting
-        // for two Telegram API calls before showing /start.
-        ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: menuButton }).catch((error: unknown) => {
-          console.warn("Telegram Mini App menü bağlantısı yenilenemedi:", error);
-        });
+        // BotFather'da belirlenen menü butonu adını ve ayarını kullanmak için
+        // sohbete özel "AzFur" zorlamasını kaldırıp BotFather varsayılanına sıfırlıyoruz.
+        ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: { type: "default" } }).catch(() => {});
       }
     };
 

@@ -9,13 +9,14 @@ import { ActiveNumbers } from "@/components/ActiveNumbers";
 import { DepositModal } from "@/components/DepositModal";
 import { SupportModal } from "@/components/SupportModal";
 import { CouponModal } from "@/components/CouponModal";
+import { ProfileSheet } from "@/components/ProfileSheet";
 import { AdminView } from "@/components/AdminView";
 import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/lib/types";
 import { APP_BUILD_VERSION } from "@/lib/app-version";
 import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert, Wrench, RotateCcw, Send } from "lucide-react";
 
 function HomeContent() {
-  const { isReady, user: tgUser } = useTelegram();
+  const { isReady, user: tgUser, initData } = useTelegram();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [adminUsernames, setAdminUsernames] = useState<string[]>([]);
@@ -32,6 +33,7 @@ function HomeContent() {
   const [depositModalOpen, setDepositModalOpen] = useState<boolean>(false);
   const [couponModalOpen, setCouponModalOpen] = useState<boolean>(false);
   const [supportModalOpen, setSupportModalOpen] = useState<boolean>(false);
+  const [profileOpen, setProfileOpen] = useState<boolean>(false);
   const [adminViewActive, setAdminViewActive] = useState<boolean>(false);
 
   const activeCountryIdRef = React.useRef<number>(62);
@@ -491,6 +493,7 @@ function HomeContent() {
           onOpenDeposit={() => setDepositModalOpen(true)}
           onOpenCoupon={() => setCouponModalOpen(true)}
           onOpenSupport={() => setSupportModalOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
           onRefreshBalance={handleRefreshAll}
           isAdmin={isAdmin}
           onToggleAdminView={() => setAdminViewActive(true)}
@@ -602,6 +605,9 @@ function HomeContent() {
         }}
         activeDiscount={currentUser?.activeDiscount}
       />
+
+      {/* Profil & İşlem Geçmişi */}
+      <ProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} initData={initData} />
 
       {/* Destek & Ticket Modalı */}
       <SupportModal

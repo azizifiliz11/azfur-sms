@@ -14,6 +14,8 @@ import {
   Sparkles,
   Copy,
   Check,
+  UserRound,
+  ChevronRight,
 } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -33,6 +35,7 @@ interface HeaderProps {
   onOpenDeposit: () => void;
   onOpenSupport?: () => void;
   onOpenCoupon?: () => void;
+  onOpenProfile?: () => void;
   onRefreshBalance: () => void;
   isAdmin?: boolean;
   onToggleAdminView?: () => void;
@@ -72,6 +75,7 @@ export function Header({
   onOpenDeposit,
   onOpenSupport,
   onOpenCoupon,
+  onOpenProfile,
   onRefreshBalance,
   isAdmin = false,
   onToggleAdminView,
@@ -176,7 +180,7 @@ export function Header({
             </div>
             <div className="min-w-0 leading-none">
               <span className="block text-[15px] font-medium tracking-tight text-foreground">AzFur</span>
-              <span className="mt-0.5 block text-[9px] uppercase tracking-[0.14em] text-muted-foreground">SMS Onay</span>
+              <span className="mt-0.5 block whitespace-nowrap text-[9px] uppercase tracking-[0.14em] text-muted-foreground">SMS Onay</span>
             </div>
           </div>
 
@@ -193,6 +197,20 @@ export function Header({
                 aria-label="Canlı destek ve ticket aç"
               >
                 <Headphones className="h-4 w-4" />
+              </button>
+            )}
+            {onOpenProfile && (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic.impact("light");
+                  onOpenProfile();
+                }}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:scale-95 dark:hover:bg-muted/50"
+                title="Profilim"
+                aria-label="Profilimi aç"
+              >
+                <UserRound className="h-4 w-4" />
               </button>
             )}
             <ThemeToggle />
@@ -317,6 +335,24 @@ export function Header({
               </button>
             </div>
           </div>
+
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic.impact("light");
+                onOpenProfile();
+              }}
+              className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border px-3.5 py-2.5 text-left transition-colors hover:bg-muted active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium text-foreground">
+                <UserRound className="h-3.5 w-3.5" /> Profil & işlem geçmişi
+              </span>
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                Yüklemeler, numaralar <ChevronRight className="h-3.5 w-3.5" />
+              </span>
+            </button>
+          )}
 
           {/* Axis istatistik ızgarası */}
           <div className="mt-4 grid grid-cols-3 border-l border-t border-border text-center">

@@ -239,6 +239,41 @@ async function saveActivationToSql(a: ActivationOrder): Promise<void> {
   }
 }
 
+function parseActivationRow(a: any): ActivationOrder {
+  return {
+    id: a.id,
+    telegramId: Number(a.telegram_id),
+    serviceCode: a.service_code,
+    serviceName: a.service_name || "",
+    countryId: Number(a.country_id),
+    countryName: a.country_name || "",
+    countryFlag: a.country_flag || "",
+    phoneNumber: a.phone_number || "",
+    originalCost: parseFloat(a.original_cost) || 0,
+    chargedPrice: parseFloat(a.charged_price) || 0,
+    status: a.status,
+    smsCode: a.sms_code || null,
+    smsText: a.sms_text || null,
+    createdAt: Number(a.created_at) || Date.now(),
+    expiresAt: Number(a.expires_at) || Date.now(),
+    notifiedBot: Boolean(a.notified_bot),
+  };
+}
+
+function parseDepositRow(d: any): DepositRequest {
+  return {
+    id: d.id,
+    telegramId: Number(d.telegram_id),
+    username: d.username || "",
+    amount: parseFloat(d.amount) || 0,
+    method: d.method || "Havale/EFT",
+    status: d.status || "PENDING",
+    referenceCode: d.reference_code || d.id,
+    txid: d.tx_id || undefined,
+    createdAt: d.created_at ? new Date(d.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
 async function saveDepositToSql(d: DepositRequest): Promise<void> {
   const sql = getSql();
   if (!sql) return;
@@ -426,37 +461,10 @@ async function syncFromSql(): Promise<DatabaseSchema | null> {
 
     const parsedActivations: Record<string, ActivationOrder> = {};
     for (const a of activationsRows) {
-      parsedActivations[a.id] = {
-        id: a.id,
-        telegramId: Number(a.telegram_id),
-        serviceCode: a.service_code,
-        serviceName: a.service_name || "",
-        countryId: Number(a.country_id),
-        countryName: a.country_name || "",
-        countryFlag: a.country_flag || "",
-        phoneNumber: a.phone_number || "",
-        originalCost: parseFloat(a.original_cost) || 0,
-        chargedPrice: parseFloat(a.charged_price) || 0,
-        status: a.status,
-        smsCode: a.sms_code || null,
-        smsText: a.sms_text || null,
-        createdAt: Number(a.created_at) || Date.now(),
-        expiresAt: Number(a.expires_at) || Date.now(),
-        notifiedBot: Boolean(a.notified_bot),
-      };
+      parsedActivations[a.id] = parseActivationRow(a);
     }
 
-    const parsedDeposits: DepositRequest[] = depositsRows.map((d: any) => ({
-      id: d.id,
-      telegramId: Number(d.telegram_id),
-      username: d.username || "",
-      amount: parseFloat(d.amount) || 0,
-      method: d.method || "Havale/EFT",
-      status: d.status || "PENDING",
-      referenceCode: d.reference_code || d.id,
-      txid: d.tx_id || undefined,
-      createdAt: d.created_at ? new Date(d.created_at).toISOString() : new Date().toISOString(),
-    }));
+    const parsedDeposits: DepositRequest[] = depositsRows.map(parseDepositRow);
 
     const parsedTickets: Record<string, Ticket> = {};
     for (const t of ticketsRows) {
@@ -1803,6 +1811,51 @@ export const db = {
     return Object.values(data.activations)
       .filter((a) => a.telegramId === key)
       .sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  /**
+   * Kullanıcının numara ve bakiye yükleme geçmişi (profil ekranı).
+   * Bellek kopyası tüm kullanıcılar için son N kayıtla sınırlı olduğundan doğrudan SQL'den okunur.
+   */
+  async getUserHistory(
+    telegramId: number,
+    limit = 50
+  ): Promise<{ orders: ActivationOrder[]; deposits: DepositRequest[]; totalDeposited: number; orderCount: number }> {
+    const sql = getSql();
+    if (sql) {
+      try {
+        const tgId = BigInt(telegramId);
+        const [orderRows, depositRows, totalRows, countRows] = (await Promise.all([
+          sql`SELECT * FROM activations WHERE telegram_id = ${tgId} ORDER BY created_at DESC LIMIT ${limit}`,
+          sql`SELECT * FROM deposits WHERE telegram_id = ${tgId} ORDER BY created_at DESC LIMIT ${limit}`,
+          sql`SELECT COALESCE(SUM(amount), 0) AS total FROM deposits WHERE telegram_id = ${tgId} AND status = 'APPROVED'`,
+          sql`SELECT COUNT(*) AS count FROM activations WHERE telegram_id = ${tgId}`,
+        ])) as any[];
+        return {
+          orders: orderRows.map(parseActivationRow),
+          deposits: depositRows.map(parseDepositRow),
+          totalDeposited: Number(Number(totalRows[0]?.total || 0).toFixed(2)),
+          orderCount: Number(countRows[0]?.count || 0),
+        };
+      } catch (err) {
+        console.error("[PostgreSQL getUserHistory Error]:", err);
+      }
+    }
+
+    // SQL yoksa/başarısızsa bellek kopyasından
+    const data = loadDb();
+    const orders = Object.values(data.activations)
+      .filter((a) => Number(a.telegramId) === Number(telegramId))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const deposits = (data.deposits || []).filter((d) => Number(d.telegramId) === Number(telegramId));
+    return {
+      orders: orders.slice(0, limit),
+      deposits: deposits.slice(0, limit),
+      totalDeposited: Number(
+        deposits.filter((d) => d.status === "APPROVED").reduce((sum, d) => sum + d.amount, 0).toFixed(2)
+      ),
+      orderCount: orders.length,
+    };
   },
 
   getActiveOrders(telegramId?: number | string): ActivationOrder[] {

@@ -74,9 +74,15 @@ export async function POST(req: NextRequest) {
         }, { status: 400 });
       }
 
-      // Admin cüzdanı tanımlı ise alıcı adresi eşleşiyor mu kontrol et
+      // Alıcı adres ZORUNLU olarak sistem cüzdanı olmalı (tanımlı değilse TXID ile yükleme kapalı)
       const adminUsdt = (settings.cryptoSettings?.usdtTrc20Address || "").trim();
-      if (adminUsdt && adminUsdt.length > 10 && usdtTransfer.to_address && usdtTransfer.to_address.toLowerCase() !== adminUsdt.toLowerCase()) {
+      if (adminUsdt.length < 10) {
+        return NextResponse.json({
+          success: false,
+          error: "TXID ile USDT yükleme şu anda kapalı. Lütfen otomatik kripto ödeme seçeneğini kullanın.",
+        }, { status: 400 });
+      }
+      if (!usdtTransfer.to_address || usdtTransfer.to_address.toLowerCase() !== adminUsdt.toLowerCase()) {
         return NextResponse.json({
           success: false,
           error: "Transfer, sistemimize ait USDT cüzdan adresine gönderilmemiş!",
@@ -96,7 +102,13 @@ export async function POST(req: NextRequest) {
       const adminTrx = (settings.cryptoSettings?.trxAddress || "").trim();
       const toAddr = tronData.toAddress || contractData?.to_address;
 
-      if (adminTrx && adminTrx.length > 10 && toAddr && toAddr.toLowerCase() !== adminTrx.toLowerCase()) {
+      if (adminTrx.length < 10) {
+        return NextResponse.json({
+          success: false,
+          error: "TXID ile TRX yükleme şu anda kapalı. Lütfen otomatik kripto ödeme seçeneğini kullanın.",
+        }, { status: 400 });
+      }
+      if (!toAddr || toAddr.toLowerCase() !== adminTrx.toLowerCase()) {
         return NextResponse.json({
           success: false,
           error: "Transfer, sistemimize ait TRX cüzdan adresine gönderilmemiş!",

@@ -18,11 +18,12 @@ export async function GET() {
           iban: "TR00 0000 0000 0000 0000 0000 00",
           descriptionNote: "Açıklama alanına Telegram ID'nizi veya kullanıcı adınızı yazınız.",
         },
-        cryptoSettings: settings.cryptoSettings || {
-          usdtTrc20Address: "",
-          trxAddress: "",
-          oxapayApiKey: "",
-          autoVerifyEnabled: true,
+        // Yalnızca kullanıcıya gösterilmesi gereken alanlar. Apirone hesap/transfer anahtarı,
+        // OxaPay/CryptoBot anahtarları gibi gizli bilgiler ASLA istemciye gönderilmez.
+        cryptoSettings: {
+          usdtTrc20Address: settings.cryptoSettings?.usdtTrc20Address || "",
+          trxAddress: settings.cryptoSettings?.trxAddress || "",
+          autoVerifyEnabled: settings.cryptoSettings?.autoVerifyEnabled !== false,
         },
         exchangeRate: settings.exchangeRateToTry || 49.2,
       },

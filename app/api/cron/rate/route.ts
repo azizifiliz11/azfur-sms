@@ -8,7 +8,8 @@ export const maxDuration = 30;
 
 /**
  * Otomatik TCMB Kur Güncelleme Cron Servisi
- * Vercel Crons, harici cron servisleri veya sunucu zamanlayıcıları tarafından çağrılabilir.
+ * Vercel Crons (vercel.json: Hobby planı günlük sınırı nedeniyle her saate ayrı bir günlük cron)
+ * tarafından saatlik çağrılır; ayrıca zamanı gelmiş otomatik yedeği de alır.
  */
 export async function GET(req: NextRequest) {
   try {

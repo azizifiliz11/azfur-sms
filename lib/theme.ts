@@ -57,3 +57,36 @@ export function applyTheme(mode: ThemeMode, persist = false) {
     }
   } catch {}
 }
+
+export type ThemePreference = ThemeMode | "system";
+
+/** Tema değiştiğinde yayınlanır; üst bar anahtarı ve profil ayarları senkron kalır. */
+export const THEME_CHANGE_EVENT = "azfur-theme-change";
+
+/** Otomatik tema: Telegram'ın renk şeması, yoksa cihaz teması, o da yoksa koyu. */
+export function resolveAutoTheme(): ThemeMode {
+  try {
+    const scheme = (window.Telegram?.WebApp as any)?.colorScheme;
+    if (scheme === "light" || scheme === "dark") return scheme;
+    if (window.matchMedia) return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {}
+  return "dark";
+}
+
+export function getThemePreference(): ThemePreference {
+  return getStoredTheme() ?? "system";
+}
+
+export function setThemePreference(pref: ThemePreference) {
+  if (pref === "system") {
+    try {
+      localStorage.removeItem(THEME_STORAGE_KEY);
+    } catch {}
+    applyTheme(resolveAutoTheme());
+  } else {
+    applyTheme(pref, true);
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: pref }));
+  } catch {}
+}

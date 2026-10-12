@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Country, ServiceItem, CalculatedCatalogItem } from "@/lib/types";
 import { getCountryMeta } from "@/lib/country-flags";
+import { FAVORITES_CHANGE_EVENT, getFavoriteCountries, getFavoriteServices } from "@/lib/favorites";
 import { haptic } from "@/lib/haptic";
 import { Card } from "./tremor/Card";
 import { Badge } from "./tremor/Badge";
@@ -120,20 +121,15 @@ export function RentPanel({
   const [favoriteServices, setFavoriteServices] = useState<string[]>([]);
   const [favoriteCountries, setFavoriteCountries] = useState<number[]>([]);
 
-  // LocalStorage'dan favorileri yükle
+  // LocalStorage'dan favorileri yükle; profilden değiştirilirse yeniden oku
   useEffect(() => {
-    try {
-      const savedServ = localStorage.getItem("azfur_fav_services");
-      if (savedServ) {
-        setFavoriteServices(JSON.parse(savedServ));
-      }
-      const savedCountr = localStorage.getItem("azfur_fav_countries");
-      if (savedCountr) {
-        setFavoriteCountries(JSON.parse(savedCountr));
-      }
-    } catch (e) {
-      console.error("Favoriler yüklenirken hata:", e);
-    }
+    const load = () => {
+      setFavoriteServices(getFavoriteServices());
+      setFavoriteCountries(getFavoriteCountries());
+    };
+    load();
+    window.addEventListener(FAVORITES_CHANGE_EVENT, load);
+    return () => window.removeEventListener(FAVORITES_CHANGE_EVENT, load);
   }, []);
 
   // Servis favori toggle
@@ -1059,14 +1055,6 @@ export function RentPanel({
               <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
               <span>
                 15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 iade alabilirsiniz.
-              </span>
-            </div>
-
-            {/* Yasal Uyarı & Kullanım Şartları */}
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10.5px] text-amber-200/90 flex items-start gap-2 leading-relaxed">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-              <span>
-                Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
               </span>
             </div>
 

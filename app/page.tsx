@@ -563,14 +563,6 @@ function HomeContent() {
               <p>
                 SMS onay kodunuz gelmediği takdirde tek tıkla iptal edip bakiyenizi anında iade alabilirsiniz.
               </p>
-
-              {/* Yasal Uyarı & Kullanım Şartları */}
-              <div className="p-2.5 rounded-xl bg-card/60 border border-border text-[10.5px] text-muted-foreground leading-relaxed text-left flex items-start gap-2">
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-foreground/80">Yasal Bilgilendirme:</strong> Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
-                </span>
-              </div>
             </div>
           </>
         )}
@@ -607,7 +599,16 @@ function HomeContent() {
       />
 
       {/* Profil & İşlem Geçmişi */}
-      <ProfileSheet isOpen={profileOpen} onClose={() => setProfileOpen(false)} initData={initData} />
+      <ProfileSheet
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        initData={initData}
+        services={services}
+        countries={countries}
+        onOpenDeposit={() => setDepositModalOpen(true)}
+        onOpenCoupon={() => setCouponModalOpen(true)}
+        onOpenSupport={() => setSupportModalOpen(true)}
+      />
 
       {/* Destek & Ticket Modalı */}
       <SupportModal

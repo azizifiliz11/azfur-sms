@@ -44,12 +44,16 @@ export async function GET(req: NextRequest) {
 
       // Telegram Botuna Anlık Bildirim Gönder (Kullanıcı mini appi kapatsa dahi bildirim alsın)
       if (updated && !updated.notifiedBot) {
-        await sendTelegramSmsNotification(
-          updated.telegramId,
-          updated.serviceName,
-          updated.phoneNumber,
-          code
-        );
+        // Profil ayarlarından "SMS gelince bot mesajı" kapatılmışsa gönderme
+        const prefs = await db.getUserPreferences(updated.telegramId);
+        if (prefs.notifySms) {
+          await sendTelegramSmsNotification(
+            updated.telegramId,
+            updated.serviceName,
+            updated.phoneNumber,
+            code
+          );
+        }
         await db.updateActivation(id, { notifiedBot: true });
       }
 

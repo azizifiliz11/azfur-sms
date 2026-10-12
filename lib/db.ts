@@ -239,6 +239,36 @@ async function saveActivationToSql(a: ActivationOrder): Promise<void> {
   }
 }
 
+export interface UserPreferences {
+  notifySms: boolean;
+  notifyAnnouncements: boolean;
+}
+
+const DEFAULT_PREFERENCES: UserPreferences = { notifySms: true, notifyAnnouncements: true };
+// SQL yoksa (yerel geliştirme) tercihler örnek belleğinde tutulur
+const memoryPreferences = new Map<number, UserPreferences>();
+let preferencesTableReady: Promise<void> | null = null;
+
+/** Bildirim tercihleri ayrı tabloda tutulur; users tablosu ve yedek/geri yükleme dökümleri değişmez. */
+function ensurePreferencesTable(sql: NonNullable<ReturnType<typeof getSql>>): Promise<void> {
+  if (!preferencesTableReady) {
+    preferencesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          telegram_id BIGINT PRIMARY KEY,
+          notify_sms BOOLEAN NOT NULL DEFAULT true,
+          notify_announcements BOOLEAN NOT NULL DEFAULT true,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+    })().catch((err) => {
+      preferencesTableReady = null;
+      throw err;
+    });
+  }
+  return preferencesTableReady;
+}
+
 function parseActivationRow(a: any): ActivationOrder {
   return {
     id: a.id,
@@ -1820,22 +1850,46 @@ export const db = {
   async getUserHistory(
     telegramId: number,
     limit = 50
-  ): Promise<{ orders: ActivationOrder[]; deposits: DepositRequest[]; totalDeposited: number; orderCount: number }> {
+  ): Promise<{
+    orders: ActivationOrder[];
+    deposits: DepositRequest[];
+    tickets: Ticket[];
+    totalDeposited: number;
+    orderCount: number;
+    statusCounts: Record<string, number>;
+    topService: { name: string; count: number } | null;
+  }> {
     const sql = getSql();
     if (sql) {
       try {
         const tgId = BigInt(telegramId);
-        const [orderRows, depositRows, totalRows, countRows] = (await Promise.all([
+        const [orderRows, depositRows, totalRows, statusRows, topRows, ticketRows] = (await Promise.all([
           sql`SELECT * FROM activations WHERE telegram_id = ${tgId} ORDER BY created_at DESC LIMIT ${limit}`,
           sql`SELECT * FROM deposits WHERE telegram_id = ${tgId} ORDER BY created_at DESC LIMIT ${limit}`,
           sql`SELECT COALESCE(SUM(amount), 0) AS total FROM deposits WHERE telegram_id = ${tgId} AND status = 'APPROVED'`,
-          sql`SELECT COUNT(*) AS count FROM activations WHERE telegram_id = ${tgId}`,
+          sql`SELECT status, COUNT(*) AS count FROM activations WHERE telegram_id = ${tgId} GROUP BY status`,
+          sql`SELECT COALESCE(NULLIF(service_name, ''), service_code) AS name, COUNT(*) AS count FROM activations WHERE telegram_id = ${tgId} GROUP BY 1 ORDER BY count DESC LIMIT 1`,
+          sql`SELECT * FROM tickets WHERE telegram_id = ${tgId} ORDER BY updated_at DESC LIMIT 20`,
         ])) as any[];
+        const statusCounts: Record<string, number> = {};
+        for (const r of statusRows) statusCounts[r.status] = Number(r.count) || 0;
         return {
           orders: orderRows.map(parseActivationRow),
           deposits: depositRows.map(parseDepositRow),
+          tickets: ticketRows.map((t: any) => ({
+            id: t.id,
+            telegramId: Number(t.telegram_id),
+            subject: t.subject || "Destek Talebi",
+            category: (t.category as any) || "GENERAL",
+            status: t.status || "OPEN",
+            messages: Array.isArray(t.messages) ? t.messages : typeof t.messages === "string" ? JSON.parse(t.messages) : [],
+            createdAt: t.created_at ? new Date(t.created_at).toISOString() : new Date().toISOString(),
+            updatedAt: t.updated_at ? new Date(t.updated_at).toISOString() : new Date().toISOString(),
+          })),
           totalDeposited: Number(Number(totalRows[0]?.total || 0).toFixed(2)),
-          orderCount: Number(countRows[0]?.count || 0),
+          orderCount: Object.values(statusCounts).reduce((a, b) => a + b, 0),
+          statusCounts,
+          topService: topRows[0] ? { name: String(topRows[0].name), count: Number(topRows[0].count) } : null,
         };
       } catch (err) {
         console.error("[PostgreSQL getUserHistory Error]:", err);
@@ -1848,14 +1902,76 @@ export const db = {
       .filter((a) => Number(a.telegramId) === Number(telegramId))
       .sort((a, b) => b.createdAt - a.createdAt);
     const deposits = (data.deposits || []).filter((d) => Number(d.telegramId) === Number(telegramId));
+    const statusCounts: Record<string, number> = {};
+    const serviceCounts: Record<string, number> = {};
+    for (const o of orders) {
+      statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+      const name = o.serviceName || o.serviceCode;
+      serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+    }
+    const top = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1])[0];
     return {
       orders: orders.slice(0, limit),
       deposits: deposits.slice(0, limit),
+      tickets: this.getUserTickets(telegramId).slice(0, 20),
+      statusCounts,
+      topService: top ? { name: top[0], count: top[1] } : null,
       totalDeposited: Number(
         deposits.filter((d) => d.status === "APPROVED").reduce((sum, d) => sum + d.amount, 0).toFixed(2)
       ),
       orderCount: orders.length,
     };
+  },
+
+  async getUserPreferences(telegramId: number): Promise<UserPreferences> {
+    const sql = getSql();
+    if (!sql) return memoryPreferences.get(Number(telegramId)) || { ...DEFAULT_PREFERENCES };
+    try {
+      await ensurePreferencesTable(sql);
+      const rows = (await sql`
+        SELECT notify_sms, notify_announcements FROM user_preferences WHERE telegram_id = ${BigInt(telegramId)}
+      `) as any[];
+      if (rows.length === 0) return { ...DEFAULT_PREFERENCES };
+      return { notifySms: Boolean(rows[0].notify_sms), notifyAnnouncements: Boolean(rows[0].notify_announcements) };
+    } catch (err) {
+      console.error("[PostgreSQL getUserPreferences Error]:", err);
+      return { ...DEFAULT_PREFERENCES };
+    }
+  },
+
+  async setUserPreferences(telegramId: number, partial: Partial<UserPreferences>): Promise<UserPreferences> {
+    const next = { ...(await this.getUserPreferences(telegramId)), ...partial };
+    const sql = getSql();
+    if (!sql) {
+      memoryPreferences.set(Number(telegramId), next);
+      return next;
+    }
+    await ensurePreferencesTable(sql);
+    await sql`
+      INSERT INTO user_preferences (telegram_id, notify_sms, notify_announcements, updated_at)
+      VALUES (${BigInt(telegramId)}, ${next.notifySms}, ${next.notifyAnnouncements}, NOW())
+      ON CONFLICT (telegram_id) DO UPDATE SET
+        notify_sms = EXCLUDED.notify_sms,
+        notify_announcements = EXCLUDED.notify_announcements,
+        updated_at = NOW()
+    `;
+    return next;
+  },
+
+  /** Duyuru almak istemeyen kullanıcıların Telegram ID'leri (toplu duyuruda atlanır). */
+  async getAnnouncementOptOutIds(): Promise<Set<number>> {
+    const sql = getSql();
+    if (!sql) {
+      return new Set([...memoryPreferences].filter(([, p]) => !p.notifyAnnouncements).map(([id]) => id));
+    }
+    try {
+      await ensurePreferencesTable(sql);
+      const rows = (await sql`SELECT telegram_id FROM user_preferences WHERE notify_announcements = false`) as any[];
+      return new Set(rows.map((r) => Number(r.telegram_id)));
+    } catch (err) {
+      console.error("[PostgreSQL getAnnouncementOptOutIds Error]:", err);
+      return new Set();
+    }
   },
 
   getActiveOrders(telegramId?: number | string): ActivationOrder[] {

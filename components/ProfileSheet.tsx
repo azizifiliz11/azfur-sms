@@ -1,14 +1,52 @@
 "use client";
 
 import React from "react";
-import { X, UserRound, Wallet, Smartphone, Loader2, RefreshCw, CalendarDays, Sparkles, Inbox } from "lucide-react";
+import {
+  X,
+  UserRound,
+  Wallet,
+  Smartphone,
+  Loader2,
+  RefreshCw,
+  CalendarDays,
+  Sparkles,
+  Inbox,
+  Ticket,
+  Star,
+  Headphones,
+  BellRing,
+  Megaphone,
+  Languages,
+  FileText,
+  ShieldCheck,
+  ChevronDown,
+  Crown,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { Badge } from "./tremor/Badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { RollingNumber } from "@/components/ui/rolling-number";
 import { DirectionAwareTabs } from "@/components/ui/direction-aware-tabs";
+import { HaloSwitch } from "@/components/ui/halo-switch";
+import { getThemePreference, setThemePreference, ThemePreference } from "@/lib/theme";
+import {
+  FAV_COUNTRIES_KEY,
+  FAV_SERVICES_KEY,
+  getFavoriteCountries,
+  getFavoriteServices,
+  saveFavorites,
+} from "@/lib/favorites";
+import { getCountryMeta } from "@/lib/country-flags";
+import type { Country, ServiceItem } from "@/lib/types";
 
-type Tab = "account" | "deposits" | "orders";
+type Tab = "account" | "deposits" | "orders" | "settings";
+
+interface Preferences {
+  notifySms: boolean;
+  notifyAnnouncements: boolean;
+}
 
 interface ProfileData {
   profile: {
@@ -21,9 +59,32 @@ interface ProfileData {
     spent: number;
     totalDeposited: number;
     orderCount: number;
-    isVip: boolean;
-    vipDiscountPercent: number;
   };
+  vip: {
+    isVip: boolean;
+    discountPercent: number;
+    since: string | null;
+    expiresAt: string | null;
+    autoVipThreshold: number | null;
+    autoVipDiscountPercent: number | null;
+  };
+  activeDiscount: { code: string; type: "DISCOUNT_PERCENT" | "DISCOUNT_FIXED"; value: number } | null;
+  stats: {
+    totalOrders: number;
+    succeeded: number;
+    cancelled: number;
+    timedOut: number;
+    successRate: number | null;
+    topService: { name: string; count: number } | null;
+  };
+  tickets: Array<{
+    id: string;
+    subject: string;
+    status: "OPEN" | "ANSWERED" | "CLOSED";
+    updatedAt: string;
+    lastMessage: { sender: "user" | "admin"; text: string } | null;
+  }>;
+  preferences: Preferences;
   deposits: Array<{ id: string; amount: number; method: string; status: "PENDING" | "APPROVED" | "REJECTED"; createdAt: string }>;
   orders: Array<{
     id: string;
@@ -42,6 +103,11 @@ interface ProfileSheetProps {
   isOpen: boolean;
   onClose: () => void;
   initData: string;
+  services?: ServiceItem[];
+  countries?: Country[];
+  onOpenDeposit?: () => void;
+  onOpenCoupon?: () => void;
+  onOpenSupport?: () => void;
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -63,7 +129,13 @@ const ORDER_STATUS: Record<string, { label: string; color: "emerald" | "amber" |
   RECEIVED: { label: "Kod alındı", color: "emerald" },
   WAIT_CODE: { label: "Kod bekleniyor", color: "amber" },
   CANCELLED: { label: "İptal · iade", color: "zinc" },
-  TIMEOUT: { label: "Süre doldu", color: "rose" },
+  TIMEOUT: { label: "Süre doldu · iade", color: "rose" },
+};
+
+const TICKET_STATUS: Record<string, { label: string; color: "emerald" | "amber" | "zinc" }> = {
+  OPEN: { label: "Açık", color: "amber" },
+  ANSWERED: { label: "Yanıtlandı", color: "emerald" },
+  CLOSED: { label: "Kapandı", color: "zinc" },
 };
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", {
@@ -82,7 +154,8 @@ const dayFmt = new Intl.DateTimeFormat("tr-TR", {
   year: "numeric",
 });
 
-function formatDate(value: string | number, withTime = true) {
+function formatDate(value: string | number | null | undefined, withTime = true) {
+  if (value === null || value === undefined || value === "") return "—";
   const d = new Date(value);
   if (isNaN(d.getTime())) return "—";
   return (withTime ? dateFmt : dayFmt).format(d);
@@ -92,18 +165,49 @@ const money = (n: number) => n.toFixed(2);
 
 function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-border px-4 py-10 text-center">
-      <Icon className="h-6 w-6 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-border px-4 py-8 text-center">
+      <Icon className="h-5 w-5 text-muted-foreground" />
       <p className="text-xs text-muted-foreground">{text}</p>
     </div>
   );
 }
 
-export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
+function Section({ title, icon: Icon, action, children }: { title: string; icon: React.ElementType; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl bg-background/70 p-4 ring-1 ring-foreground/10">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h4 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" /> {title}
+        </h4>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const pillButton =
+  "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors active:scale-95";
+
+export function ProfileSheet({
+  isOpen,
+  onClose,
+  initData,
+  services = [],
+  countries = [],
+  onOpenDeposit,
+  onOpenCoupon,
+  onOpenSupport,
+}: ProfileSheetProps) {
   const [tab, setTab] = React.useState<Tab>("account");
   const [data, setData] = React.useState<ProfileData | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [prefs, setPrefs] = React.useState<Preferences | null>(null);
+  const [prefsError, setPrefsError] = React.useState<string | null>(null);
+  const [themePref, setThemePref] = React.useState<ThemePreference>("system");
+  const [favServices, setFavServices] = React.useState<string[]>([]);
+  const [favCountries, setFavCountries] = React.useState<number[]>([]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -118,6 +222,7 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Profil yüklenemedi");
       setData(json);
+      setPrefs(json.preferences);
     } catch (e: any) {
       setError(e.message || "Profil yüklenemedi");
     } finally {
@@ -126,18 +231,69 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
   }, [initData]);
 
   React.useEffect(() => {
-    if (isOpen) load();
+    if (!isOpen) return;
+    load();
+    setThemePref(getThemePreference());
+    setFavServices(getFavoriteServices());
+    setFavCountries(getFavoriteCountries());
   }, [isOpen, load]);
+
+  const updatePref = async (key: keyof Preferences, value: boolean) => {
+    if (!prefs) return;
+    const previous = prefs;
+    setPrefs({ ...prefs, [key]: value });
+    setPrefsError(null);
+    try {
+      const res = await fetch("/api/user/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData, [key]: value }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Kaydedilemedi");
+      setPrefs(json.preferences);
+    } catch (e: any) {
+      setPrefs(previous);
+      setPrefsError(e.message || "Tercih kaydedilemedi");
+    }
+  };
+
+  const removeFavService = (code: string) => {
+    haptic.impact("light");
+    const next = favServices.filter((c) => c !== code);
+    setFavServices(next);
+    saveFavorites(FAV_SERVICES_KEY, next);
+  };
+
+  const removeFavCountry = (id: number) => {
+    haptic.impact("light");
+    const next = favCountries.filter((c) => c !== id);
+    setFavCountries(next);
+    saveFavorites(FAV_COUNTRIES_KEY, next);
+  };
+
+  const goTo = (action?: () => void) => {
+    if (!action) return;
+    haptic.impact("light");
+    onClose();
+    action();
+  };
 
   if (!isOpen) return null;
 
   const p = data?.profile;
   const fullName = p ? [p.firstName, p.lastName].filter(Boolean).join(" ") || "Kullanıcı" : "";
   const initials = (p?.firstName || p?.username || "AZ").slice(0, 2).toUpperCase();
+  const serviceName = (code: string) => services.find((s) => s.code === code)?.name || code.toUpperCase();
+  const countryLabel = (id: number) => {
+    const c = countries.find((x) => x.id === id);
+    const meta = getCountryMeta(id, c?.eng);
+    return { name: c?.nameTr || meta.nameTr || c?.eng || `Ülke #${id}`, flag: c?.flag || meta.flag || "🌐" };
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] flex flex-col max-h-[92vh] space-y-4">
+      <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] flex flex-col h-[88vh] sm:h-auto sm:max-h-[92vh] space-y-4">
         {/* Başlık */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -146,7 +302,7 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
             </div>
             <div className="leading-tight">
               <h3 className="text-base font-medium tracking-tight text-foreground">Profilim</h3>
-              <p className="text-[11px] text-muted-foreground">Hesap, bakiye ve işlem geçmişi</p>
+              <p className="text-[11px] text-muted-foreground">Hesap, geçmiş ve ayarlar</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -183,15 +339,117 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
             setTab(id);
           }}
           tabs={[
-            { id: "account", label: <><Wallet className="h-3.5 w-3.5" />Hesap</> },
-            { id: "deposits", label: <><RefreshCw className="h-3.5 w-3.5" />Yüklemeler</> },
-            { id: "orders", label: <><Smartphone className="h-3.5 w-3.5" />Numaralar</> },
+            { id: "account", label: "Hesap" },
+            { id: "deposits", label: "Ödemeler" },
+            { id: "orders", label: "Numaralar" },
+            { id: "settings", label: "Ayarlar" },
           ]}
-          tabClassName="px-1.5"
+          tabClassName="px-1"
         />
 
         <div className="-mx-1 flex-1 overflow-y-auto px-1 pb-1">
-          {loading && !data ? (
+          {tab === "settings" ? (
+            /* ---------------- AYARLAR (veri yüklenmeden de kullanılabilir) ---------------- */
+            <div className="space-y-3">
+              <Section title="Tema" icon={Sparkles}>
+                <DirectionAwareTabs
+                  value={themePref}
+                  onValueChange={(pref) => {
+                    haptic.selection();
+                    setThemePref(pref);
+                    setThemePreference(pref);
+                  }}
+                  tabs={[
+                    { id: "light", label: "Açık" },
+                    { id: "dark", label: "Koyu" },
+                    { id: "system", label: "Otomatik" },
+                  ]}
+                />
+                <p className="mt-2 text-[11px] text-muted-foreground">Otomatik: Telegram&apos;ın, yoksa cihazınızın temasını izler.</p>
+              </Section>
+
+              <Section title="Bildirimler" icon={BellRing}>
+                {prefs ? (
+                  <div className="divide-y divide-border">
+                    <label className="flex items-center justify-between gap-3 pb-3">
+                      <span>
+                        <span className="flex items-center gap-1.5 text-sm text-foreground">
+                          <Smartphone className="h-3.5 w-3.5" /> SMS kodu bildirimi
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">Kod geldiğinde bot size Telegram&apos;dan mesaj atar.</span>
+                      </span>
+                      <HaloSwitch
+                        aria-label="SMS kodu bildirimi"
+                        checked={prefs.notifySms}
+                        onCheckedChange={(v) => {
+                          haptic.selection();
+                          updatePref("notifySms", v);
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between gap-3 pt-3">
+                      <span>
+                        <span className="flex items-center gap-1.5 text-sm text-foreground">
+                          <Megaphone className="h-3.5 w-3.5" /> Kampanya ve duyurular
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">İndirim, yeni servis ve sistem duyuruları.</span>
+                      </span>
+                      <HaloSwitch
+                        aria-label="Kampanya ve duyurular"
+                        checked={prefs.notifyAnnouncements}
+                        onCheckedChange={(v) => {
+                          haptic.selection();
+                          updatePref("notifyAnnouncements", v);
+                        }}
+                      />
+                    </label>
+                    {prefsError && <p className="pt-2 text-[11px] text-rose-400">{prefsError}</p>}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {loading ? "Tercihler yükleniyor..." : error || "Tercihler yüklenemedi."}
+                  </p>
+                )}
+              </Section>
+
+              <Section title="Dil" icon={Languages}>
+                <div className="flex gap-2">
+                  <span className={`${pillButton} bg-foreground text-background`}>Türkçe</span>
+                  <span className={`${pillButton} cursor-not-allowed border border-border text-muted-foreground`} aria-disabled="true">
+                    English · yakında
+                  </span>
+                </div>
+              </Section>
+
+              <Section title="Yasal" icon={FileText}>
+                <div className="divide-y divide-border">
+                  <details className="group pb-2">
+                    <summary className="flex cursor-pointer list-none items-center justify-between py-1.5 text-sm text-foreground">
+                      Kullanım şartları
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="space-y-2 pt-1 text-[12px] leading-relaxed text-muted-foreground">
+                      <p>AzFur, SMS doğrulama kodu almak için tek kullanımlık sanal numara kiralama hizmeti sunar. Kiralanan numara 15 dakika boyunca geçerlidir.</p>
+                      <p>Numara ücreti sipariş anında bakiyenizden düşülür. Süre içinde SMS kodu gelmezse siparişi iptal edebilirsiniz; ücret bakiyenize eksiksiz iade edilir. 15 dakika dolduğunda kod gelmemiş siparişler otomatik olarak iade edilir.</p>
+                      <p>Bakiye yüklemeleri kripto para ile yapılır ve ödeme onaylandığında hesabınıza eklenir. Kupon ve promosyon kodları yalnızca kendi koşulları dahilinde geçerlidir.</p>
+                      <p>Numaraların stok ve fiyatları servis sağlayıcılara bağlıdır ve değişebilir. Sorularınız için destek merkezinden bize ulaşabilirsiniz.</p>
+                    </div>
+                  </details>
+                  <details className="group pt-2">
+                    <summary className="flex cursor-pointer list-none items-center justify-between py-1.5 text-sm text-foreground">
+                      Gizlilik
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="space-y-2 pt-1 text-[12px] leading-relaxed text-muted-foreground">
+                      <p>Telegram&apos;ın paylaştığı hesap bilgilerinizi (Telegram ID, ad, kullanıcı adı), bakiyenizi ve işlem geçmişinizi (kiralanan numaralar, gelen kodlar, ödemeler, destek talepleri) hizmeti sunabilmek için saklarız.</p>
+                      <p>Kripto ödemeleri ödeme sağlayıcısı üzerinden alınır; kart veya banka bilgisi tutulmaz. Numara kiralama için sipariş bilgileri SMS servis sağlayıcısına iletilir.</p>
+                      <p>Bildirim tercihlerinizi bu ekrandan değiştirebilirsiniz. Verilerinizin silinmesini destek merkezinden talep edebilirsiniz.</p>
+                    </div>
+                  </details>
+                </div>
+              </Section>
+            </div>
+          ) : loading && !data ? (
             <div className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Profil yükleniyor...
             </div>
@@ -206,7 +464,7 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
                 Tekrar dene
               </button>
             </div>
-          ) : p ? (
+          ) : p && data ? (
             <>
               {tab === "account" && (
                 <div className="space-y-3">
@@ -219,9 +477,9 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <h4 className="truncate text-lg font-normal tracking-tight text-foreground">{fullName}</h4>
-                          {p.isVip && (
+                          {data.vip.isVip && (
                             <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-secondary px-1.5 text-[10px] font-medium text-foreground dark:text-background">
-                              <Sparkles className="h-3 w-3" /> VIP{p.vipDiscountPercent ? ` %${p.vipDiscountPercent}` : ""}
+                              <Sparkles className="h-3 w-3" /> VIP
                             </span>
                           )}
                         </div>
@@ -248,6 +506,72 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
                     </div>
                   </section>
 
+                  {/* VIP durumu */}
+                  {(data.vip.isVip || data.vip.autoVipThreshold) && (
+                    <Section title="VIP durumu" icon={Crown}>
+                      {data.vip.isVip ? (
+                        <div className="space-y-2.5">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-normal tracking-tighter text-brand">%{data.vip.discountPercent}</span>
+                            <span className="text-xs text-muted-foreground">indirim tüm numara alımlarında</span>
+                          </div>
+                          <div className="divide-y divide-border rounded-2xl border border-border text-xs">
+                            <div className="flex justify-between px-3.5 py-2">
+                              <span className="text-muted-foreground">VIP başlangıcı</span>
+                              <span className="text-foreground">{formatDate(data.vip.since, false)}</span>
+                            </div>
+                            <div className="flex justify-between px-3.5 py-2">
+                              <span className="text-muted-foreground">Bitiş</span>
+                              <span className="text-foreground">{data.vip.expiresAt ? formatDate(data.vip.expiresAt, false) : "Süresiz"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-sm leading-relaxed text-foreground">
+                            Tek seferde <span className="font-medium text-brand">₺{money(data.vip.autoVipThreshold || 0)}</span> veya üzeri yükleme
+                            yaparsanız otomatik VIP olur, tüm numaralarda{" "}
+                            <span className="font-medium text-brand">%{data.vip.autoVipDiscountPercent}</span> indirim kazanırsınız.
+                          </p>
+                          {onOpenDeposit && (
+                            <button type="button" onClick={() => goTo(onOpenDeposit)} className={`${pillButton} bg-foreground text-background hover:bg-foreground/85`}>
+                              <Plus className="h-3.5 w-3.5" /> ₺{money(data.vip.autoVipThreshold || 0)} yükle, VIP ol
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </Section>
+                  )}
+
+                  {/* Aktif indirim */}
+                  <Section
+                    title="Aktif indirim"
+                    icon={Ticket}
+                    action={
+                      onOpenCoupon && (
+                        <button type="button" onClick={() => goTo(onOpenCoupon)} className={`${pillButton} border border-border text-foreground hover:bg-muted`}>
+                          Kupon kullan
+                        </button>
+                      )
+                    }
+                  >
+                    {data.activeDiscount ? (
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-brand/40 bg-brand/10 px-3.5 py-2.5">
+                        <div className="min-w-0">
+                          <p className="font-mono text-sm font-medium tracking-wider text-brand">{data.activeDiscount.code}</p>
+                          <p className="text-[11px] text-muted-foreground">Bir sonraki numara alımınızda otomatik uygulanır.</p>
+                        </div>
+                        <span className="shrink-0 text-lg font-normal tracking-tight text-brand">
+                          {data.activeDiscount.type === "DISCOUNT_PERCENT"
+                            ? `%${data.activeDiscount.value}`
+                            : `₺${money(Number(data.activeDiscount.value))}`}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Aktif indirim kuponunuz yok. İndirim kodu kullandığınızda burada görünür.</p>
+                    )}
+                  </Section>
+
                   {/* Bakiye özeti */}
                   <section className="rounded-3xl bg-background/70 p-4 ring-1 ring-foreground/10">
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -256,7 +580,7 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
                     <div className="mt-1 text-4xl font-normal leading-none tracking-tighter text-foreground">
                       ₺<RollingNumber value={p.balance} precision={2} format={money} />
                     </div>
-                    <div className="mt-4 grid grid-cols-3 border-l border-t border-border text-center">
+                    <div className="mt-4 grid grid-cols-2 border-l border-t border-border text-center">
                       <div className="border-b border-r border-border px-1 py-2.5">
                         <span className="block font-mono text-[13px] font-medium text-foreground">₺{money(p.totalDeposited)}</span>
                         <span className="block text-[10px] text-muted-foreground">toplam yükleme</span>
@@ -265,15 +589,130 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
                         <span className="block font-mono text-[13px] font-medium text-foreground">₺{money(p.spent)}</span>
                         <span className="block text-[10px] text-muted-foreground">toplam harcama</span>
                       </div>
-                      <div className="border-b border-r border-border px-1 py-2.5">
-                        <span className="block font-mono text-[13px] font-medium text-foreground">{p.orderCount}</span>
-                        <span className="block text-[10px] text-muted-foreground">numara</span>
-                      </div>
                     </div>
                     <p className="mt-2.5 text-[10px] leading-relaxed text-muted-foreground">
                       Toplam yükleme, onaylanan ödemelerinizi kapsar; hediye bakiye kuponları dahil değildir.
                     </p>
                   </section>
+
+                  {/* İstatistikler */}
+                  <Section title="İstatistikler" icon={TrendingUp}>
+                    <div className="grid grid-cols-3 border-l border-t border-border text-center">
+                      <div className="border-b border-r border-border px-1 py-2.5">
+                        <span className="block text-xl font-normal tracking-tight text-foreground">{data.stats.totalOrders}</span>
+                        <span className="block text-[10px] text-muted-foreground">sipariş</span>
+                      </div>
+                      <div className="border-b border-r border-border px-1 py-2.5">
+                        <span className="block text-xl font-normal tracking-tight text-foreground">
+                          {data.stats.successRate === null ? "—" : `%${data.stats.successRate}`}
+                        </span>
+                        <span className="block text-[10px] text-muted-foreground">başarı oranı</span>
+                      </div>
+                      <div className="border-b border-r border-border px-1 py-2.5">
+                        <span className="block truncate px-1 text-sm font-medium leading-7 text-foreground">
+                          {data.stats.topService?.name || "—"}
+                        </span>
+                        <span className="block text-[10px] text-muted-foreground">
+                          {data.stats.topService ? `en çok · ${data.stats.topService.count} kez` : "en çok kullanılan"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Başarı oranı, kodu gelen siparişlerin sonuçlanan tüm siparişlere oranıdır ({data.stats.succeeded} başarılı,{" "}
+                      {data.stats.cancelled} iptal, {data.stats.timedOut} süre doldu).
+                    </p>
+                  </Section>
+
+                  {/* Favoriler */}
+                  <Section title="Favorilerim" icon={Star}>
+                    {favServices.length === 0 && favCountries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Kiralama panelinde ☆ simgesiyle servis ve ülkeleri favorilere ekleyebilirsiniz.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {favServices.length > 0 && (
+                          <div>
+                            <p className="mb-1.5 text-[11px] text-muted-foreground">Servisler</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {favServices.map((code) => (
+                                <span key={code} className="inline-flex h-8 items-center gap-1 rounded-full border border-border pl-3 pr-1 text-xs text-foreground">
+                                  {serviceName(code)}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFavService(code)}
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    aria-label={`${serviceName(code)} favorilerden kaldır`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {favCountries.length > 0 && (
+                          <div>
+                            <p className="mb-1.5 text-[11px] text-muted-foreground">Ülkeler</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {favCountries.map((id) => {
+                                const c = countryLabel(id);
+                                return (
+                                  <span key={id} className="inline-flex h-8 items-center gap-1 rounded-full border border-border pl-2.5 pr-1 text-xs text-foreground">
+                                    <span>{c.flag}</span> {c.name}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeFavCountry(id)}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                                      aria-label={`${c.name} favorilerden kaldır`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Section>
+
+                  {/* Destek talepleri */}
+                  <Section
+                    title="Destek taleplerim"
+                    icon={Headphones}
+                    action={
+                      onOpenSupport && (
+                        <button type="button" onClick={() => goTo(onOpenSupport)} className={`${pillButton} border border-border text-foreground hover:bg-muted`}>
+                          Destek merkezi
+                        </button>
+                      )
+                    }
+                  >
+                    {data.tickets.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Henüz destek talebiniz yok.</p>
+                    ) : (
+                      <ul className="divide-y divide-border">
+                        {data.tickets.map((t) => {
+                          const st = TICKET_STATUS[t.status] || TICKET_STATUS.OPEN;
+                          return (
+                            <li key={t.id} className="py-2.5 first:pt-0 last:pb-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 truncate text-sm text-foreground">{t.subject}</p>
+                                <Badge color={st.color} size="sm">{st.label}</Badge>
+                              </div>
+                              {t.lastMessage && (
+                                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                                  <span className="text-foreground/80">{t.lastMessage.sender === "admin" ? "Destek: " : "Siz: "}</span>
+                                  {t.lastMessage.text}
+                                </p>
+                              )}
+                              <p className="mt-0.5 text-[10px] text-muted-foreground/80">{formatDate(t.updatedAt)}</p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </Section>
                 </div>
               )}
 
@@ -355,6 +794,12 @@ export function ProfileSheet({ isOpen, onClose, initData }: ProfileSheetProps) {
             </>
           ) : null}
         </div>
+
+        {tab === "account" && data && !error && (
+          <p className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+            <ShieldCheck className="h-3 w-3" /> Bu bilgiler yalnızca size gösterilir.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Moon, Sun } from "lucide-react";
-import { applyTheme, getCurrentTheme, getStoredTheme, ThemeMode } from "@/lib/theme";
+import { applyTheme, getCurrentTheme, getStoredTheme, setThemePreference, THEME_CHANGE_EVENT, ThemeMode } from "@/lib/theme";
 import { haptic } from "@/lib/haptic";
 
 // Axis şablonundaki ThemeToggle'ın görünümü
@@ -13,6 +13,11 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     const initial = getStoredTheme() ?? getCurrentTheme();
     applyTheme(initial);
     setMode(initial);
+
+    // Profil > Ayarlar'dan tema değişirse anahtarı güncelle
+    const sync = () => setMode(getCurrentTheme());
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
   }, []);
 
   if (!mode) {
@@ -27,7 +32,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       onClick={() => {
         haptic.selection();
         const next: ThemeMode = isDark ? "light" : "dark";
-        applyTheme(next, true);
+        setThemePreference(next);
         setMode(next);
       }}
       aria-label={isDark ? "Açık temaya geç" : "Koyu temaya geç"}

@@ -32,11 +32,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Hesabınız askıya alınmıştır." }, { status: 403 });
     }
 
-    const history = await db.getUserHistory(tgUser.id);
+    const [history, preferences] = await Promise.all([
+      db.getUserHistory(tgUser.id),
+      db.getUserPreferences(tgUser.id),
+    ]);
+
+    // İstatistikler: başarı oranı yalnızca sonuçlanmış siparişler üzerinden (kod bekleyenler hariç)
+    const sc = history.statusCounts;
+    const succeeded = (sc.COMPLETED || 0) + (sc.RECEIVED || 0);
+    const finished = history.orderCount - (sc.WAIT_CODE || 0);
+
+    // Otomatik VIP: tek seferde eşik ve üzeri yükleme yapan kullanıcı VIP olur (db.updateDepositStatus)
+    const vipCfg = db.getSettings().vipSettings;
+    const autoVipThreshold =
+      vipCfg?.enabled && vipCfg.autoVipOnDepositAmount ? Number(vipCfg.autoVipOnDepositAmount) : null;
 
     return NextResponse.json(
       {
         success: true,
+        vip: {
+          isVip: Boolean(user.isVip),
+          discountPercent: user.vipDiscountPercent || 0,
+          since: user.vipSince || null,
+          expiresAt: user.vipExpiresAt || null,
+          autoVipThreshold,
+          autoVipDiscountPercent: autoVipThreshold ? vipCfg?.defaultDiscountPercent || 15 : null,
+        },
+        activeDiscount: user.activeDiscount || null,
+        stats: {
+          totalOrders: history.orderCount,
+          succeeded,
+          cancelled: sc.CANCELLED || 0,
+          timedOut: sc.TIMEOUT || 0,
+          successRate: finished > 0 ? Math.round((succeeded / finished) * 100) : null,
+          topService: history.topService,
+        },
+        tickets: history.tickets.map((t) => {
+          const last = t.messages[t.messages.length - 1];
+          return {
+            id: t.id,
+            subject: t.subject,
+            status: t.status,
+            updatedAt: t.updatedAt,
+            lastMessage: last ? { sender: last.sender, text: String(last.text || "").slice(0, 160) } : null,
+          };
+        }),
+        preferences,
         profile: {
           telegramId: user.telegramId,
           firstName: user.firstName,

@@ -53,9 +53,16 @@ export async function POST(req: NextRequest) {
 
       let sentCount = 0;
       let failedCount = 0;
+      let skippedCount = 0;
+      // Profil ayarlarından duyuruları kapatan kullanıcılar atlanır
+      const optOutIds = await db.getAnnouncementOptOutIds();
 
       for (const u of users) {
         if (!u.telegramId) continue;
+        if (optOutIds.has(Number(u.telegramId))) {
+          skippedCount++;
+          continue;
+        }
         try {
           const res = await sendTelegramDirectMessage(u.telegramId, cleanMessage, "HTML");
           if (res.ok) {
@@ -72,15 +79,16 @@ export async function POST(req: NextRequest) {
         category: "ADMIN",
         level: "INFO",
         action: "BROADCAST_ALL_SENT",
-        details: `Tüm kullanıcılara toplu duyuru gönderildi (${sentCount} başarılı, ${failedCount} başarısız).`,
-        metadata: { sentCount, failedCount, totalUsers: users.length, messagePreview: cleanMessage.slice(0, 100) },
+        details: `Tüm kullanıcılara toplu duyuru gönderildi (${sentCount} başarılı, ${failedCount} başarısız, ${skippedCount} duyuruları kapatmış).`,
+        metadata: { sentCount, failedCount, skippedCount, totalUsers: users.length, messagePreview: cleanMessage.slice(0, 100) },
       }).catch(() => {});
 
       return NextResponse.json({
         success: true,
-        message: `Duyuru tamamlandı: ${sentCount} kullanıcıya iletildi${failedCount > 0 ? `, ${failedCount} kullanıcıya iletilemedi` : ""}.`,
+        message: `Duyuru tamamlandı: ${sentCount} kullanıcıya iletildi${failedCount > 0 ? `, ${failedCount} kullanıcıya iletilemedi` : ""}${skippedCount > 0 ? `, ${skippedCount} kullanıcı duyuruları kapattığı için atlandı` : ""}.`,
         sentCount,
         failedCount,
+        skippedCount,
         totalUsers: users.length,
       });
     }

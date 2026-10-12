@@ -1323,10 +1323,24 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
+        // Ücret numara alınmadan ÖNCE atomik düşülür (eşzamanlı satın almalarla eksi bakiye olmaz)
+        const debited = await db.tryDebitBalance(from.id, finalPriceTry);
+        if (!debited) {
+          const currentBalance = db.getUser(from.id)?.balance ?? user.balance;
+          await editOrReply(
+            ctx,
+            `⚠️ <b>Yetersiz Bakiye!</b>\nMevcut bakiyeniz: <code>${currentBalance.toFixed(2)} ₺</code>\nGereken: <code>${finalPriceTry.toFixed(2)} ₺</code>`,
+            new InlineKeyboard().text("💳 Bakiye Yükle", "btn_deposit_menu").row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+
         // Hero-SMS API'den numara çek
         const numberResult = await heroSms.getNumber(serviceCode, countryId);
 
         if (!numberResult.success || !numberResult.id || !numberResult.number) {
+          // Numara alınamadı: düşülen ücreti geri ver
+          await db.revertDebit(from.id, finalPriceTry);
           const errMsg =
             numberResult.error === "NO_NUMBERS"
               ? "Bu ülke ve servis için anlık stok tükenmiş. Lütfen başka bir ülke deneyiniz."
@@ -1340,8 +1354,7 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
-        // Bakiye düş
-        await db.updateUserBalance(from.id, -finalPriceTry);
+        // Bakiye yukarıda atomik olarak düşüldü
 
         // Siparişi kaydet
         const now = Date.now();

@@ -135,7 +135,13 @@ function getSql() {
   return sqlClient;
 }
 
-async function saveUserToSql(u: User): Promise<void> {
+/**
+ * Kullanıcı satırını yazar. Mevcut satırda bakiye ve harcama VARSAYILAN OLARAK KORUNUR: bellekteki
+ * kopya başka bir sunucusuz örneğin yaptığı bakiye değişikliğinden (ödeme onayı, iade) habersiz
+ * olabilir ve tam yazım onu ezerdi. Bakiye yalnızca atomik SQL işlemleriyle (tryDebitBalance,
+ * incrementUserBalance, updateUserBalance) ya da bilinçli ayarlamada (includeBalance) değişir.
+ */
+async function saveUserToSql(u: User, opts: { includeBalance?: boolean } = {}): Promise<void> {
   const sql = getSql();
   if (!sql) return;
   try {
@@ -168,8 +174,8 @@ async function saveUserToSql(u: User): Promise<void> {
         username = EXCLUDED.username,
         first_name = EXCLUDED.first_name,
         last_name = EXCLUDED.last_name,
-        balance = EXCLUDED.balance,
-        spent = EXCLUDED.spent,
+        balance = CASE WHEN ${Boolean(opts.includeBalance)} THEN EXCLUDED.balance ELSE users.balance END,
+        spent = CASE WHEN ${Boolean(opts.includeBalance)} THEN EXCLUDED.spent ELSE users.spent END,
         role = EXCLUDED.role,
         is_banned = EXCLUDED.is_banned,
         is_vip = EXCLUDED.is_vip,
@@ -1584,8 +1590,34 @@ export const db = {
       user.spent = Number(((user.spent || 0) + Math.abs(delta)).toFixed(2));
     }
     user.lastActiveAt = new Date().toISOString();
+
+    const sql = getSql();
+    if (sql && foundKey) {
+      // Mevcut kullanıcı: profil alanlarını yaz (bakiyeye dokunmadan), bakiyeyi atomik değiştir
+      await saveUserToSql(user);
+      try {
+        const spentDelta = delta < 0 ? Math.abs(delta) : 0;
+        const rows = (await sql`
+          UPDATE users
+          SET balance = GREATEST(balance + ${Number(delta)}, 0),
+              spent = COALESCE(spent, 0) + ${spentDelta}
+          WHERE telegram_id = ${BigInt(cleanId)}
+          RETURNING balance, spent
+        `) as any[];
+        if (rows.length > 0) {
+          user.balance = Number(Number(rows[0].balance).toFixed(2));
+          user.spent = Number(Number(rows[0].spent).toFixed(2));
+        }
+      } catch (err) {
+        console.error("[PostgreSQL updateUserBalance Error]:", err);
+      }
+      await saveDb(data, true);
+      return user;
+    }
+
     await saveDb(data, true);
-    await saveUserToSql(user);
+    // Yeni kullanıcı (veya SQL yok): satır ilk kez yazılır, bakiye dahil
+    await saveUserToSql(user, { includeBalance: true });
     return user;
   },
 
@@ -1643,7 +1675,8 @@ export const db = {
 
     user.lastActiveAt = new Date().toISOString();
     await saveDb(data, true);
-    await saveUserToSql(user);
+    // Yönetici bakiyeyi bilinçli olarak belirli bir değere ayarlıyor
+    await saveUserToSql(user, { includeBalance: true });
     return user;
   },
 
@@ -2676,7 +2709,7 @@ export const db = {
       await saveDb(data);
       await Promise.allSettled([
         claimedInSql ? Promise.resolve() : saveCouponToSql(coupon),
-        credited ? Promise.resolve() : saveUserToSql(user),
+        credited ? Promise.resolve() : saveUserToSql(user, { includeBalance: true }),
       ]);
 
       this.addLog({

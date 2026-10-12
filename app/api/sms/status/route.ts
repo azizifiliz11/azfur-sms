@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { heroSms } from "@/lib/hero-sms";
 import { db } from "@/lib/db";
 import { sendTelegramSmsNotification } from "@/lib/telegram-bot";
+import { refundUnfulfilledOrder } from "@/lib/orders";
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,11 +21,13 @@ export async function GET(req: NextRequest) {
 
     // Süre dolmuş mu?
     if (Date.now() > order.expiresAt && order.status === "WAIT_CODE") {
-      // Otomatik süre dolumu ve iade
-      await db.updateUserBalance(order.telegramId, order.chargedPrice);
-      const updated = await db.updateActivation(id, { status: "TIMEOUT" });
-      await heroSms.setStatus(id, 8);
-      return NextResponse.json({ success: true, order: updated, message: "Süre doldu, ücret iade edildi" });
+      // Otomatik süre dolumu ve iade (atomik: eşzamanlı yoklamalarda tek iade)
+      const updated = await refundUnfulfilledOrder(order, "TIMEOUT");
+      return NextResponse.json({
+        success: true,
+        order: updated || db.getActivation(id),
+        message: "Süre doldu, ücret iade edildi",
+      });
     }
 
     // Zaten kod alınmış veya iptal edilmişse doğrudan döndür
@@ -65,9 +68,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (statusResult.status === "CANCELLED") {
-      await db.updateUserBalance(order.telegramId, order.chargedPrice);
-      const updated = await db.updateActivation(id, { status: "CANCELLED" });
-      return NextResponse.json({ success: true, order: updated, message: "Aktivasyon iptal edildi" });
+      const updated = await refundUnfulfilledOrder(order, "CANCELLED");
+      return NextResponse.json({ success: true, order: updated || db.getActivation(id), message: "Aktivasyon iptal edildi" });
     }
 
     return NextResponse.json({ success: true, order });

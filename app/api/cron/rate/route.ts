@@ -19,6 +19,10 @@ export async function GET(req: NextRequest) {
     // Zamanı gelmişse otomatik veritabanı yedeğini de al
     await db.checkAndRunAutoBackup().catch((e) => console.error("Cron rate auto backup error:", e));
 
+    // Bekleyen kripto ödemelerini sağlayıcıdan kontrol et (webhook kaçırıldıysa)
+    const { reconcilePendingCryptoDeposits } = await import("@/lib/deposit-confirm");
+    await reconcilePendingCryptoDeposits().catch((e) => console.error("Cron deposit reconcile error:", e));
+
     const settings = db.getSettings();
 
     if (settings.useTcmbAutoRate === false) {

@@ -68,7 +68,12 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
       const res = await fetch("/api/sms/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activationId: id, telegramId }),
+        body: JSON.stringify({
+          activationId: id,
+          telegramId,
+          // Telegram imzalı oturum: sunucu iptal isteğinin sipariş sahibinden geldiğini doğrular
+          initData: (window as any).Telegram?.WebApp?.initData || "",
+        }),
       });
       const data = await res.json();
       if (data.success) {

@@ -1,41 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { heroSms } from "@/lib/hero-sms";
-import { db } from "@/lib/db";
+import { CONFIG } from "@/lib/config";
+import { verifyTelegramInitData } from "@/lib/telegram-auth";
+import { cancelOrderWithRefund } from "@/lib/orders";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * POST /api/sms/cancel
+ * Kod beklenen siparişi iptal eder; ücret siparişin sahibine bir kez iade edilir (lib/orders.ts).
+ */
 export async function POST(req: NextRequest) {
   try {
-    const { activationId, telegramId } = await req.json();
+    const { activationId, telegramId, initData } = await req.json();
 
     if (!activationId || !telegramId) {
       return NextResponse.json({ success: false, error: "Eksik parametreler" }, { status: 400 });
     }
 
-    await db.syncFromCloud();
-    const order = db.getActivation(activationId);
-    if (!order) {
-      return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
+    // Mini App Telegram imzalı oturum bilgisini gönderir; varsa kimlik onunla doğrulanır
+    let requesterId = Number(telegramId);
+    if (initData) {
+      const verified = verifyTelegramInitData(String(initData), CONFIG.TELEGRAM_BOT_TOKEN);
+      if (!verified || verified.id !== requesterId) {
+        return NextResponse.json(
+          { success: false, error: "Oturum doğrulanamadı. Lütfen Mini App'i yeniden açın." },
+          { status: 401 }
+        );
+      }
+      requesterId = verified.id;
     }
 
-    if (order.status === "CANCELLED" || order.status === "COMPLETED") {
-      return NextResponse.json({ success: false, error: `Bu sipariş zaten ${order.status}` }, { status: 400 });
+    const result = await cancelOrderWithRefund(String(activationId), requesterId);
+    if (!result.ok) {
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
-
-    // Hero-SMS status=8 (iptal ve iade) çağır
-    await heroSms.setStatus(activationId, 8);
-
-    // Kullanıcıya ücreti geri iade et
-    const updatedUser = await db.updateUserBalance(telegramId, order.chargedPrice);
-
-    // Durumu güncelle
-    const updatedOrder = await db.updateActivation(activationId, {
-      status: "CANCELLED",
-    });
 
     return NextResponse.json({
       success: true,
       message: "Numara iptal edildi ve ücret bakiyenize eksiksiz iade edildi.",
-      order: updatedOrder,
-      newBalance: updatedUser?.balance || 0,
+      order: result.order,
+      newBalance: result.user?.balance || 0,
     });
   } catch (err: any) {
     console.error("Cancel API error:", err);

@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { getApironePaymentOption } from "./crypto-currencies";
+import { CONFIG } from "./config";
 
 export interface ApironeInvoiceResult {
   success: boolean;
@@ -324,14 +325,17 @@ export async function createApironeInvoice(params: {
       return { success: false, error: "Yükleme tutarı seçilen kripto para için çok düşük." };
     }
 
-    // Apirone fatura (invoice) oluştururken callback-url parametresini ZORUNLU KILMAZ.
-    // Otomatik üretilen domainler (Vercel vb.) Apirone tarafından 400 veya 500 hatasıyla reddedilebilir.
-    // Bu nedenle callback-url yalnızca yönetici panelinde AÇIKÇA geçerli bir Webhook URL tanımlanmışsa gönderilir.
+    // Ödeme bildirimi (callback-url): yönetici panelinde tanımlı adres, yoksa uygulamanın canlı adresi.
+    // Callback olmadan Apirone ödeme gelince haber vermez ve bakiye yalnızca "Ödemeyi kontrol et" ile
+    // yüklenirdi. Apirone adresi reddederse aşağıdaki self-healing callback'siz tekrar dener; o durumda
+    // bekleyen ödemeler zamanlanmış bakımda (lib/deposit-confirm.ts) yine otomatik onaylanır.
     let candidateCallback: string | null = null;
     try {
       const explicitUrl = (settings.cryptoSettings?.callbackUrl || "").trim();
-      if (explicitUrl && explicitUrl.startsWith("https://")) {
-        candidateCallback = explicitUrl;
+      const defaultUrl = `${CONFIG.APP_URL.replace(/\/+$/, "")}/api/user/deposit/crypto-webhook`;
+      const url = explicitUrl || defaultUrl;
+      if (url.startsWith("https://") && !/localhost|127\.0\.0\.1/.test(url)) {
+        candidateCallback = url;
       }
     } catch {
       candidateCallback = null;

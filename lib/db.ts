@@ -1996,6 +1996,81 @@ export const db = {
     await saveActivationToSql(order);
   },
 
+  /**
+   * Sipariş durumunu atomik olarak değiştirir: yalnızca mevcut durum `from` listesindeyse `to` yapar.
+   * Aynı siparişi iki istek aynı anda işlemeye çalışırsa (çift tıklama, eşzamanlı yoklama, farklı
+   * sunucusuz örnekler) yalnızca biri başarılı olur; diğeri null alır. İadeler bu kilit üzerinden yapılır.
+   */
+  async claimActivationStatus(
+    id: string,
+    from: ActivationOrder["status"][],
+    to: ActivationOrder["status"]
+  ): Promise<ActivationOrder | null> {
+    const sql = getSql();
+    if (sql) {
+      try {
+        const rows = (await sql`
+          UPDATE activations SET status = ${to}
+          WHERE id = ${id} AND status = ANY(${from})
+          RETURNING *
+        `) as any[];
+        const data = loadDb();
+        if (rows.length > 0) {
+          const claimed = { ...(data.activations[id] || {}), ...parseActivationRow(rows[0]) } as ActivationOrder;
+          data.activations[id] = claimed;
+          await saveDb(data);
+          return claimed;
+        }
+        const existing = (await sql`SELECT * FROM activations WHERE id = ${id}`) as any[];
+        if (existing.length > 0) {
+          // Başka bir istek durumu zaten değiştirmiş: belleği güncelle, işlem yapma
+          data.activations[id] = { ...(data.activations[id] || {}), ...parseActivationRow(existing[0]) } as ActivationOrder;
+          return null;
+        }
+        // Satır SQL'de yoksa (eski kayıt) bellek kontrolüne düş
+      } catch (err) {
+        console.error("[PostgreSQL claimActivationStatus Error]:", err);
+      }
+    }
+
+    const data = loadDb();
+    const current = data.activations[id];
+    if (!current || !from.includes(current.status)) return null;
+    data.activations[id] = { ...current, status: to };
+    await saveDb(data);
+    await saveActivationToSql(data.activations[id]);
+    return data.activations[id];
+  },
+
+  /** Bakiyeyi SQL'de atomik olarak değiştirir (iadelerde kayıp güncelleme olmasın). */
+  async incrementUserBalance(telegramId: number | string, delta: number): Promise<User> {
+    const sql = getSql();
+    const cleanId = String(telegramId).trim();
+    if (sql) {
+      try {
+        const rows = (await sql`
+          UPDATE users SET balance = balance + ${Number(delta)}
+          WHERE telegram_id = ${BigInt(cleanId)}
+          RETURNING balance
+        `) as any[];
+        if (rows.length > 0) {
+          const data = loadDb();
+          const key = Object.keys(data.users).find(
+            (k) => String(k).trim() === cleanId || String(data.users[k]?.telegramId).trim() === cleanId
+          );
+          if (key) {
+            data.users[key].balance = Number(Number(rows[0].balance).toFixed(2));
+            await saveDb(data);
+            return data.users[key];
+          }
+        }
+      } catch (err) {
+        console.error("[PostgreSQL incrementUserBalance Error]:", err);
+      }
+    }
+    return this.updateUserBalance(cleanId, delta);
+  },
+
   async updateActivation(id: string, updates: Partial<ActivationOrder>): Promise<ActivationOrder | null> {
     const data = loadDb();
     if (!data.activations[id]) return null;
@@ -2979,8 +3054,8 @@ export const db = {
    */
   async triggerAutoBackupIfNeeded(): Promise<void> {
     const now = Date.now();
-    // Örnek başına en fazla 5 dakikada bir kontrol (istekleri yavaşlatmaz)
-    if (now - lastAutoBackupCheckTime < 5 * 60 * 1000) {
+    // Örnek başına en fazla 2 dakikada bir kontrol (istekleri yavaşlatmaz; bekleyen ödemeler hızlı onaylansın)
+    if (now - lastAutoBackupCheckTime < 2 * 60 * 1000) {
       return;
     }
     lastAutoBackupCheckTime = now;
@@ -2994,6 +3069,9 @@ export const db = {
         const { tcmb } = await import("./tcmb");
         await tcmb.getLiveRate().catch((err) => console.error("[AutoRate Trigger Error]:", err));
       }
+      // Webhook gelmese / kullanıcı yükleme penceresini kapatsa bile ödenmiş kripto yüklemelerini onayla
+      const { reconcilePendingCryptoDeposits } = await import("./deposit-confirm");
+      await reconcilePendingCryptoDeposits().catch((err) => console.error("[DepositReconcile Error]:", err));
     }, "scheduled-maintenance");
   },
 

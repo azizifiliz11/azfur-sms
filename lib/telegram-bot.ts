@@ -6,6 +6,7 @@ import { CONFIG } from "./config";
 import { APP_BUILD_VERSION } from "./app-version";
 import { db } from "./db";
 import { heroSms } from "./hero-sms";
+import { cancelOrderWithRefund } from "./orders";
 import { pricingEngine } from "./pricing";
 import { ActivationOrder, User } from "./types";
 import { rateLimiter } from "./rate-limit";
@@ -1482,27 +1483,15 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
-        if (order.status === "CANCELLED") {
-          await ctx.answerCallbackQuery({ text: "Bu sipariş zaten iptal edilmiş.", show_alert: true });
+        // Sahiplik, durum kontrolü, atomik kilit ve tek seferlik iade lib/orders.ts içinde
+        const cancelResult = await cancelOrderWithRefund(orderId, Number(from.id));
+        if (!cancelResult.ok) {
+          try {
+            await ctx.answerCallbackQuery({ text: cancelResult.error, show_alert: true });
+          } catch (e) {}
           return;
         }
-
-        // Hero-SMS status=8
-        await heroSms.setStatus(orderId, 8);
-
-        // Ücreti iade et
-        const updatedUser = await db.updateUserBalance(from.id, order.chargedPrice);
-        await db.updateActivation(orderId, { status: "CANCELLED" });
-
-        db.addLog({
-          category: "ORDER",
-          level: "INFO",
-          action: "ORDER_REFUNDED",
-          details: `${order.countryFlag} ${order.serviceName} (${order.phoneNumber}) siparişi iptal edildi, ${order.chargedPrice.toFixed(2)} ₺ bakiye iade edildi.`,
-          telegramId: Number(from.id),
-          username: from.username,
-          metadata: { orderId: order.id, phoneNumber: order.phoneNumber, refundAmount: order.chargedPrice },
-        }).catch(() => {});
+        const updatedUser = cancelResult.user;
 
         const text =
           `✅ <b>NUMARA BAŞARIYLA İPTAL EDİLDİ</b>\n` +

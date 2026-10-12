@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { DepositRequest } from "@/lib/types";
 
@@ -41,7 +42,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     await db.syncFromCloud();
-    const { telegramId, amount, method, referenceCode, txid } = await req.json();
+    const body = await req.json();
+    const { amount, method, referenceCode, txid } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
     if (!telegramId || !amount || !method) {
       return NextResponse.json({ success: false, error: "Eksik parametreler" }, { status: 400 });

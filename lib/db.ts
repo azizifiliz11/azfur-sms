@@ -92,8 +92,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   maintenanceMessage: "",
 };
 
-const DEFAULT_KV_URL = "https://communal-bengal-212625.upstash.io";
-const DEFAULT_KV_TOKEN = "gQAAAAAAAz6RAAIgcDE4YjExNzIzNGIzODI0YmNiYWNhNWE3NWU1ZWU5YWU2MA";
+// Bağlantı bilgileri yalnızca ortam değişkenlerinden okunur (koda gömülü kimlik bilgisi yok).
 
 const KV_URL =
   process.env.KV_REST_API_URL ||
@@ -101,7 +100,7 @@ const KV_URL =
   process.env.STORAGE_REST_API_URL ||
   process.env.STORAGE_URL ||
   process.env.UPSTASH_REDIS_URL ||
-  DEFAULT_KV_URL;
+  "";
 
 const KV_TOKEN =
   process.env.KV_REST_API_TOKEN ||
@@ -109,7 +108,7 @@ const KV_TOKEN =
   process.env.STORAGE_REST_API_TOKEN ||
   process.env.STORAGE_TOKEN ||
   process.env.UPSTASH_REDIS_TOKEN ||
-  DEFAULT_KV_TOKEN;
+  "";
 
 const KV_KEY = "azfur_sms_db_v1";
 const KV_APIRONE_KEY = "azfur_sms_apirone_creds";
@@ -118,7 +117,11 @@ const POSTGRES_URL =
   process.env.POSTGRES_URL ||
   process.env.DATABASE_URL ||
   process.env.POSTGRES_PRISMA_URL ||
-  "postgresql://neondb_owner:npg_F3ZvuyiU5abt@ep-dry-feather-bacqjppv-pooler.c-8.eu-central-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+  "";
+
+if (process.env.VERCEL && !POSTGRES_URL) {
+  console.error("[DB] POSTGRES_URL / DATABASE_URL tanımlı değil! Veriler kalıcı veritabanına yazılamaz.");
+}
 
 let sqlClient: ReturnType<typeof neon> | null = null;
 function getSql() {
@@ -2042,6 +2045,106 @@ export const db = {
     return data.activations[id];
   },
 
+  /**
+   * Bakiye yeterliyse tek SQL işlemiyle düşer ve harcamaya ekler; yetersizse hiçbir şey yapmaz (null).
+   * Kontrol ile düşüm arasında eşzamanlı ikinci bir satın alma bakiyeyi eksiye düşüremez.
+   */
+  async tryDebitBalance(telegramId: number | string, amount: number): Promise<User | null> {
+    const sql = getSql();
+    const cleanId = String(telegramId).trim();
+    const amt = Number(Number(amount).toFixed(2));
+    if (sql) {
+      try {
+        const rows = (await sql`
+          UPDATE users SET balance = balance - ${amt}, spent = COALESCE(spent, 0) + ${amt}
+          WHERE telegram_id = ${BigInt(cleanId)} AND balance >= ${amt}
+          RETURNING balance, spent
+        `) as any[];
+        const data = loadDb();
+        const key = Object.keys(data.users).find(
+          (k) => String(k).trim() === cleanId || String(data.users[k]?.telegramId).trim() === cleanId
+        );
+        if (rows.length > 0) {
+          if (key) {
+            data.users[key].balance = Number(Number(rows[0].balance).toFixed(2));
+            data.users[key].spent = Number(Number(rows[0].spent).toFixed(2));
+            await saveDb(data);
+            return data.users[key];
+          }
+          return null;
+        }
+        const exists = (await sql`SELECT balance FROM users WHERE telegram_id = ${BigInt(cleanId)}`) as any[];
+        if (exists.length > 0) {
+          if (key) data.users[key].balance = Number(Number(exists[0].balance).toFixed(2));
+          return null; // Yetersiz bakiye
+        }
+        // SQL'de satır yoksa bellek kontrolüne düş
+      } catch (err) {
+        console.error("[PostgreSQL tryDebitBalance Error]:", err);
+        return null;
+      }
+    }
+    const user = this.getUser(cleanId);
+    if (!user || user.balance < amt) return null;
+    return this.updateUserBalance(cleanId, -amt);
+  },
+
+  /** tryDebitBalance ile düşülen tutarı geri verir (sağlayıcı numara veremediğinde). */
+  async revertDebit(telegramId: number | string, amount: number): Promise<void> {
+    const sql = getSql();
+    const cleanId = String(telegramId).trim();
+    const amt = Number(Number(amount).toFixed(2));
+    if (sql) {
+      try {
+        const rows = (await sql`
+          UPDATE users SET balance = balance + ${amt}, spent = GREATEST(COALESCE(spent, 0) - ${amt}, 0)
+          WHERE telegram_id = ${BigInt(cleanId)}
+          RETURNING balance, spent
+        `) as any[];
+        if (rows.length > 0) {
+          const user = this.getUser(cleanId);
+          if (user) {
+            user.balance = Number(Number(rows[0].balance).toFixed(2));
+            user.spent = Number(Number(rows[0].spent).toFixed(2));
+            await saveDb(loadDb());
+          }
+          return;
+        }
+      } catch (err) {
+        console.error("[PostgreSQL revertDebit Error]:", err);
+      }
+    }
+    await this.updateUserBalance(cleanId, amt);
+  },
+
+  /** Tek kullanımlık indirimi atomik olarak sahiplenir; eşzamanlı ikinci sipariş aynı indirimi alamaz. */
+  async claimActiveDiscount(telegramId: number | string): Promise<User["activeDiscount"] | null> {
+    const sql = getSql();
+    const cleanId = String(telegramId).trim();
+    const user = this.getUser(cleanId);
+    if (sql) {
+      if (!user?.activeDiscount) return null;
+      const discount = user.activeDiscount;
+      try {
+        // Karşılaştır-ve-değiştir: indirim hâlâ aynıysa sil ve bu siparişe ver
+        const rows = (await sql`
+          UPDATE users SET active_discount = NULL
+          WHERE telegram_id = ${BigInt(cleanId)} AND active_discount = ${JSON.stringify(discount)}::jsonb
+          RETURNING telegram_id
+        `) as any[];
+        user.activeDiscount = undefined;
+        return rows.length > 0 ? discount : null;
+      } catch (err) {
+        console.error("[PostgreSQL claimActiveDiscount Error]:", err);
+        return null;
+      }
+    }
+    if (!user?.activeDiscount) return null;
+    const discount = user.activeDiscount;
+    await this.updateUser(cleanId, { activeDiscount: undefined });
+    return discount;
+  },
+
   /** Bakiyeyi SQL'de atomik olarak değiştirir (iadelerde kayıp güncelleme olmasın). */
   async incrementUserBalance(telegramId: number | string, delta: number): Promise<User> {
     const sql = getSql();
@@ -2078,6 +2181,52 @@ export const db = {
     await saveDb(data);
     await saveActivationToSql(data.activations[id]);
     return data.activations[id];
+  },
+
+  /**
+   * TXID ile onaylanan ödemeyi kaydeder; aynı TXID daha önce (tüm geçmişte) onaylandıysa veya
+   * eşzamanlı başka bir istek aynı TXID'yi kaydettiyse false döner. Kayıt kimliği TXID'den
+   * türetildiği için (dep_tx_<txid>) birincil anahtar çakışması çift yüklemeyi engeller.
+   */
+  async insertTxDepositIfNew(deposit: DepositRequest): Promise<boolean> {
+    const txid = String(deposit.txid || "").trim().toLowerCase();
+    if (!txid) return false;
+    const sql = getSql();
+    if (sql) {
+      try {
+        const dup = (await sql`
+          SELECT 1 FROM deposits WHERE LOWER(tx_id) = ${txid} AND status = 'APPROVED' LIMIT 1
+        `) as any[];
+        if (dup.length > 0) return false;
+        const inserted = (await sql`
+          INSERT INTO deposits (id, telegram_id, amount, method, status, tx_id, currency, created_at, approved_at)
+          VALUES (${deposit.id}, ${BigInt(deposit.telegramId)}, ${Number(deposit.amount)}, ${deposit.method},
+                  ${deposit.status}, ${txid}, 'TRY', ${new Date(deposit.createdAt)}, NOW())
+          ON CONFLICT (id) DO NOTHING
+          RETURNING id
+        `) as any[];
+        if (inserted.length === 0) return false;
+      } catch (err) {
+        console.error("[PostgreSQL insertTxDepositIfNew Error]:", err);
+        return false;
+      }
+    } else if (this.hasUsedTxid(txid)) {
+      return false;
+    }
+
+    const data = loadDb();
+    data.deposits.unshift(deposit);
+    await saveDb(data);
+    this.addLog({
+      category: "DEPOSIT",
+      level: "SUCCESS",
+      action: "DEPOSIT_APPROVED",
+      details: `${deposit.amount} ₺ tutarındaki ${deposit.method} ödemesi TXID ile doğrulandı.`,
+      telegramId: Number(deposit.telegramId),
+      username: deposit.username,
+      metadata: { depositId: deposit.id, method: deposit.method, amount: deposit.amount, txid },
+    }).catch(() => {});
+    return true;
   },
 
   async addDeposit(deposit: DepositRequest): Promise<void> {
@@ -2459,19 +2608,75 @@ export const db = {
       data.users[cleanId] = user;
     }
 
-    // Kuponu kullanıldı olarak kaydet
-    coupon.usedCount = (coupon.usedCount || 0) + 1;
-    coupon.usedByUserIds.push(Number(cleanId));
+    // Kuponu kullanıldı olarak kaydet. SQL'de atomik sahiplenme: limit ve kişi başı tek kullanım
+    // kontrolü aynı UPDATE içinde yapılır; eşzamanlı istekler kuponu fazladan kullanamaz.
+    const sql = getSql();
+    let claimedInSql = false;
+    if (sql) {
+      try {
+        const userJson = JSON.stringify([Number(cleanId)]);
+        const claimed = (await sql`
+          UPDATE coupons
+          SET used_count = COALESCE(used_count, 0) + 1,
+              used_by = COALESCE(used_by, '[]'::jsonb) || ${userJson}::jsonb
+          WHERE code = ${coupon.code}
+            AND (usage_limit IS NULL OR usage_limit <= 0 OR COALESCE(used_count, 0) < usage_limit)
+            AND NOT (COALESCE(used_by, '[]'::jsonb) @> ${userJson}::jsonb)
+          RETURNING used_count, used_by
+        `) as any[];
+        if (claimed.length > 0) {
+          claimedInSql = true;
+          coupon.usedCount = Number(claimed[0].used_count) || coupon.usedCount + 1;
+          const usedBy = typeof claimed[0].used_by === "string" ? JSON.parse(claimed[0].used_by) : claimed[0].used_by;
+          coupon.usedByUserIds = Array.isArray(usedBy) ? usedBy.map(Number) : [...coupon.usedByUserIds, Number(cleanId)];
+        } else {
+          const exists = (await sql`SELECT 1 FROM coupons WHERE code = ${coupon.code}`) as any[];
+          if (exists.length > 0) {
+            return {
+              success: false,
+              message: "🚫 Bu kuponu daha önce kullandınız veya kuponun kullanım limiti doldu.",
+            };
+          }
+          // Kupon SQL'de yoksa (eski kayıt) bellek kontrolüyle devam
+        }
+      } catch (err) {
+        console.error("[PostgreSQL coupon claim Error]:", err);
+        return { success: false, message: "Kupon şu anda doğrulanamadı. Lütfen birazdan tekrar deneyin." };
+      }
+    }
+    if (!claimedInSql) {
+      coupon.usedCount = (coupon.usedCount || 0) + 1;
+      coupon.usedByUserIds.push(Number(cleanId));
+    }
 
     // 1. HEDİYE BAKİYE KUPONU (BALANCE)
     if (coupon.type === "BALANCE") {
       const bonus = Number(coupon.value) || 0;
-      user.balance = Math.max(0, Number(((user.balance || 0) + bonus).toFixed(2)));
       user.lastActiveAt = new Date().toISOString();
+      let credited = false;
+      if (sql && foundKey) {
+        // Bakiyeyi SQL'de atomik artır (eşzamanlı satın alma ile kayıp güncelleme olmasın)
+        try {
+          const rows = (await sql`
+            UPDATE users SET balance = balance + ${bonus}
+            WHERE telegram_id = ${BigInt(cleanId)}
+            RETURNING balance
+          `) as any[];
+          if (rows.length > 0) {
+            user.balance = Number(Number(rows[0].balance).toFixed(2));
+            credited = true;
+          }
+        } catch (err) {
+          console.error("[PostgreSQL coupon balance Error]:", err);
+        }
+      }
+      if (!credited) {
+        user.balance = Math.max(0, Number(((user.balance || 0) + bonus).toFixed(2)));
+      }
       await saveDb(data);
       await Promise.allSettled([
-        saveCouponToSql(coupon),
-        saveUserToSql(user),
+        claimedInSql ? Promise.resolve() : saveCouponToSql(coupon),
+        credited ? Promise.resolve() : saveUserToSql(user),
       ]);
 
       this.addLog({
@@ -2503,7 +2708,7 @@ export const db = {
       user.lastActiveAt = new Date().toISOString();
       await saveDb(data);
       await Promise.allSettled([
-        saveCouponToSql(coupon),
+        claimedInSql ? Promise.resolve() : saveCouponToSql(coupon),
         saveUserToSql(user),
       ]);
 
@@ -2532,7 +2737,7 @@ export const db = {
 
     await saveDb(data);
     await Promise.allSettled([
-      saveCouponToSql(coupon),
+      claimedInSql ? Promise.resolve() : saveCouponToSql(coupon),
       saveUserToSql(user),
     ]);
     return { success: true, message: `Kupon başarıyla uygulandı!`, coupon };

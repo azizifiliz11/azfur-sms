@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +8,11 @@ export const revalidate = 0;
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
+    // Önceden telegramId verilmezse TÜM kullanıcıların aktif numaraları ve kodları dönüyordu
+    const auth = requireTelegramUser(req, undefined, searchParams.get("telegramId"));
+    if (!auth.ok) return auth.response;
 
-    const orders = db.getActiveOrders(telegramId || undefined);
+    const orders = db.getActiveOrders(auth.id);
 
     return NextResponse.json(
       {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { DepositRequest } from "@/lib/types";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
@@ -9,7 +10,11 @@ export const revalidate = 0;
 export async function POST(req: NextRequest) {
   try {
     await db.syncFromCloud();
-    const { telegramId, txid, cryptoType, amountTry } = await req.json();
+    const body = await req.json();
+    const { txid, cryptoType, amountTry } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
     if (!telegramId || !txid) {
       return NextResponse.json({ success: false, error: "Eksik parametreler (Telegram ID ve TXID gereklidir)" }, { status: 400 });
@@ -53,6 +58,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         error: "İşlem Tron ağında henüz onaylanmamış veya bulunamadı. Lütfen 15-30 saniye sonra tekrar deneyiniz.",
+      }, { status: 400 });
+    }
+
+    // Yalnızca son 48 saatteki işlemler: zincirdeki eski (başkasına ait olabilecek) transferler sahiplenilemesin
+    const txTimestamp = Number(tronData.timestamp || 0);
+    if (txTimestamp && Date.now() - txTimestamp > 48 * 3600 * 1000) {
+      return NextResponse.json({
+        success: false,
+        error: "Bu işlem 48 saatten eski. Eski işlemler için lütfen destek talebi açın.",
       }, { status: 400 });
     }
 
@@ -140,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     // 7. Bakiye yükleme kaydı oluştur ve anında ONAYLA
     const deposit: DepositRequest = {
-      id: `dep_crypto_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      id: `dep_tx_${cleanTxid.toLowerCase()}`,
       telegramId: Number(telegramId),
       username: (user?.username && !user.username.startsWith("user_")) ? user.username : "",
       amount: creditedAmount,
@@ -151,10 +165,16 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await db.addDeposit(deposit);
+    // Atomik kayıt: aynı TXID tüm geçmişte bir kez kullanılabilir (eşzamanlı isteklerde de)
+    if (!(await db.insertTxDepositIfNew(deposit))) {
+      return NextResponse.json({
+        success: false,
+        error: "Bu işlem kodu (TXID) daha önce kullanılmış ve onaylanmış!",
+      }, { status: 400 });
+    }
 
-    // 8. Kullanıcı bakiyesine ANINDA ekle
-    const updatedUser = await db.updateUserBalance(telegramId, creditedAmount);
+    // 8. Kullanıcı bakiyesine ANINDA ekle (SQL'de atomik)
+    const updatedUser = await db.incrementUserBalance(telegramId, creditedAmount);
 
     // 9. Telegram botundan kullanıcıya bildirim gönder
     try {

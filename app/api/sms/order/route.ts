@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { heroSms } from "@/lib/hero-sms";
 import { pricingEngine } from "@/lib/pricing";
 import { db } from "@/lib/db";
@@ -8,7 +9,10 @@ import { checkApiRateLimit } from "@/lib/rate-limit";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { serviceCode, countryId, telegramId } = body;
+    const { serviceCode, countryId } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
     const rateCheck = checkApiRateLimit(req, `order_${telegramId || "anon"}`, 4, 10);
     if (!rateCheck.allowed) {
@@ -61,9 +65,10 @@ export async function POST(req: NextRequest) {
     let finalPriceTry = baseCalc.finalPriceTry;
     let appliedDiscount: { code: string; type: string; value: number; discountAmount: number; originalPrice: number } | null = null;
 
-    // Kullanıcının tanımlı aktif promosyon / indirim kuponu var mı?
-    if (user.activeDiscount) {
-      const discount = user.activeDiscount;
+    // Kullanıcının tanımlı aktif promosyon / indirim kuponu var mı? (atomik sahiplenme: tek kullanım)
+    const claimedDiscount = user.activeDiscount ? await db.claimActiveDiscount(telegramId) : null;
+    if (claimedDiscount) {
+      const discount = claimedDiscount;
       let discountAmount = 0;
       if (discount.type === "DISCOUNT_PERCENT") {
         discountAmount = (finalPriceTry * Number(discount.value)) / 100;
@@ -82,14 +87,18 @@ export async function POST(req: NextRequest) {
       finalPriceTry = discountedPrice;
     }
 
-    // 4. Kullanıcı bakiyesi yeterli mi?
-    if (user.balance < finalPriceTry) {
+    // 4. Kullanıcı bakiyesi yeterli mi? Yeterliyse ücret numara alınmadan ÖNCE atomik olarak düşülür;
+    // böylece eşzamanlı iki sipariş tek kişilik bakiyeyle iki numara alamaz.
+    const debited = await db.tryDebitBalance(telegramId, finalPriceTry);
+    if (!debited) {
+      if (claimedDiscount) await db.updateUser(telegramId, { activeDiscount: claimedDiscount });
+      const currentBalance = db.getUser(telegramId)?.balance ?? user.balance;
       return NextResponse.json(
         {
           success: false,
-          error: `Yetersiz bakiye! Bu işlem için ${finalPriceTry.toFixed(2)} ₺ gereklidir. Mevcut bakiyeniz: ${user.balance.toFixed(2)} ₺. Lütfen bakiye yükleyin.`,
+          error: `Yetersiz bakiye! Bu işlem için ${finalPriceTry.toFixed(2)} ₺ gereklidir. Mevcut bakiyeniz: ${currentBalance.toFixed(2)} ₺. Lütfen bakiye yükleyin.`,
           requiredAmount: finalPriceTry,
-          currentBalance: user.balance,
+          currentBalance,
         },
         { status: 400 }
       );
@@ -99,6 +108,9 @@ export async function POST(req: NextRequest) {
     const numberResult = await heroSms.getNumber(serviceCode, Number(countryId));
 
     if (!numberResult.success || !numberResult.id || !numberResult.number) {
+      // Numara alınamadı: düşülen ücreti ve kullanılan indirimi geri ver
+      await db.revertDebit(telegramId, finalPriceTry);
+      if (claimedDiscount) await db.updateUser(telegramId, { activeDiscount: claimedDiscount });
       return NextResponse.json(
         {
           success: false,
@@ -114,13 +126,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Kullanıcının bakiyesinden ücreti düş
-    await db.updateUserBalance(telegramId, -finalPriceTry);
-
-    // Eğer indirim kuponu kullanıldıysa hakkı tüket (sıfırla)
-    if (appliedDiscount) {
-      await db.updateUser(telegramId, { activeDiscount: undefined });
-    }
+    // 6. Ücret 4. adımda atomik olarak düşüldü; indirim de sahiplenilirken tüketildi
 
     // 7. Aktivasyon siparişini kaydet
     const now = Date.now();
@@ -150,7 +156,7 @@ export async function POST(req: NextRequest) {
       message: "Numara başarıyla kiralandı",
       order,
       appliedDiscount,
-      remainingBalance: (user.balance - finalPriceTry).toFixed(2),
+      remainingBalance: debited.balance.toFixed(2),
     });
   } catch (err: any) {
     console.error("Order API error:", err);

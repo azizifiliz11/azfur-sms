@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTelegramBot, runAfterResponse } from "@/lib/telegram-bot";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
+import { isAuthorizedAdmin } from "@/lib/auth-check";
+import {
+  TELEGRAM_SECRET_HEADER,
+  getWebhookUrl,
+  isValidWebhookSecret,
+  registerWebhookWithSecret,
+  registerWebhookWithSecretThrottled,
+} from "@/lib/webhook-secret";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -23,6 +31,23 @@ export async function POST(req: NextRequest) {
     if (!bot) {
       console.error("Bot token not configured");
       return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 400 });
+    }
+
+    // Güncellemenin gerçekten Telegram'dan geldiğini doğrula (gizli anahtar başlığı). Aksi halde
+    // herkes from.id'ye yöneticinin ID'sini yazıp bot üzerinden yönetici işlemi yapabilirdi.
+    const secretHeader = req.headers.get(TELEGRAM_SECRET_HEADER);
+    if (secretHeader) {
+      if (!isValidWebhookSecret(secretHeader)) {
+        return NextResponse.json({ ok: false }, { status: 401 });
+      }
+    } else {
+      await db.syncFromCloud();
+      // Webhook henüz anahtarla kayıtlı değilse (geçiş): bu güncellemeyi işle ve anahtarla yeniden kaydol.
+      // Kayıtlıysa anahtarsız istek reddedilir; webhook dışarıdan anahtarsız kurulduysa kendini onarır.
+      runAfterResponse(() => registerWebhookWithSecretThrottled());
+      if (db.getSettings().webhookSecretActive) {
+        return NextResponse.json({ ok: false }, { status: 401 });
+      }
     }
 
     // grammY başlatma (getMe) gövde okunurken paralel başlar; botInfo önbellekteyse anında biter
@@ -73,6 +98,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  // Webhook kurma/menü sıfırlama/bilgi yalnızca yöneticiye açık (önceden herkes ?set=1&url=... ile
+  // botun webhook'unu kendi sunucusuna yönlendirebiliyordu)
+  if (!(await isAuthorizedAdmin(req))) {
+    return NextResponse.json({ ok: false, error: "Yetkisiz erişim" }, { status: 403 });
+  }
+
   const token = CONFIG.TELEGRAM_BOT_TOKEN;
   const searchParams = req.nextUrl.searchParams;
   const action = searchParams.get("action");
@@ -87,10 +118,8 @@ export async function GET(req: NextRequest) {
     try {
       const dropPending = searchParams.get("drop") !== "0"; // Kuyruktaki eski mesajları temizle ki bot 0 gecikmeyle anında açılsın
       const targetUrl = searchParams.get("url") || webhookUrl;
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(targetUrl)}&drop_pending_updates=${dropPending}&max_connections=100`
-      );
-      const data = await res.json();
+      // Webhook her zaman gizli anahtarla kurulur
+      const data = await registerWebhookWithSecret({ url: targetUrl, dropPending });
       return NextResponse.json({
         ok: data.ok ?? true,
         message: data.ok ? "Telegram Webhook Başarıyla Kuruldu!" : "Telegram Webhook Hatası",

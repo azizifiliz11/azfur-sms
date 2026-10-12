@@ -1,4 +1,5 @@
 import fs from "fs";
+import crypto from "crypto";
 import path from "path";
 
 // .env.local dosyasından değişkenleri oku
@@ -42,7 +43,9 @@ console.log(`📌 Hedef URL: ${webhookUrl}`);
 
 async function setWebhook() {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+    // Sunucu (lib/webhook-secret.ts) ile aynı şekilde türetilen gizli anahtar; anahtarsız güncellemeler reddedilir
+    const secret = crypto.createHmac("sha256", token).update("azfur-webhook-secret-v1").digest("hex");
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}&secret_token=${secret}`);
     const data = await res.json();
     if (data.ok) {
       console.log("✅ Webhook başarıyla Telegram'a kaydedildi!");

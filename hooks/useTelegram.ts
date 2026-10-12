@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { haptic } from "@/lib/haptic";
+import "@/lib/telegram-fetch";
 
 export interface TelegramUser {
   id: number;

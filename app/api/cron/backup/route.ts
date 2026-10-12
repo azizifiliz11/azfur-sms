@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isTrustedCronCaller } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,7 +14,9 @@ export const maxDuration = 30;
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
-    const isForce = searchParams.get("force") === "1" || searchParams.get("force") === "true";
+    // Zorunlu yedek yalnızca yönetici veya Vercel Cron anahtarıyla (aksi halde herkes sınırsız yedek üretebilirdi)
+    const wantsForce = searchParams.get("force") === "1" || searchParams.get("force") === "true";
+    const isForce = wantsForce && (await isTrustedCronCaller(req));
 
     await db.syncFromCloud(true);
     const backup = await db.checkAndRunAutoBackup(isForce);

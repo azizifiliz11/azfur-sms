@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isTrustedCronCaller } from "@/lib/cron-auth";
 import { tcmb } from "@/lib/tcmb";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export const maxDuration = 30;
  */
 export async function GET(req: NextRequest) {
   try {
-    const force = ["1", "true"].includes(req.nextUrl.searchParams.get("force") || "");
+    const force = ["1", "true"].includes(req.nextUrl.searchParams.get("force") || "") && (await isTrustedCronCaller(req));
     await db.syncFromCloud(true);
     
     // Zamanı gelmişse otomatik veritabanı yedeğini de al

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { checkApiRateLimit } from "@/lib/rate-limit";
 
@@ -8,11 +9,9 @@ export const revalidate = 0;
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-
-    if (!telegramId) {
-      return NextResponse.json({ success: false, error: "Telegram ID gereklidir." }, { status: 400 });
-    }
+    const auth = requireTelegramUser(req, undefined, searchParams.get("telegramId"));
+    if (!auth.ok) return auth.response;
+    const telegramId = String(auth.id);
 
     await db.syncFromCloud();
     const user = db.getUser(telegramId);
@@ -30,7 +29,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { code, telegramId } = body;
+    const { code } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
     const rateCheck = checkApiRateLimit(req, `coupon_${telegramId || "anon"}`, 5, 10);
     if (!rateCheck.allowed) {

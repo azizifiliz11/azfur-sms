@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CONFIG } from "@/lib/config";
-import { verifyTelegramInitData } from "@/lib/telegram-auth";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { cancelOrderWithRefund } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
@@ -11,26 +10,16 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
-    const { activationId, telegramId, initData } = await req.json();
+    const body = await req.json();
+    const { activationId } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
 
-    if (!activationId || !telegramId) {
+    if (!activationId) {
       return NextResponse.json({ success: false, error: "Eksik parametreler" }, { status: 400 });
     }
 
-    // Mini App Telegram imzalı oturum bilgisini gönderir; varsa kimlik onunla doğrulanır
-    let requesterId = Number(telegramId);
-    if (initData) {
-      const verified = verifyTelegramInitData(String(initData), CONFIG.TELEGRAM_BOT_TOKEN);
-      if (!verified || verified.id !== requesterId) {
-        return NextResponse.json(
-          { success: false, error: "Oturum doğrulanamadı. Lütfen Mini App'i yeniden açın." },
-          { status: 401 }
-        );
-      }
-      requesterId = verified.id;
-    }
-
-    const result = await cancelOrderWithRefund(String(activationId), requesterId);
+    const result = await cancelOrderWithRefund(String(activationId), auth.id);
     if (!result.ok) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }

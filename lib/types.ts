@@ -162,6 +162,7 @@ export interface SystemSettings {
   };
   maintenanceMode?: boolean; // Sistem bakım modu (Kullanıcılara kapalı, adminlere açık)
   maintenanceMessage?: string; // Samimi özel bakım mesajı
+  webhookSecretActive?: boolean; // Telegram webhook gizli anahtarla kayıtlı (anahtarsız güncellemeler reddedilir)
 }
 
 export interface BackupStats {

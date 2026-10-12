@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { getVerifiedTelegramUser } from "./request-auth";
 
 export interface AdminAuthResult {
   authorized: boolean;
@@ -82,18 +83,13 @@ export function checkAdminAuthWithRateLimit(req: Request): AdminAuthResult {
     const allowedPins = adminPin ? [adminPin] : [];
 
     const headerPin = req.headers.get("x-admin-pin")?.trim();
-    const headerTgId = req.headers.get("x-telegram-id")?.trim();
 
     let queryPin: string | null = null;
-    let queryTgId: string | null = null;
     try {
-      const url = new URL(req.url);
-      queryPin = url.searchParams.get("pin")?.trim() || null;
-      queryTgId = url.searchParams.get("telegramId")?.trim() || null;
+      queryPin = new URL(req.url).searchParams.get("pin")?.trim() || null;
     } catch {}
 
     const providedPin = headerPin || queryPin;
-    const providedTgId = headerTgId || queryTgId;
 
     let isAuthorized = false;
 
@@ -102,9 +98,13 @@ export function checkAdminAuthWithRateLimit(req: Request): AdminAuthResult {
       isAuthorized = true;
     }
 
-    // Telegram ID Kontrolü (DB'deki admin rolü)
-    if (!isAuthorized && providedTgId && db.isAdmin(providedTgId)) {
-      isAuthorized = true;
+    // Telegram kimliği: yalnızca Telegram'ın imzaladığı initData ile (x-telegram-id / ?telegramId gibi
+    // istemcinin yazdığı düz değerler artık kabul edilmez; herkes bir yöneticinin ID'sini yazabilirdi)
+    if (!isAuthorized) {
+      const verified = getVerifiedTelegramUser(req);
+      if (verified && db.isAdmin(verified.id)) {
+        isAuthorized = true;
+      }
     }
 
     if (isAuthorized) {

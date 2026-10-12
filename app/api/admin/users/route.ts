@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchTelegramUserInfo, sendTelegramDirectMessage, getAdminUsernamesList } from "@/lib/telegram-bot";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
+import { getVerifiedTelegramUser } from "@/lib/request-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
-    const reqAdminTgId = req.headers.get("x-telegram-id") || db.getSettings().adminTelegramId;
+    const reqAdminTgId = getVerifiedTelegramUser(req)?.id || db.getSettings().adminTelegramId;
     if (reqAdminTgId) {
       await db.touchUserActive(reqAdminTgId);
     }

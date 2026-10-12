@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
 import { fetchTelegramUserInfo, getAdminUsernamesList } from "@/lib/telegram-bot";
@@ -11,15 +12,14 @@ export async function POST(req: NextRequest) {
   try {
     await db.syncFromCloud(true);
     const body = await req.json();
-    const { telegramId, username, firstName, lastName } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
-    if (!telegramId) {
-      return NextResponse.json({ success: false, error: "Telegram ID gerekli" }, { status: 400 });
-    }
-
-    const cleanUsername = username ? String(username).replace(/^@/, "").trim() : "";
-    const cleanFirstName = firstName ? String(firstName).trim() : "";
-    const cleanLastName = lastName ? String(lastName).trim() : undefined;
+    // Profil bilgileri istemcinin gönderdiğinden değil, Telegram'ın imzaladığı veriden alınır
+    const cleanUsername = (auth.user.username || "").replace(/^@/, "").trim();
+    const cleanFirstName = (auth.user.first_name || "").trim();
+    const cleanLastName = auth.user.last_name ? auth.user.last_name.trim() : undefined;
 
     const user = await db.getOrCreateUser(telegramId, {
       username: cleanUsername,
@@ -70,11 +70,9 @@ export async function GET(req: NextRequest) {
   try {
     await db.syncFromCloud(true);
     const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-
-    if (!telegramId) {
-      return NextResponse.json({ success: false, error: "Telegram ID gerekli" }, { status: 400 });
-    }
+    const auth = requireTelegramUser(req, undefined, searchParams.get("telegramId"));
+    if (!auth.ok) return auth.response;
+    const telegramId = String(auth.id);
 
     let user = db.getUser(telegramId);
     if (!user) {

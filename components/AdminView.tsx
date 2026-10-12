@@ -69,6 +69,7 @@ import { Callout, ProgressBar } from "./tremor/Callout";
 import { AreaChart, DonutChart } from "./tremor/Charts";
 import { haptic } from "@/lib/haptic";
 import { ThemeToggle } from "./ThemeToggle";
+import { getTelegramInitData } from "@/lib/telegram-fetch";
 import { HaloSwitch } from "./ui/halo-switch";
 import { RollingNumber } from "./ui/rolling-number";
 
@@ -664,8 +665,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const handleDownloadCurrentDatabase = async () => {
     haptic.impact("light");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const telegramId = getAdminTelegramId();
-    const authQuery = telegramId ? `&telegramId=${encodeURIComponent(telegramId)}` : "";
+    // Tarayıcıda açılan indirmelerde başlık gönderilemez: imzalı Telegram oturumu sorguda taşınır
+    const initData = getTelegramInitData();
+    const authQuery = initData ? `&initData=${encodeURIComponent(initData)}` : "";
     const downloadUrl = `${origin}/api/admin/backups?action=download_current${authQuery}`;
 
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
@@ -723,8 +725,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const handleDownloadSnapshot = async (backupId: string, rawDate?: string) => {
     haptic.impact("light");
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const telegramId = getAdminTelegramId();
-    const authQuery = telegramId ? `&telegramId=${encodeURIComponent(telegramId)}` : "";
+    // Tarayıcıda açılan indirmelerde başlık gönderilemez: imzalı Telegram oturumu sorguda taşınır
+    const initData = getTelegramInitData();
+    const authQuery = initData ? `&initData=${encodeURIComponent(initData)}` : "";
     const downloadUrl = `${origin}/api/admin/backups?action=download&id=${encodeURIComponent(backupId)}${authQuery}`;
 
     const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;

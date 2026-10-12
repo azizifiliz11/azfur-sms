@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { getPaymentInformation, evaluateCryptoTolerance } from "@/lib/oxapay";
 import { confirmCryptoDeposit } from "@/lib/deposit-confirm";
@@ -14,7 +15,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const trackId = body.trackId;
-    const telegramId = Number(body.telegramId);
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
 
     if (!trackId) {
       return NextResponse.json(
@@ -33,6 +35,9 @@ export async function POST(req: Request) {
           d.referenceCode === `OXA-${trackId}` ||
           d.txid === String(trackId)
       );
+    if (dep && Number(dep.telegramId) !== auth.id) {
+      return NextResponse.json({ success: false, error: "Ödeme kaydı bulunamadı", status: "unknown" }, { status: 404 });
+    }
 
     // Depozit varsa onay + tek seferlik yükleme + bildirim ortak fonksiyonda (webhook ve bakımla aynı)
     const confirmation = dep ? await confirmCryptoDeposit(dep, String(trackId)) : null;

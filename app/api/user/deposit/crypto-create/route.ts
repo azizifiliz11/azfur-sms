@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { checkApiRateLimit } from "@/lib/rate-limit";
 import { getApironePaymentOption } from "@/lib/crypto-currencies";
@@ -12,7 +13,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const telegramId = Number(body.telegramId);
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    const telegramId = auth.id;
 
     const rateCheck = checkApiRateLimit(req, `crypto_dep_${telegramId || "anon"}`, 4, 15);
     if (!rateCheck.allowed) {

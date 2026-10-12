@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { heroSms } from "@/lib/hero-sms";
 import { db } from "@/lib/db";
 import { sendTelegramSmsNotification } from "@/lib/telegram-bot";
@@ -13,9 +14,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Aktivasyon ID gerekli" }, { status: 400 });
     }
 
+    const auth = requireTelegramUser(req);
+    if (!auth.ok) return auth.response;
+
     await db.syncFromCloud();
     const order = db.getActivation(id);
-    if (!order) {
+    // Başkasının siparişi "bulunamadı" gibi davranır (numara/kod sızmasın, varlığı da belli olmasın)
+    if (!order || Number(order.telegramId) !== auth.id) {
       return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
     }
 

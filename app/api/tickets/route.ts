@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTelegramUser } from "@/lib/request-auth";
 import { db } from "@/lib/db";
 import { Ticket, TicketMessage } from "@/lib/types";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
@@ -10,15 +11,10 @@ export const fetchCache = "force-no-store";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = requireTelegramUser(req, undefined, req.nextUrl.searchParams.get("telegramId"));
+    if (!auth.ok) return auth.response;
     await db.syncFromCloud();
-    const telegramId = req.nextUrl.searchParams.get("telegramId");
-
-    if (!telegramId) {
-      return NextResponse.json(
-        { success: false, error: "telegramId parametresi gereklidir" },
-        { status: 400 }
-      );
-    }
+    const telegramId = String(auth.id);
 
     const tickets = db.getUserTickets(telegramId);
     const settings = db.getSettings();
@@ -40,6 +36,10 @@ export async function POST(req: NextRequest) {
     await db.syncFromCloud();
     const body = await req.json();
     const { action } = body;
+    const auth = requireTelegramUser(req, body, body.telegramId);
+    if (!auth.ok) return auth.response;
+    // Talep işlemleri yalnızca imzalı kullanıcı adına; başkasının talebi okunamaz/yanıtlanamaz/kapatılamaz
+    body.telegramId = auth.id;
 
     if (action === "create") {
       const { telegramId, subject, category, message, userFirstName, username } = body;
@@ -102,9 +102,9 @@ export async function POST(req: NextRequest) {
           adminId,
           `🎫 <b>YENİ DESTEK TALEBİ GELDİ!</b>\n\n` +
             `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
-            `👤 <b>Kullanıcı:</b> ${safeName} (@${username || "yok"})\n` +
+            `👤 <b>Kullanıcı:</b> ${safeName} (@${String(username || "yok").replace(/[<>&]/g, "")})\n` +
             `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
-            `📂 <b>Kategori:</b> ${ticket.category}\n` +
+            `📂 <b>Kategori:</b> ${String(ticket.category).replace(/[<>&]/g, "")}\n` +
             `📝 <b>Konu:</b> ${safeSubject}\n\n` +
             `💬 <b>Mesaj:</b>\n${safeMsg}\n\n` +
             `<i>Yönetici panelinden 'Destek Talepleri' sekmesine girerek yanıtlayabilirsiniz.</i>`
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       }
 
       const ticket = db.getTicket(ticketId);
-      if (!ticket) {
+      if (!ticket || Number(ticket.telegramId) !== auth.id) {
         return NextResponse.json(
           { success: false, error: "Destek talebi bulunamadı" },
           { status: 404 }
@@ -163,9 +163,9 @@ export async function POST(req: NextRequest) {
           adminId,
           `💬 <b>DESTEK TALEBİNE YENİ YANIT!</b>\n\n` +
             `📌 <b>Talep No:</b> <code>#${ticketId}</code>\n` +
-            `👤 <b>Kullanıcı:</b> ${ticket.userFirstName || "Kullanıcı"}\n` +
-            `📝 <b>Konu:</b> ${ticket.subject}\n\n` +
-            `💬 <b>Mesaj:</b>\n${message.trim()}`
+            `👤 <b>Kullanıcı:</b> ${String(ticket.userFirstName || "Kullanıcı").replace(/[<>&]/g, "")}\n` +
+            `📝 <b>Konu:</b> ${String(ticket.subject).replace(/[<>&]/g, "")}\n\n` +
+            `💬 <b>Mesaj:</b>\n${message.trim().replace(/[<>&]/g, "")}`
         ).catch(() => {});
       });
 
@@ -185,6 +185,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const own = db.getTicket(ticketId);
+      if (!own || Number(own.telegramId) !== auth.id) {
+        return NextResponse.json({ success: false, error: "Destek talebi bulunamadı" }, { status: 404 });
+      }
       const updated = await db.updateTicketStatus(ticketId, "CLOSED");
       return NextResponse.json({
         success: true,

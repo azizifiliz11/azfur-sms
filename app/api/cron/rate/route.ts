@@ -4,6 +4,7 @@ import { tcmb } from "@/lib/tcmb";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 30;
 
 /**
  * Otomatik TCMB Kur Güncelleme Cron Servisi
@@ -11,7 +12,8 @@ export const revalidate = 0;
  */
 export async function GET(req: NextRequest) {
   try {
-    await db.syncFromCloud();
+    const force = ["1", "true"].includes(req.nextUrl.searchParams.get("force") || "");
+    await db.syncFromCloud(true);
     
     // Zamanı gelmişse otomatik veritabanı yedeğini de al
     await db.checkAndRunAutoBackup().catch((e) => console.error("Cron rate auto backup error:", e));
@@ -27,8 +29,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Canlı kuru çek ve DB/Cloud KV'ye kalıcı olarak kaydet
-    const live = await tcmb.getLiveRate(true);
+    // Admin panelindeki güncelleme aralığı dolduysa canlı kuru çek ve kalıcı olarak kaydet
+    // (?force=1 aralığı yok sayar)
+    const live = await tcmb.getLiveRate(force);
+    if (live.skipped) {
+      return NextResponse.json({
+        success: true,
+        message: `Kur güncel; ayarlanan aralık (${settings.tcmbUpdateIntervalMinutes || 30} dk) henüz dolmadı.`,
+        rate: live.rate,
+        source: live.source,
+        timestamp: live.timestamp,
+        skipped: true,
+      });
+    }
     if (live.source === "CACHED") {
       return NextResponse.json({
         success: false,

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
+import { runInBackground } from "./background";
 import {
   User,
   ActivationOrder,
@@ -2757,21 +2758,30 @@ export const db = {
     return null;
   },
 
+  /**
+   * Zamanlanmış bakım: süresi dolmuşsa otomatik yedek al ve TCMB kurunu yenile.
+   * Herhangi bir trafikte (bot, Mini App, API) tetiklenir; iş yanıttan sonra `after()` ile
+   * tamamlanır. Eskiden ateşle-unut çalıştığı için Vercel fonksiyonu yanıtla birlikte
+   * dondurulup iş yarıda kalıyordu; yalnızca işi bekleyen admin paneli yedek/kur alabiliyordu.
+   */
   async triggerAutoBackupIfNeeded(): Promise<void> {
     const now = Date.now();
-    // En fazla 5 dakikada bir tetikleme kontrolü yap (0ms performans etkisi)
+    // Örnek başına en fazla 5 dakikada bir kontrol (istekleri yavaşlatmaz)
     if (now - lastAutoBackupCheckTime < 5 * 60 * 1000) {
       return;
     }
     lastAutoBackupCheckTime = now;
 
-    if (isAutoBackupRunning) return;
-
-    try {
-      await this.checkAndRunAutoBackup();
-    } catch (err) {
-      console.error("[AutoBackup Trigger Error]:", err);
-    }
+    runInBackground(async () => {
+      if (!isAutoBackupRunning) {
+        await this.checkAndRunAutoBackup().catch((err) => console.error("[AutoBackup Trigger Error]:", err));
+      }
+      if (this.getSettings().useTcmbAutoRate !== false) {
+        // tcmb -> db döngüsel içe aktarımını önlemek için geç yükle; aralık dolmadıysa ağ çağrısı yapmaz
+        const { tcmb } = await import("./tcmb");
+        await tcmb.getLiveRate().catch((err) => console.error("[AutoRate Trigger Error]:", err));
+      }
+    }, "scheduled-maintenance");
   },
 
   async restoreBackup(backupPayload: any): Promise<{ success: boolean; message: string; details: any }> {

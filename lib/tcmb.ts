@@ -15,7 +15,7 @@ export const tcmb = {
    * Eğer TCMB yanıt vermezse veya hafta sonu/yurtdışı bulut sunucusu (Vercel) IP engeli varsa
    * uluslararası canlı kur API'lerine kesintisiz fallback yapar.
    */
-  async getLiveRate(forceRefresh = false): Promise<{ rate: number; source: "TCMB" | "FALLBACK_API" | "CACHED"; timestamp: string }> {
+  async getLiveRate(forceRefresh = false): Promise<{ rate: number; source: "TCMB" | "FALLBACK_API" | "CACHED"; timestamp: string; skipped?: boolean }> {
     const now = Date.now();
     const settings = db.getSettings();
     const intervalMs = getUpdateIntervalMs(settings.tcmbUpdateIntervalMinutes);
@@ -34,6 +34,8 @@ export const tcmb = {
         rate: activeRate,
         source: "CACHED",
         timestamp: settings.lastTcmbFetchTime || new Date(lastDbFetchMs || lastCacheTime).toISOString(),
+        // Ayarlanan güncelleme aralığı henüz dolmadı; dış servise gidilmedi
+        skipped: true,
       };
     }
 

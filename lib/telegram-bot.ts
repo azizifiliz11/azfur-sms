@@ -1880,14 +1880,9 @@ export function getTelegramBot(): Bot | null {
         const tolerance = evaluateCryptoTolerance(payInfo, depositAmountTry);
 
         if (payInfo.success && (payInfo.status === "paid" || tolerance.isAccepted)) {
+          // updateDepositStatus bakiyeyi tek seferlik yükler (ikinci kez eklenmez)
           if (dep && dep.status !== "APPROVED") {
             await db.updateDepositStatus(dep.id, "APPROVED");
-            const curUser = db.getUser(from.id);
-            if (curUser) {
-              await db.updateUser(from.id, {
-                balance: Number((curUser.balance + depositAmountTry).toFixed(2)),
-              });
-            }
           }
 
           const updatedUser = db.getUser(from.id);

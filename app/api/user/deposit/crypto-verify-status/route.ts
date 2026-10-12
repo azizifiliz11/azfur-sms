@@ -35,7 +35,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // İlgili bekleyen depoziti bul
+    // İlgili bekleyen depoziti bul (başka örnekte oluşturulmuş olabilir: güncel veriyi al)
+    await db.syncFromCloud();
     const deposits = db.getDeposits();
     const dep = deposits.find(
       (d) =>
@@ -51,14 +52,13 @@ export async function POST(req: Request) {
       let creditedAmount = depositAmountTry;
       let targetTelegramId = dep?.telegramId || telegramId;
 
-      if (dep && dep.status !== "APPROVED") {
-        await db.updateDepositStatus(dep.id, "APPROVED");
-
+      // updateDepositStatus bakiyeyi tek seferlik yükler; null = zaten onaylanmış (tekrar yükleme yok)
+      const approved = dep && dep.status !== "APPROVED" ? await db.updateDepositStatus(dep.id, "APPROVED") : null;
+      if (approved) {
         if (targetTelegramId) {
           const user = db.getUser(targetTelegramId);
           if (user) {
-            const newBal = Number((user.balance + creditedAmount).toFixed(2));
-            await db.updateUser(targetTelegramId, { balance: newBal });
+            const newBal = Number(user.balance.toFixed(2));
 
             const toleranceNote = tolerance.deficitTry > 0
               ? `\nℹ️ <i>Küçük yuvarlama farkı toleransı (${tolerance.deficitTry.toFixed(2)} ₺ eksik) onaylandı.</i>\n`

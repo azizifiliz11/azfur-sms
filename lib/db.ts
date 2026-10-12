@@ -1858,11 +1858,43 @@ export const db = {
     return data.deposits;
   },
 
+  /**
+   * Ödeme talebini onaylar/reddeder. Onay bakiyeyi BURADA ve yalnızca BİR KEZ ekler;
+   * çağıranlar bakiyeye ayrıca ekleme yapmamalıdır.
+   * Talep bulunamazsa veya zaten onaylanmışsa (başka bir istek/örnek onayladıysa) null döner.
+   */
   async updateDepositStatus(id: string, status: "APPROVED" | "REJECTED"): Promise<DepositRequest | null> {
-    const data = loadDb();
+    // Webhook ve durum sorgusu farklı sunucusuz örneklerde aynı anda gelebilir: güncel veriyle çalış
+    const data = await this.syncFromCloud(true);
     const dep = data.deposits.find((d) => d.id === id);
     if (!dep) return null;
+    if (dep.status === "APPROVED") return null;
+
+    const sql = getSql();
+    if (status === "APPROVED" && sql) {
+      // Atomik sahiplenme: yalnızca durumu gerçekten değiştiren istek bakiyeyi yükler
+      try {
+        const claimed = (await sql`
+          UPDATE deposits SET status = 'APPROVED', approved_at = NOW()
+          WHERE id = ${id} AND status <> 'APPROVED'
+          RETURNING id
+        `) as any[];
+        if (claimed.length === 0) {
+          const existing = (await sql`SELECT status FROM deposits WHERE id = ${id}`) as any[];
+          if (existing.length > 0) {
+            // Satır var ama zaten onaylanmış: başka bir istek bakiyeyi yükledi
+            dep.status = "APPROVED";
+            return null;
+          }
+          // Satır SQL'de yoksa (eski kayıt) bellek kontrolüyle devam edilir ve aşağıda eklenir
+        }
+      } catch (err) {
+        console.error("[PostgreSQL deposit claim Error]:", err);
+      }
+    }
+
     dep.status = status;
+    (dep as any).approvedAt = status === "APPROVED" ? new Date().toISOString() : (dep as any).approvedAt;
 
     if (status === "APPROVED") {
       const cleanId = String(dep.telegramId).trim();
@@ -1875,9 +1907,21 @@ export const db = {
       let targetUser: User;
       if (foundKey && data.users[foundKey]) {
         targetUser = data.users[foundKey];
-        targetUser.balance = Number(
-          (targetUser.balance + dep.amount).toFixed(2)
-        );
+        let newBalance = Number((targetUser.balance + dep.amount).toFixed(2));
+        if (sql) {
+          // Bakiyeyi SQL'de atomik artır (eşzamanlı satın alma/yüklemede kayıp güncelleme olmasın)
+          try {
+            const rows = (await sql`
+              UPDATE users SET balance = balance + ${Number(dep.amount)}
+              WHERE telegram_id = ${BigInt(cleanId)}
+              RETURNING balance
+            `) as any[];
+            if (rows.length > 0) newBalance = Number(Number(rows[0].balance).toFixed(2));
+          } catch (err) {
+            console.error("[PostgreSQL balance increment Error]:", err);
+          }
+        }
+        targetUser.balance = newBalance;
       } else {
         targetUser = await this.getOrCreateUser(cleanId, {
           username: dep.username,

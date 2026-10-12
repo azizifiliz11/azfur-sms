@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       const apStatus = String(payload.status || "").toLowerCase();
       console.log(`🔔 Apirone Webhook Alındı: Invoice=${invoiceId}, Status=${apStatus}`);
 
+      await db.syncFromCloud();
       const deposits = db.getDeposits();
       const dep = deposits.find(
         (d) =>
@@ -55,18 +56,17 @@ export async function POST(req: Request) {
       }
 
       // Eğer fatura onaylandıysa
-      if (isApproved && dep && dep.status !== "APPROVED") {
-        await db.updateDepositStatus(dep.id, "APPROVED");
-
-        const user = db.getUser(dep.telegramId);
+      // updateDepositStatus bakiyeyi tek seferlik yükler; null = zaten onaylanmış (tekrar yükleme yok)
+      const approved = isApproved && dep && dep.status !== "APPROVED" ? await db.updateDepositStatus(dep.id, "APPROVED") : null;
+      if (approved) {
+        const user = db.getUser(approved.telegramId);
         if (user) {
-          const newBal = Number((user.balance + dep.amount).toFixed(2));
-          await db.updateUser(dep.telegramId, { balance: newBal });
+          const newBal = Number(user.balance.toFixed(2));
 
           await sendTelegramDirectMessage(
-            dep.telegramId,
+            approved.telegramId,
             `🎉 <b>TEBRİKLER! ÖDEMENİZ ONAYLANDI</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-              `💰 <b>Yüklenen Tutar:</b> <code>₺${dep.amount.toFixed(2)}</code>\n` +
+              `💰 <b>Yüklenen Tutar:</b> <code>₺${approved.amount.toFixed(2)}</code>\n` +
               `💳 <b>Yeni Bakiyeniz:</b> <code>₺${newBal.toFixed(2)}</code>\n` +
               toleranceMsg +
               `🆔 <b>İşlem No:</b> <code>#${invoiceId}</code>\n` +
@@ -103,6 +103,7 @@ export async function POST(req: Request) {
 
     console.log(`🔔 Kripto Webhook Alındı: TrackId=${trackId}, Status=${status}, OrderId=${orderId}`);
 
+    await db.syncFromCloud();
     const deposits = db.getDeposits();
     const dep = deposits.find(
       (d) =>
@@ -128,13 +129,12 @@ export async function POST(req: Request) {
     }
 
     if (isApproved && dep) {
-      if (dep.status !== "APPROVED") {
-        await db.updateDepositStatus(dep.id, "APPROVED");
-
+      // updateDepositStatus bakiyeyi tek seferlik yükler; null = zaten onaylanmış (tekrar yükleme yok)
+      const approved = dep.status !== "APPROVED" ? await db.updateDepositStatus(dep.id, "APPROVED") : null;
+      if (approved) {
         const user = db.getUser(dep.telegramId);
         if (user) {
-          const newBal = Number((user.balance + dep.amount).toFixed(2));
-          await db.updateUser(dep.telegramId, { balance: newBal });
+          const newBal = Number(user.balance.toFixed(2));
 
           await sendTelegramDirectMessage(
             dep.telegramId,

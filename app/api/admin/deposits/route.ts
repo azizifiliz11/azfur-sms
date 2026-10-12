@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
 
     const updated = await db.updateDepositStatus(depositId, status);
     if (!updated) {
+      const existing = db.getDeposits().find((d) => d.id === depositId);
+      if (existing?.status === "APPROVED") {
+        return NextResponse.json({ success: false, error: "Bu talep zaten onaylanmış; bakiye daha önce yüklendi." }, { status: 409 });
+      }
       return NextResponse.json({ success: false, error: "Talep bulunamadı" }, { status: 404 });
     }
 

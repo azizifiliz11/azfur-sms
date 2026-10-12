@@ -268,12 +268,12 @@ function HomeContent() {
 
   if (isReady && !tgUser) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#090a0f] text-center">
-        <div className="w-16 h-16 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4 shadow-xl">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-3xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand mb-4 shadow-xl">
           <Zap className="w-8 h-8" />
         </div>
-        <h1 className="text-xl font-bold text-white mb-2">AzFur SMS Onay Platformu</h1>
-        <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
+        <h1 className="text-xl font-semibold text-foreground mb-2">AzFur SMS Onay Platformu</h1>
+        <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
           Bu uygulama bir <b>Telegram Mini App (TMA)</b> servisidir. Güvenliğiniz ve işlemlerinizin anında gerçekleşmesi için lütfen Telegram botumuz üzerinden başlatınız.
         </p>
       </div>
@@ -282,12 +282,12 @@ function HomeContent() {
 
   if (!isReady || (loading && !currentUser)) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#090a0f]">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="relative flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-          <Zap className="w-6 h-6 text-emerald-400 absolute" />
+          <div className="w-16 h-16 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
+          <Zap className="w-6 h-6 text-brand absolute" />
         </div>
-        <p className="mt-4 text-xs font-semibold text-zinc-400 animate-pulse">
+        <p className="mt-4 text-xs font-medium text-muted-foreground animate-pulse">
           AzFur Altyapısı Başlatılıyor...
         </p>
       </div>
@@ -296,19 +296,19 @@ function HomeContent() {
 
   if (currentUser?.isBanned) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#090a0f] text-center select-none">
-        <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 mb-5 shadow-2xl shadow-rose-950/50">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 mb-5 shadow-2xl ">
           <ShieldAlert className="w-10 h-10 animate-pulse" />
         </div>
-        <h1 className="text-xl font-black text-white tracking-wider uppercase mb-2">
+        <h1 className="text-xl font-semibold text-foreground tracking-wider uppercase mb-2">
           HESABINIZ ENGELLENDİ
         </h1>
-        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+        <p className="text-xs text-muted-foreground max-w-sm mb-6 leading-relaxed">
           Yönetici kararı veya sistem kuralları gereği hesabınız kalıcı/geçici olarak askıya alınmıştır. Bu süre zarfında bot ve web servislerimize erişim sağlayamazsınız.
         </p>
 
-        <div className="w-full max-w-sm bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 text-left mb-6 shadow-xl backdrop-blur-md">
-          <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <div className="w-full max-w-sm bg-card/90 border border-border rounded-2xl p-4 text-left mb-6 shadow-xl backdrop-blur-md">
+          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
             <span>👑 İletişim & Destek Yöneticileri</span>
           </div>
           <div className="space-y-2">
@@ -319,30 +319,30 @@ function HomeContent() {
                   href={`https://t.me/${adminUser}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/50 text-white transition-all group active:scale-98"
+                  className="flex items-center justify-between p-3 rounded-xl bg-muted/70 hover:bg-muted border border-border text-foreground transition-all group active:scale-98"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
+                    <div className="w-7 h-7 rounded-full bg-brand/20 text-brand flex items-center justify-center text-xs font-semibold font-mono">
                       @
                     </div>
-                    <span className="text-sm font-semibold text-zinc-200 group-hover:text-emerald-400 transition-colors">
+                    <span className="text-sm font-medium text-foreground group-hover:text-brand transition-colors">
                       @{adminUser}
                     </span>
                   </div>
-                  <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                  <span className="text-xs font-medium text-brand bg-brand/10 px-2.5 py-1 rounded-lg border border-brand/20">
                     Mesaj At →
                   </span>
                 </a>
               ))
             ) : (
-              <p className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/50 text-sm text-zinc-400">
+              <p className="p-3 rounded-xl bg-muted/70 border border-border text-sm text-muted-foreground">
                 Destek yöneticisi bilgisi henüz tanımlanmamış.
               </p>
             )}
           </div>
         </div>
 
-        <p className="text-[11px] text-zinc-600">
+        <p className="text-[11px] text-muted-foreground/60">
           AzFur SMS Onay Altyapısı Güvenlik Sistemi
         </p>
       </div>
@@ -354,17 +354,17 @@ function HomeContent() {
   // SİSTEM BAKIM MODUNDA İKEN NORMAL KULLANICILARA SAMİMİ BAKIM EKRANI
   if (maintenanceMode && !isAdmin) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-zinc-100 p-4 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col items-center justify-center text-foreground p-4 relative overflow-hidden">
         {/* Ambient background glows */}
         <div className="absolute -top-32 -left-32 w-80 h-80 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="w-full max-w-md mx-auto space-y-4 relative z-10">
           {/* Main Card */}
-          <div className="bg-gradient-to-b from-[#151722]/90 to-[#0e1017]/95 border border-amber-500/30 rounded-3xl p-6 shadow-2xl shadow-black/80 backdrop-blur-xl text-center space-y-4">
+          <div className="bg-gradient-to-b from-card/90 to-card/95 border border-amber-500/30 rounded-3xl p-6 shadow-2xl shadow-black/80 backdrop-blur-xl text-center space-y-4">
             {/* Animated Icon */}
             <div className="relative inline-flex items-center justify-center">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/40 flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/40 flex items-center justify-center shadow-lg ">
                 <Wrench className="w-10 h-10 text-amber-400 animate-bounce" />
               </div>
               <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
@@ -374,7 +374,7 @@ function HomeContent() {
 
             {/* Badge */}
             <div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 Planlı Altyapı Bakımı
               </span>
@@ -382,10 +382,10 @@ function HomeContent() {
 
             {/* Header */}
             <div className="space-y-2">
-              <h1 className="text-xl font-extrabold text-white tracking-tight">
+              <h1 className="text-xl font-semibold text-foreground tracking-tight">
                 Kısa Bir Mola! Bakımdayız ✨
               </h1>
-              <p className="text-xs text-zinc-300 leading-relaxed">
+              <p className="text-xs text-foreground/80 leading-relaxed">
                 {maintenanceMessage?.trim() || (
                   <>
                     Değerli Kullanıcımız, sizlere çok daha hızlı, kesintisiz ve kaliteli bir hizmet sunabilmek için altyapımızda kısa süreli bir bakım ve güncelleme çalışması yapıyoruz.
@@ -396,11 +396,11 @@ function HomeContent() {
 
             {/* Warm Note Box */}
             <div className="bg-amber-950/30 border border-amber-500/20 rounded-2xl p-4 text-left space-y-2">
-              <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+              <div className="flex items-center gap-2 text-amber-400 font-medium text-xs">
                 <Headphones className="w-4 h-4 shrink-0" />
                 <span>Numara Almak İçin İletişime Geçin:</span>
               </div>
-              <p className="text-[11px] text-zinc-300 leading-relaxed">
+              <p className="text-[11px] text-foreground/80 leading-relaxed">
                 Bu süreçte otomatik sistemimiz geçici olarak kapalıdır. Acil numara almak, bakiye yüklemek veya herhangi bir sorunuz için yöneticilerimizle doğrudan iletişime geçebilirsiniz; hemen yardımcı olacağız!
               </p>
             </div>
@@ -414,14 +414,14 @@ function HomeContent() {
                     href={`https://t.me/${u}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 active:scale-98 transition-all"
+                    className="bg-foreground w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-background font-semibold text-xs shadow-lg active:scale-98 transition-all"
                   >
                     <Send className="w-4 h-4" />
                     <span>Yöneticiye Yaz (@{u})</span>
                   </a>
                 ))
               ) : (
-                <div className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/50 text-xs text-zinc-400 text-center">
+                <div className="p-3 rounded-xl bg-muted/70 border border-border text-xs text-muted-foreground text-center">
                   Destek yöneticisi bilgisi henüz tanımlanmamış.
                 </div>
               )}
@@ -429,14 +429,14 @@ function HomeContent() {
               <button
                 type="button"
                 onClick={handleRefreshAll}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-zinc-300 font-medium text-xs active:scale-98 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-muted/80 hover:bg-input/80 border border-border text-foreground/80 font-medium text-xs active:scale-98 transition-all"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Durumu Tekrar Kontrol Et</span>
               </button>
             </div>
 
-            <p className="text-[10px] text-zinc-500 pt-1">
+            <p className="text-[10px] text-muted-foreground/80 pt-1">
               Anlayışınız ve sabrınız için içtenlikle teşekkür ederiz. ❤️
             </p>
           </div>
@@ -465,10 +465,10 @@ function HomeContent() {
     : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#090a0f] text-zinc-100">
+    <div className="min-h-screen flex flex-col text-foreground">
       {/* Yönetici için bakım modu bildirim bandı */}
       {maintenanceMode && isAdmin && (
-        <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-lg sticky top-0 z-50">
+        <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 text-white px-4 py-2 text-xs font-medium flex items-center justify-between shadow-lg sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <Wrench className="w-4 h-4 shrink-0" />
             <span>
@@ -477,7 +477,7 @@ function HomeContent() {
           </div>
           <button
             onClick={() => setAdminViewActive(true)}
-            className="ml-2 px-2.5 py-1 bg-black/30 hover:bg-black/50 rounded-lg text-[11px] font-bold shrink-0 transition-colors"
+            className="ml-2 px-2.5 py-1 bg-foreground/5 hover:bg-black/50 rounded-lg text-[11px] font-semibold shrink-0 transition-colors"
           >
             Paneli Aç
           </button>
@@ -542,16 +542,16 @@ function HomeContent() {
             />
 
             {/* Alt Bilgi & Canlı Destek Butonu */}
-            <div className="pt-4 border-t border-white/[0.06] text-center space-y-2.5 text-zinc-500 text-[11px]">
+            <div className="pt-4 border-t border-border text-center space-y-2.5 text-muted-foreground/80 text-[11px]">
               <div className="flex items-center justify-center gap-3">
-                <div className="flex items-center gap-1.5 text-zinc-400">
-                  <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Shield className="w-3.5 h-3.5 text-brand" />
                   <span>%100 İade Garantili</span>
                 </div>
-                <span className="text-zinc-600">•</span>
+                <span className="text-muted-foreground/60">•</span>
                 <button
                   onClick={() => setSupportModalOpen(true)}
-                  className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-semibold active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 text-foreground/90 hover:text-foreground font-medium active:scale-95 transition-all"
                 >
                   <Headphones className="w-3.5 h-3.5" />
                   <span>Destek & Ticket Aç</span>
@@ -562,10 +562,10 @@ function HomeContent() {
               </p>
 
               {/* Yasal Uyarı & Kullanım Şartları */}
-              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-white/[0.06] text-[10.5px] text-zinc-400 leading-relaxed text-left flex items-start gap-2">
+              <div className="p-2.5 rounded-xl bg-card/60 border border-border text-[10.5px] text-muted-foreground leading-relaxed text-left flex items-start gap-2">
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong className="text-zinc-300">Yasal Bilgilendirme:</strong> Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
+                  <strong className="text-foreground/80">Yasal Bilgilendirme:</strong> Kullanıcı, aldığı numaraları yasalara aykırı işlemler için kullanamaz. Hizmetin kötüye kullanımı durumunda hesabın askıya alınma hakkı saklıdır.
                 </span>
               </div>
             </div>

@@ -16,6 +16,8 @@ import {
   Check,
 } from "lucide-react";
 import { haptic } from "@/lib/haptic";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { RollingNumber } from "@/components/ui/rolling-number";
 
 interface HeaderProps {
   user: {
@@ -164,24 +166,21 @@ export function Header({
       : "0.00";
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.07] bg-[#080a10]/95 px-3 pt-[calc(env(safe-area-inset-top)+0.55rem)] pb-3 backdrop-blur-2xl">
-      <div className="mx-auto max-w-md space-y-2.5">
-        <div className="flex min-h-10 items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-300 via-teal-400 to-cyan-500 text-[#062017] shadow-lg shadow-emerald-950/40">
-              <Zap className="h-[18px] w-[18px] fill-current" />
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#080a10] bg-emerald-300" />
+    <header className="contents">
+      <div className="sticky top-0 z-40 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-2">
+        {/* Axis pill navbar */}
+        <nav className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-full border border-border bg-background/80 p-1.5 pl-2 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] backdrop-blur-xl dark:border-muted-foreground/20">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+              <Zap className="h-4 w-4 fill-current" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[15px] font-black leading-none tracking-tight text-white">AzFur</span>
-                <span className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.07] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.13em] text-emerald-200">SMS ONAY</span>
-              </div>
-              <span className="mt-1 block text-[9px] leading-none text-zinc-500">Hızlı, güvenli ve canlı</span>
+            <div className="min-w-0 leading-none">
+              <span className="block text-[15px] font-medium tracking-tight text-foreground">AzFur</span>
+              <span className="mt-0.5 block text-[9px] uppercase tracking-[0.14em] text-muted-foreground">SMS Onay</span>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             {onOpenSupport && (
               <button
                 type="button"
@@ -189,14 +188,14 @@ export function Header({
                   haptic.impact("light");
                   onOpenSupport();
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] px-2.5 text-[10px] font-semibold text-sky-200 transition-colors hover:bg-sky-300/[0.12] active:scale-95"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:scale-95 dark:hover:bg-muted/50"
                 title="Canlı Destek & Ticket Aç"
                 aria-label="Canlı destek ve ticket aç"
               >
-                <Headphones className="h-3.5 w-3.5" />
-                <span>Destek</span>
+                <Headphones className="h-4 w-4" />
               </button>
             )}
+            <ThemeToggle />
             {isAdmin && onToggleAdminView && (
               <button
                 type="button"
@@ -204,11 +203,7 @@ export function Header({
                   haptic.impact("light");
                   onToggleAdminView();
                 }}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-bold transition-colors active:scale-95 ${
-                  adminViewActive
-                    ? "border-violet-300/35 bg-violet-300/15 text-violet-100"
-                    : "border-violet-300/15 bg-violet-300/[0.06] text-violet-200 hover:bg-violet-300/[0.12]"
-                }`}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-foreground px-3.5 text-xs font-medium text-background transition-colors hover:bg-foreground/85 active:scale-95"
                 title="Yönetici Paneli"
                 aria-label={adminViewActive ? "Uygulamaya dön" : "Yönetici panelini aç"}
               >
@@ -217,54 +212,48 @@ export function Header({
               </button>
             )}
           </div>
-        </div>
+        </nav>
+      </div>
 
-        <section className="relative isolate overflow-hidden rounded-[1.55rem] border border-emerald-300/15 bg-[linear-gradient(135deg,#10221f_0%,#10151d_52%,#111522_100%)] p-3.5 shadow-[0_16px_44px_rgba(0,0,0,0.28)]">
-          <div className="pointer-events-none absolute -right-12 -top-16 -z-10 h-40 w-40 rounded-full bg-emerald-400/[0.13] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/3 -z-10 h-36 w-36 rounded-full bg-sky-400/[0.09] blur-3xl" />
-
+      <div className="px-3 pt-2">
+        {/* Axis kartı: hesap ve bakiye */}
+        <section className="relative mx-auto max-w-md overflow-hidden rounded-3xl bg-background/70 p-4 shadow-xs ring-1 ring-foreground/10 backdrop-blur-xl">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="relative mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] border border-emerald-200/15 bg-gradient-to-br from-emerald-300/15 to-sky-300/[0.06] text-[15px] font-black tracking-wide text-emerald-100 shadow-inner shadow-white/[0.04]">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium tracking-wide text-foreground ring-1 ring-foreground/10">
               {initials}
-              <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-[3px] border-[#111a1c] bg-emerald-400" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-brand" />
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]" />
-                Hesap paneli
-              </div>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <h2
-                  suppressHydrationWarning
-                  className="max-w-full truncate text-[17px] font-extrabold leading-tight tracking-tight text-white"
-                >
-                  {greeting}
-                </h2>
+              <h2
+                suppressHydrationWarning
+                className="truncate text-xl font-normal leading-tight tracking-tighter text-foreground"
+              >
+                {greeting}
+              </h2>
+              <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
                 {isAdmin && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/20 bg-emerald-300/[0.09] px-2 py-0.5 text-[8px] font-bold text-emerald-100">
-                    <ShieldCheck className="h-2.5 w-2.5" /> Yönetici
+                  <span className="inline-flex h-5 items-center gap-1 rounded-sm border border-border px-2 text-[10px] font-medium text-foreground">
+                    <ShieldCheck className="h-3 w-3" /> Yönetici
                   </span>
                 )}
                 {user?.isVip && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/20 bg-amber-300/[0.09] px-2 py-0.5 text-[8px] font-bold text-amber-100">
-                    <Sparkles className="h-2.5 w-2.5" /> VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
+                  <span className="inline-flex h-5 items-center gap-1 rounded-sm bg-secondary px-2 text-[10px] font-medium text-foreground dark:text-background">
+                    <Sparkles className="h-3 w-3" /> VIP {user.vipDiscountPercent ? `%${user.vipDiscountPercent}` : ""}
                   </span>
                 )}
-              </div>
-              <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
                 {showUsername && (
-                  <span className="max-w-[55%] truncate text-[10px] font-medium text-zinc-300">@{visibleUsername}</span>
+                  <span className="max-w-[45%] truncate text-[11px] text-muted-foreground">@{visibleUsername}</span>
                 )}
                 <button
                   type="button"
                   onClick={handleCopyId}
-                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-black/20 px-2 font-mono text-[9px] text-zinc-400 transition-colors hover:border-white/15 hover:text-white"
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border px-2 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                   title="Telegram ID'yi kopyala"
                   aria-label={`Telegram ID ${user?.telegramId || "0"}, kopyalamak için dokun`}
                 >
                   <span>ID {user?.telegramId || "0"}</span>
-                  {copiedId ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
+                  {copiedId ? <Check className="h-2.5 w-2.5 text-brand" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
                 </button>
               </div>
             </div>
@@ -273,68 +262,79 @@ export function Header({
               type="button"
               onClick={handleRefreshClick}
               disabled={refreshing}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.055] text-zinc-300 transition-colors hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:cursor-wait"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-xs transition-colors hover:bg-muted active:scale-95 disabled:cursor-wait dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
               title="Bakiyeyi ve verileri yenile"
               aria-label="Bakiyeyi ve verileri yenile"
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-emerald-300" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-brand" : ""}`} />
             </button>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/[0.07] bg-[#080c12]/70 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={handleRefreshClick}
-                className="group min-w-0 flex-1 cursor-pointer text-left"
-                title="Bakiyeyi yenilemek için dokun"
-                aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
-              >
-                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">
-                  <Wallet className="h-3 w-3 text-emerald-300" /> Kullanılabilir bakiye
+          <div className="mt-5 space-y-3">
+            <button
+              type="button"
+              onClick={handleRefreshClick}
+              className="group block w-full cursor-pointer text-left"
+              title="Bakiyeyi yenilemek için dokun"
+              aria-label={`Mevcut bakiye ₺${balanceDisplay}. Yenilemek için dokun`}
+            >
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Wallet className="h-3.5 w-3.5" /> Kullanılabilir bakiye
+              </span>
+              <span className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="text-4xl font-normal leading-none tracking-tighter text-foreground transition-colors group-hover:text-muted-foreground">
+                  ₺<RollingNumber value={Number(balanceDisplay)} precision={2} format={(n) => n.toFixed(2)} />
                 </span>
-                <span className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
-                  <span className="font-mono text-[25px] font-extrabold leading-none tracking-tight text-white transition-colors group-hover:text-emerald-200">₺{balanceDisplay}</span>
-                  <span className="text-[9px] font-semibold tracking-wide text-emerald-300">TRY</span>
-                </span>
-              </button>
+                <span className="text-xs text-muted-foreground">TRY</span>
+              </span>
+            </button>
 
-              <div className={`grid shrink-0 gap-1.5 ${onOpenCoupon ? "grid-cols-2" : "grid-cols-1"}`}>
-                {onOpenCoupon && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic.impact("light");
-                      onOpenCoupon();
-                    }}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-2.5 text-[10px] font-bold text-amber-200 transition-colors hover:bg-amber-300/[0.14] active:scale-95"
-                    title="Kupon / Promosyon Kodu Kullan"
-                    aria-label="Kupon veya promosyon kodu kullan"
-                  >
-                    <Ticket className="h-3.5 w-3.5" />
-                    <span>Kupon</span>
-                  </button>
-                )}
+            <div className={`grid gap-2 ${onOpenCoupon ? "grid-cols-2" : "grid-cols-1"}`}>
+              {onOpenCoupon && (
                 <button
                   type="button"
-                  onClick={handleDepositClick}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-300 to-teal-300 px-3 text-[10px] font-extrabold text-[#062017] shadow-md shadow-emerald-950/30 transition-all hover:brightness-110 active:scale-95"
-                  title="Bakiye yükle"
-                  aria-label="Bakiye yükle"
+                  onClick={() => {
+                    haptic.impact("light");
+                    onOpenCoupon();
+                  }}
+                  className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted active:scale-95 dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                  title="Kupon / Promosyon Kodu Kullan"
+                  aria-label="Kupon veya promosyon kodu kullan"
                 >
-                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                  <span>Yükle</span>
+                  <Ticket className="h-3.5 w-3.5" />
+                  <span>Kupon Kullan</span>
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={handleDepositClick}
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full bg-foreground px-4 text-sm font-medium text-background transition-colors hover:bg-foreground/85 active:scale-95"
+                title="Bakiye yükle"
+                aria-label="Bakiye yükle"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Bakiye Yükle</span>
+              </button>
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-1 px-0.5 text-[9px] font-semibold text-zinc-400">
-            <span className="inline-flex items-center gap-1 whitespace-nowrap"><Zap className="h-3 w-3 text-emerald-300" /> 5–30 sn teslim</span>
-            <span className="h-1 w-1 rounded-full bg-zinc-700" />
-            <span className="inline-flex items-center gap-1 whitespace-nowrap"><ShieldAlert className="h-3 w-3 text-sky-300" /> %100 iade</span>
-            <span className="h-1 w-1 rounded-full bg-zinc-700" />
-            <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3 text-violet-300" /> 7/24 aktif</span>
+          {/* Axis istatistik ızgarası */}
+          <div className="mt-4 grid grid-cols-3 border-l border-t border-border text-center">
+            <div className="border-b border-r border-border px-1 py-2.5">
+              <Zap className="mx-auto h-3.5 w-3.5 text-brand" />
+              <span className="mt-1 block text-[11px] font-medium text-foreground">5–30 sn</span>
+              <span className="block text-[9px] text-muted-foreground">teslim</span>
+            </div>
+            <div className="border-b border-r border-border px-1 py-2.5">
+              <ShieldAlert className="mx-auto h-3.5 w-3.5 text-brand" />
+              <span className="mt-1 block text-[11px] font-medium text-foreground">%100</span>
+              <span className="block text-[9px] text-muted-foreground">iade</span>
+            </div>
+            <div className="border-b border-r border-border px-1 py-2.5">
+              <Clock className="mx-auto h-3.5 w-3.5 text-brand" />
+              <span className="mt-1 block text-[11px] font-medium text-foreground">7/24</span>
+              <span className="block text-[9px] text-muted-foreground">aktif</span>
+            </div>
           </div>
         </section>
       </div>

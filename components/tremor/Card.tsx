@@ -15,11 +15,11 @@ export function Card({
   ...props
 }: CardProps) {
   const decorColors = {
-    emerald: "border-emerald-500",
-    blue: "border-blue-500",
+    emerald: "border-brand",
+    blue: "border-foreground/40",
     amber: "border-amber-500",
     red: "border-rose-500",
-    purple: "border-purple-500",
+    purple: "border-foreground/40",
   };
 
   const decorBorders = {
@@ -31,7 +31,7 @@ export function Card({
 
   return (
     <div
-      className={`relative rounded-2xl bg-[#11131a]/90 backdrop-blur-xl border border-white/[0.08] shadow-lg shadow-black/40 p-4 transition-all ${
+      className={`relative rounded-3xl bg-background/70 backdrop-blur-xl ring-1 ring-foreground/10 shadow-xs p-4 transition-all ${
         decoration ? decorBorders[decoration] : ""
       } ${className}`}
       {...props}

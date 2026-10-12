@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+import { themeInitScript } from "@/lib/theme";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Axis şablonunun yazı tipi
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "latin-ext"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -22,7 +25,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#090a0f",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -45,8 +51,9 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-[#090a0f] text-[#f4f4f5] flex flex-col selection:bg-emerald-500/30 selection:text-emerald-300`}
+        className={`${inter.variable} ${geistMono.variable} font-sans font-light antialiased min-h-screen bg-background text-foreground flex flex-col`}
       >
+        <Script id="axis-theme" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <Script
           id="anti-bis"
           strategy="beforeInteractive"
@@ -87,7 +94,8 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
-        {children}
+        <div aria-hidden="true" className="axis-orb" />
+        <div className="relative z-[1] flex min-h-screen flex-col">{children}</div>
       </body>
     </html>
   );

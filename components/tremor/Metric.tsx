@@ -9,7 +9,7 @@ interface MetricProps {
 export function Metric({ children, className = "", isMono = true }: MetricProps) {
   return (
     <div
-      className={`text-2xl sm:text-3xl font-bold tracking-tight text-white ${
+      className={`text-3xl sm:text-4xl font-normal tracking-tighter text-foreground ${
         isMono ? "font-mono" : ""
       } ${className}`}
     >
@@ -19,5 +19,5 @@ export function Metric({ children, className = "", isMono = true }: MetricProps)
 }
 
 export function Text({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-xs sm:text-sm text-zinc-400 font-medium ${className}`}>{children}</p>;
+  return <p className={`text-xs sm:text-sm text-muted-foreground font-medium ${className}`}>{children}</p>;
 }

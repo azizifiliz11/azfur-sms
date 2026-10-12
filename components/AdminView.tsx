@@ -68,6 +68,9 @@ import { Badge } from "./tremor/Badge";
 import { Callout, ProgressBar } from "./tremor/Callout";
 import { AreaChart, DonutChart } from "./tremor/Charts";
 import { haptic } from "@/lib/haptic";
+import { ThemeToggle } from "./ThemeToggle";
+import { HaloSwitch } from "./ui/halo-switch";
+import { RollingNumber } from "./ui/rolling-number";
 
 interface AdminViewProps {
   onBackToApp?: () => void;
@@ -2321,8 +2324,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 space-y-3">
-        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-        <span className="text-xs text-zinc-400 font-medium">Yönetici yetkileri ve sistem verileri kontrol ediliyor...</span>
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+        <span className="text-xs text-muted-foreground font-medium">Yönetici yetkileri ve sistem verileri kontrol ediliyor...</span>
       </div>
     );
   }
@@ -2332,62 +2335,61 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   return (
     <div className="space-y-4 pb-12">
       {/* Top Banner */}
-      <div className="flex items-center justify-between bg-zinc-900/90 border border-white/10 rounded-2xl p-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
-            <ShieldCheck className="w-5 h-5" />
+      <div className="sticky top-[calc(env(safe-area-inset-top)+0.75rem)] z-40 flex items-center justify-between gap-2 rounded-full border border-border bg-background/80 p-1.5 pl-2 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] backdrop-blur-xl dark:border-muted-foreground/20">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+            <ShieldCheck className="h-4 w-4" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <span>AzFur Yönetici Paneli</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                CANLI
-              </span>
-            </h2>
-            <p className="text-[11px] text-zinc-400">Tüm sistem kontrolü, TCMB kur entegrasyonu ve kullanıcı yönetimi</p>
+          <div className="min-w-0 leading-none">
+            <h2 className="truncate text-[15px] font-medium tracking-tight text-foreground">Yönetici</h2>
+            <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-brand" />
+              Canlı panel
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={() => {
               haptic.impact("light");
               fetchAllData();
             }}
             disabled={refreshing}
-            className="p-2 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white transition-colors disabled:opacity-50"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:opacity-50 dark:hover:bg-muted/50"
             title="Yenile"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-emerald-400" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-brand" : ""}`} />
           </button>
+          <ThemeToggle />
           {onBackToApp && (
             <button
               onClick={onBackToApp}
-              className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 font-semibold transition-colors"
+              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background transition-colors hover:bg-foreground/85"
             >
-              Uygulamaya Dön
+              Uygulama
             </button>
           )}
         </div>
       </div>
 
       {toastMsg && (
-        <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-semibold animate-in fade-in">
+        <div className="p-3 rounded-xl bg-brand/10 border border-brand/50 text-brand text-xs font-medium animate-in fade-in">
           {toastMsg}
         </div>
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-10 gap-1.5 bg-zinc-900/70 p-1.5 rounded-2xl border border-white/5 text-xs font-semibold">
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-10 gap-1 bg-background/70 p-1.5 rounded-3xl ring-1 ring-foreground/10 backdrop-blur-xl text-xs font-medium">
         <button
           onClick={() => {
             haptic.selection();
             setActiveTab("overview");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "overview"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Genel Bakış
@@ -2397,10 +2399,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("pricing");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "pricing"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Fiyat / Kâr
@@ -2410,10 +2412,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("bank");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "bank"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Kripto & Ayar
@@ -2423,10 +2425,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("coupons");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "coupons"
-              ? "bg-purple-500 text-white shadow-md shadow-purple-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Kuponlar ({coupons.length})
@@ -2436,10 +2438,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("users");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "users"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Kullanıcı ({users.length})
@@ -2449,10 +2451,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("deposits");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "deposits"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Talepler ({deposits.filter((d) => d.status === "PENDING").length})
@@ -2462,10 +2464,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("tickets");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center relative ${
+          className={`py-2 px-1 rounded-full transition-all text-center relative ${
             activeTab === "tickets"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>Destek ({tickets.filter((t) => t.status === "OPEN").length})</span>
@@ -2478,10 +2480,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("broadcast");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center ${
+          className={`py-2 px-1 rounded-full transition-all text-center ${
             activeTab === "broadcast"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Duyuru
@@ -2491,10 +2493,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("backups");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center flex items-center justify-center gap-1 ${
+          className={`py-2 px-1 rounded-full transition-all text-center flex items-center justify-center gap-1 ${
             activeTab === "backups"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Archive className="w-3.5 h-3.5 shrink-0" />
@@ -2505,10 +2507,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             haptic.selection();
             setActiveTab("logs");
           }}
-          className={`py-2 px-1 rounded-xl transition-all text-center flex items-center justify-center gap-1 ${
+          className={`py-2 px-1 rounded-full transition-all text-center flex items-center justify-center gap-1 ${
             activeTab === "logs"
-              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <FileText className="w-3.5 h-3.5 shrink-0" />
@@ -2523,8 +2525,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           <div
             className={`p-4 rounded-2xl border transition-all duration-300 ${
               maintenanceMode
-                ? "bg-gradient-to-br from-red-950/40 via-red-900/25 to-zinc-950/90 border-red-500/50 shadow-xl shadow-red-950/40 ring-1 ring-red-500/30"
-                : "bg-gradient-to-br from-[#12141e] via-[#0e1017] to-zinc-950 border-emerald-500/30 shadow-md shadow-emerald-950/20"
+                ? "bg-gradient-to-br from-red-950/40 via-red-900/25 to-background/90 border-red-500/50 shadow-xl ring-1 ring-red-500/30"
+                : "bg-gradient-to-br from-card via-card to-background border-brand/30 shadow-md "
             }`}
           >
             {/* Kart Başlığı ve Durum Rozeti */}
@@ -2534,30 +2536,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                     maintenanceMode
                       ? "bg-red-500/20 border-red-500/40 text-red-400"
-                      : "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                      : "bg-brand/20 border-brand/40 text-brand"
                   }`}
                 >
                   <Wrench className={`w-5 h-5 ${maintenanceMode ? "text-red-400 animate-pulse" : ""}`} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold text-white">Sistem Bakım Modu</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Sistem Bakım Modu</h3>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
                         maintenanceMode
                           ? "bg-red-500/20 text-red-300 border-red-500/40 animate-pulse"
-                          : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-brand/20 text-brand border-brand/40"
                       }`}
                     >
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
-                          maintenanceMode ? "bg-red-400" : "bg-emerald-400"
+                          maintenanceMode ? "bg-red-400" : "bg-brand"
                         }`}
                       />
                       {maintenanceMode ? "BAKIMDA (Kullanıcılara Kapalı)" : "AÇIK (Normal Çalışma)"}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                     {maintenanceMode
                       ? "⚠️ Bakım aktif: Normal kullanıcılar bot ve Mini App'te samimi bakım ekranı ile yönetici iletişim butonlarını görür. Yöneticiler her yere tam erişebilir."
                       : "Sistem aktif: Tüm kullanıcılar Telegram botundan ve Mini App'ten kesintisiz işlem yapabilir."}
@@ -2567,13 +2569,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Bakım Mesajı Düzenleme Alanı (Bakıma Alırken / Bakımdayken Değiştirilebilir) */}
-            <div className="mt-3.5 pt-3 border-t border-white/[0.08] space-y-2">
+            <div className="mt-3.5 pt-3 border-t border-border space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
                   <span>Bakım Duyurusu / Mesajı:</span>
                 </label>
-                <span className="text-[10px] text-zinc-500 font-mono">
+                <span className="text-[10px] text-muted-foreground/80 font-mono">
                   {maintenanceMessage.length} karakter
                 </span>
               </div>
@@ -2588,7 +2590,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       "Değerli Kullanıcımız, altyapımızda kısa süreli bakım ve iyileştirme çalışması yapmaktayız. Numara almak veya bakiye yüklemek için yöneticilerimizle iletişime geçebilirsiniz."
                     );
                   }}
-                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                  className="px-2 py-1 rounded-lg bg-muted/80 hover:bg-input/80 border border-border text-[10px] text-foreground/80 transition-colors"
                 >
                   ⚡ Standart Bakım
                 </button>
@@ -2600,7 +2602,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       "Sistemimizde hız ve sunucu altyapı güncellemesi yapılmaktadır. Acil numara talepleriniz için lütfen yöneticilerimize doğrudan yazınız."
                     );
                   }}
-                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                  className="px-2 py-1 rounded-lg bg-muted/80 hover:bg-input/80 border border-border text-[10px] text-foreground/80 transition-colors"
                 >
                   🚀 Altyapı Güncellemesi
                 </button>
@@ -2612,7 +2614,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       "SMS sağlayıcı altyapısında geçici bir bakım çalışması mevcuttur. Bilgi ve işlemleriniz için yöneticilerimize hemen ulaşabilirsiniz."
                     );
                   }}
-                  className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/5 text-[10px] text-zinc-300 transition-colors"
+                  className="px-2 py-1 rounded-lg bg-muted/80 hover:bg-input/80 border border-border text-[10px] text-foreground/80 transition-colors"
                 >
                   🛡️ Sağlayıcı Bakımı
                 </button>
@@ -2635,22 +2637,22 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 onChange={(e) => setMaintenanceMessage(e.target.value)}
                 placeholder="Özel bakım mesajınızı buraya yazınız... (Boş bırakırsanız sistemin samimi varsayılan mesajı gösterilir)"
                 rows={3}
-                className="w-full bg-zinc-900/90 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all leading-relaxed font-sans"
+                className="w-full bg-card/90 border border-border rounded-xl p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-amber-500 transition-all leading-relaxed font-sans"
               />
-              <p className="text-[10px] text-zinc-400">
+              <p className="text-[10px] text-muted-foreground">
                 💡 Bu mesaj kullanıcı /start verdiğinde, bot butonlarına tıkladığında ve Mini App bakım ekranında canlı olarak görüntülenir.
               </p>
             </div>
 
             {/* Aksiyon Butonları */}
-            <div className="mt-3 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2 flex-wrap">
-              <div className="text-[11px] text-zinc-400">
+            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-[11px] text-muted-foreground">
                 {maintenanceMode ? (
                   <span className="text-amber-300 font-medium flex items-center gap-1">
                     <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Yöneticiler her yere tam erişebilir
                   </span>
                 ) : (
-                  <span className="text-zinc-500">
+                  <span className="text-muted-foreground/80">
                     Mesajınızı yazıp tek tıkla sistemi bakıma alabilirsiniz.
                   </span>
                 )}
@@ -2662,7 +2664,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   type="button"
                   onClick={handleSaveMaintenanceMessage}
                   disabled={savingMaintenance || togglingMaintenance}
-                  className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
+                  className="px-3 py-2 rounded-xl bg-muted hover:bg-input border border-border text-foreground font-medium text-xs flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
                   title="Yalnızca mesajı kaydeder"
                 >
                   {savingMaintenance ? (
@@ -2678,10 +2680,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   type="button"
                   onClick={() => handleToggleMaintenance()}
                   disabled={togglingMaintenance}
-                  className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md disabled:opacity-50 ${
+                  className={`px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md disabled:opacity-50 ${
                     maintenanceMode
-                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-                      : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30"
+                      ? "bg-foreground hover:bg-foreground/85 text-background "
+                      : "bg-red-600 hover:bg-red-500 text-white "
                   }`}
                 >
                   {togglingMaintenance ? (
@@ -2697,15 +2699,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
           </div>
           {/* Servis Sağlayıcı Kasa Monitörü */}
-          <Card className="p-4 bg-gradient-to-br from-[#12141e] to-[#0c0e15] border-blue-500/30">
+          <Card className="p-4 bg-gradient-to-br from-card to-card border-foreground/15">
             <div className="flex items-center justify-between">
               <div>
                 <Text>Servis Sağlayıcı Kasası</Text>
-                <Metric isMono={true} className="mt-1 text-blue-400">
-                  ${overview?.provider?.balance?.toFixed(2) || "0.00"}
+                <Metric isMono={true} className="mt-1 text-foreground/90">
+                  $<RollingNumber value={Number(overview?.provider?.balance) || 0} precision={2} format={(n) => n.toFixed(2)} />
                 </Metric>
-                <div className="text-[11px] font-mono text-zinc-400 mt-1">
-                  API Durumu: <span className="text-zinc-200">{overview?.provider?.raw || "Online"}</span>
+                <div className="text-[11px] font-mono text-muted-foreground mt-1">
+                  API Durumu: <span className="text-foreground">{overview?.provider?.raw || "Online"}</span>
                 </div>
               </div>
 
@@ -2713,7 +2715,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <Badge color={overview?.provider?.balance > 0 ? "emerald" : "amber"}>
                   {overview?.provider?.balance > 0 ? "Bakiye Yeterli" : "Kasa 0 (Mock Aktif)"}
                 </Badge>
-                <p className="text-[10px] text-zinc-500 mt-2">Altyapı: AzFur SMS Motoru</p>
+                <p className="text-[10px] text-muted-foreground/80 mt-2">Altyapı: AzFur SMS Motoru</p>
               </div>
             </div>
           </Card>
@@ -2722,18 +2724,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           <div className="grid grid-cols-2 gap-3">
             <Card className="p-3.5">
               <Text>Toplam Ciro</Text>
-              <Metric isMono={true} className="text-emerald-400 mt-1">
-                ₺{overview?.stats?.totalRevenue?.toFixed(2) || "0.00"}
+              <Metric isMono={true} className="text-brand mt-1">
+                ₺<RollingNumber value={Number(overview?.stats?.totalRevenue) || 0} precision={2} format={(n) => n.toFixed(2)} />
               </Metric>
-              <div className="text-[11px] text-zinc-400 mt-1">Net Kâr: ₺{overview?.stats?.totalProfit?.toFixed(2) || "0.00"}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">Net Kâr: ₺{overview?.stats?.totalProfit?.toFixed(2) || "0.00"}</div>
             </Card>
 
             <Card className="p-3.5">
               <Text>Aktif Kullanıcı</Text>
-              <Metric isMono={true} className="text-white mt-1">
-                {overview?.stats?.totalUsers || 0}
+              <Metric isMono={true} className="text-foreground mt-1">
+                <RollingNumber value={Number(overview?.stats?.totalUsers) || 0} />
               </Metric>
-              <div className="text-[11px] text-zinc-400 mt-1">Toplam {overview?.stats?.totalActivations || 0} Sipariş</div>
+              <div className="text-[11px] text-muted-foreground mt-1">Toplam {overview?.stats?.totalActivations || 0} Sipariş</div>
             </Card>
           </div>
 
@@ -2752,15 +2754,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <RotateCcw className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">İstatistikleri Sıfırla</h4>
-                <p className="text-[11px] text-zinc-400">Ciro, sipariş geçmişi ve harcama sayaçlarını temizler</p>
+                <h4 className="text-xs font-semibold text-foreground">İstatistikleri Sıfırla</h4>
+                <p className="text-[11px] text-muted-foreground">Ciro, sipariş geçmişi ve harcama sayaçlarını temizler</p>
               </div>
             </div>
 
             <button
               onClick={handleResetStats}
               disabled={resettingStats}
-              className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5"
+              className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-semibold transition-all disabled:opacity-50 flex items-center gap-1.5"
             >
               {resettingStats ? (
                 <>
@@ -2780,12 +2782,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                <h4 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider">
                   Son 7 Günlük Gelir Trendi
                 </h4>
-                <p className="text-[11px] text-zinc-500">Günlük ciro ve kâr akışı</p>
+                <p className="text-[11px] text-muted-foreground/80">Günlük ciro ve kâr akışı</p>
               </div>
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <TrendingUp className="w-4 h-4 text-brand" />
             </div>
 
             <AreaChart data={overview?.revenueTrend || overview?.chartDaily || []} />
@@ -2794,10 +2796,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           {/* Donut Chart: En Çok Satan Servisler */}
           <Card className="p-4 space-y-3">
             <div>
-              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+              <h4 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider">
                 En Çok Tercih Edilen Servisler
               </h4>
-              <p className="text-[11px] text-zinc-500">Satış adetlerine göre dağılım</p>
+              <p className="text-[11px] text-muted-foreground/80">Satış adetlerine göre dağılım</p>
             </div>
             <DonutChart data={overview?.chartServices || []} />
           </Card>
@@ -2808,18 +2810,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "pricing" && (
         <div className="space-y-4">
           {/* TCMB Otomatik Kur Kartı */}
-          <Card className="p-4 space-y-3 bg-gradient-to-br from-[#10141f] to-[#0c0e15] border-blue-500/40 shadow-lg">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-3 bg-gradient-to-br from-card to-card border-foreground/20 shadow-lg">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <Landmark className="w-5 h-5 text-blue-400" />
+                <Landmark className="w-5 h-5 text-foreground/90" />
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>TCMB Canlı Döviz Kuru (USD/TRY)</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-foreground/10 text-foreground border border-foreground/15">
                       Resmi XML
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Fiyatlar TCMB resmi kuruna göre otomatik çevrilir
                   </p>
                 </div>
@@ -2828,7 +2830,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 onClick={handleRefreshTcmb}
                 disabled={tcmbRefreshing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-semibold transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-foreground/10 hover:bg-foreground/15 text-foreground border border-foreground/20 text-xs font-medium transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${tcmbRefreshing ? "animate-spin" : ""}`} />
                 <span>{tcmbRefreshing ? "Çekiliyor..." : "Kuru Güncelle"}</span>
@@ -2836,12 +2838,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-zinc-900/80 p-3 rounded-xl border border-white/5">
-                <span className="text-[11px] text-zinc-400 block">Güncel TCMB Dolar Kuru:</span>
-                <span className="text-xl font-bold font-mono text-blue-400 block mt-0.5">
+              <div className="bg-card/80 p-3 rounded-xl border border-border">
+                <span className="text-[11px] text-muted-foreground block">Güncel TCMB Dolar Kuru:</span>
+                <span className="text-xl font-semibold font-mono text-foreground/90 block mt-0.5">
                   ₺{lastTcmbRate.toFixed(4)}
                 </span>
-                <span className="text-[10px] text-zinc-500 block mt-0.5 truncate" title={lastTcmbFetchTime}>
+                <span className="text-[10px] text-muted-foreground/80 block mt-0.5 truncate" title={lastTcmbFetchTime}>
                   {lastTcmbFetchTime
                     ? !isNaN(Date.parse(lastTcmbFetchTime))
                       ? `Son güncelleme: ${new Date(lastTcmbFetchTime).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
@@ -2850,23 +2852,23 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </span>
               </div>
 
-              <div className="bg-zinc-900/80 p-3 rounded-xl border border-white/5 flex flex-col justify-between gap-2">
-                <span className="text-[11px] text-zinc-400 block">Kullanılan Kur Kaynağı:</span>
+              <div className="bg-card/80 p-3 rounded-xl border border-border flex flex-col justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground block">Kullanılan Kur Kaynağı:</span>
                 <div className="flex items-center gap-2 mt-1">
                   <input
                     type="checkbox"
                     id="tcmbToggle"
                     checked={useTcmbAutoRate}
                     onChange={(e) => setUseTcmbAutoRate(e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                    className="w-4 h-4 accent-brand rounded cursor-pointer"
                   />
-                  <label htmlFor="tcmbToggle" className="text-xs font-semibold text-white cursor-pointer">
+                  <label htmlFor="tcmbToggle" className="text-xs font-medium text-foreground cursor-pointer">
                     {useTcmbAutoRate ? "Otomatik TCMB Aktif" : "Manuel Kur Kullan"}
                   </label>
                 </div>
                 {useTcmbAutoRate ? (
                   <div className="space-y-1">
-                    <label htmlFor="tcmbUpdateIntervalMinutes" className="text-[10px] text-zinc-400 block">
+                    <label htmlFor="tcmbUpdateIntervalMinutes" className="text-[10px] text-muted-foreground block">
                       Kur kontrol aralığı
                     </label>
                     <div className="flex items-center gap-2">
@@ -2878,30 +2880,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         step={1}
                         value={tcmbUpdateIntervalMinutes}
                         onChange={(e) => setTcmbUpdateIntervalMinutes(Number(e.target.value))}
-                        className="w-20 bg-zinc-950 border border-white/10 rounded-lg px-2 py-1.5 text-xs font-mono text-white"
+                        className="w-20 bg-background border border-border rounded-lg px-2 py-1.5 text-xs font-mono text-foreground"
                       />
-                      <span className="text-xs text-zinc-400">dakika</span>
+                      <span className="text-xs text-muted-foreground">dakika</span>
                     </div>
-                    <span className="text-[10px] text-emerald-400 block">
+                    <span className="text-[10px] text-brand block">
                       Uygulamaya istek geldiğinde bu süre dolmuşsa kur yenilenir.
                     </span>
                   </div>
                 ) : (
-                  <span className="text-[10px] text-zinc-400 block">Sabit manuel kur geçerli</span>
+                  <span className="text-[10px] text-muted-foreground block">Sabit manuel kur geçerli</span>
                 )}
               </div>
             </div>
           </Card>
 
           {/* Kâr Motoru Kartı */}
-          <Card className="p-4 space-y-4 border-emerald-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-brand/30">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-brand" />
                   <span>Dinamik Kâr Marjı Motoru</span>
                 </h3>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-muted-foreground">
                   Sağlayıcı alış fiyatı üzerine kâr ve kur kurallarını belirleyin.
                 </p>
               </div>
@@ -2910,8 +2912,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             {/* Margin Percent Input */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Genel Kâr Marjı Oranı:</span>
-                <span className="font-mono font-bold text-emerald-400">%{marginPercent}</span>
+                <span className="text-foreground/80 font-medium">Genel Kâr Marjı Oranı:</span>
+                <span className="font-mono font-semibold text-brand">%{marginPercent}</span>
               </div>
               <div className="flex items-center gap-3">
                 <input
@@ -2921,13 +2923,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   step="5"
                   value={marginPercent}
                   onChange={(e) => setMarginPercent(Number(e.target.value))}
-                  className="w-full accent-emerald-500 h-2 bg-zinc-800 rounded-lg cursor-pointer"
+                  className="w-full accent-brand h-2 bg-muted rounded-lg cursor-pointer"
                 />
                 <input
                   type="number"
                   value={marginPercent}
                   onChange={(e) => setMarginPercent(Number(e.target.value))}
-                  className="w-20 bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white text-center"
+                  className="w-20 bg-card border border-border rounded-xl px-2.5 py-1.5 text-xs font-mono text-foreground text-center"
                 />
               </div>
             </div>
@@ -2935,15 +2937,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             {/* Fixed Fee Addition */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Sabit Ek Hizmet Ücreti (₺):</span>
-                <span className="font-mono font-bold text-emerald-400">₺{fixedFee.toFixed(2)}</span>
+                <span className="text-foreground/80 font-medium">Sabit Ek Hizmet Ücreti (₺):</span>
+                <span className="font-mono font-semibold text-brand">₺{fixedFee.toFixed(2)}</span>
               </div>
               <input
                 type="number"
                 step="0.5"
                 value={fixedFee}
                 onChange={(e) => setFixedFee(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white"
+                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground"
                 placeholder="Örn: 5.00"
               />
             </div>
@@ -2951,10 +2953,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             {/* Exchange Rate To TRY */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">
+                <span className="text-foreground/80 font-medium">
                   {useTcmbAutoRate ? "TCMB Canlı Kur Değeri:" : "Manuel Dolar / TL Kuru:"}
                 </span>
-                <span className="font-mono font-bold text-blue-400">₺{rateToTry.toFixed(2)}</span>
+                <span className="font-mono font-semibold text-foreground/90">₺{rateToTry.toFixed(2)}</span>
               </div>
               <input
                 type="number"
@@ -2962,21 +2964,21 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 value={rateToTry}
                 onChange={(e) => setRateToTry(Number(e.target.value))}
                 disabled={useTcmbAutoRate}
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground disabled:opacity-60 disabled:cursor-not-allowed"
                 placeholder="Örn: 49.20"
               />
               {useTcmbAutoRate && (
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-[10px] text-muted-foreground/80">
                   Otomatik TCMB kuru açık olduğu için bu alan canlı TCMB bülteninden çekilir.
                 </p>
               )}
             </div>
 
             {/* Mock / Test Mode Toggle */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-white/10">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-card/80 border border-border">
               <div>
-                <span className="text-xs font-bold text-white block">Mock / Test Modu</span>
-                <span className="text-[11px] text-zinc-400 block mt-0.5">
+                <span className="text-xs font-semibold text-foreground block">Mock / Test Modu</span>
+                <span className="text-[11px] text-muted-foreground block mt-0.5">
                   Sağlayıcı bakiyesi 0 iken gerçekçi OTP simülasyonu çalıştırır.
                 </span>
               </div>
@@ -2984,7 +2986,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="checkbox"
                 checked={mockMode}
                 onChange={(e) => setMockMode(e.target.checked)}
-                className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                className="w-5 h-5 accent-brand rounded cursor-pointer"
               />
             </div>
 
@@ -2992,27 +2994,27 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <button
               onClick={handleSaveSettings}
               disabled={savingSettings}
-              className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {savingSettings ? "Kaydediliyor..." : "Ayarları Kaydet & Fiyatları Güncelle"}
             </button>
           </Card>
 
           {/* 🎯 Ülke ve Servise Özel Manuel Fiyatlandırma Kartı */}
-          <Card className="p-4 space-y-4 border-amber-500/40 bg-gradient-to-br from-[#161208] to-[#0c0e15] shadow-lg">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-amber-500/40 bg-gradient-to-br from-card to-card shadow-lg">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Ülke & Servise Özel Manuel Fiyatlandırma</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       {Object.keys(customPriceRules).length} Özel Kural
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Belirli ülke ve servis kombinasyonlarına özel sabit satış fiyatı veya kâr marjı tanımlayın.
                   </p>
                 </div>
@@ -3020,15 +3022,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Form Alanı */}
-            <div className="space-y-3 p-3 rounded-xl bg-zinc-900/90 border border-white/5">
+            <div className="space-y-3 p-3 rounded-xl bg-card/90 border border-border">
               <div className="grid grid-cols-2 gap-2">
                 {/* Ülke Seçimi */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-300 block">Ülke Seçin:</label>
+                  <label className="text-[11px] font-medium text-foreground/80 block">Ülke Seçin:</label>
                   <select
                     value={ruleCountryId}
                     onChange={(e) => setRuleCountryId(Number(e.target.value))}
-                    className="w-full bg-[#181a24] border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-card border border-border rounded-xl px-2.5 py-2 text-xs text-foreground focus:outline-none focus:border-amber-500"
                   >
                     {(settingsData?.allCountries || []).map((c: any) => (
                       <option key={c.id} value={c.id}>
@@ -3040,11 +3042,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                 {/* Servis Seçimi */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-300 block">Servis Seçin:</label>
+                  <label className="text-[11px] font-medium text-foreground/80 block">Servis Seçin:</label>
                   <select
                     value={ruleServiceCode}
                     onChange={(e) => setRuleServiceCode(e.target.value)}
-                    className="w-full bg-[#181a24] border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-card border border-border rounded-xl px-2.5 py-2 text-xs text-foreground focus:outline-none focus:border-amber-500"
                   >
                     {(settingsData?.allServices || []).map((s: any) => (
                       <option key={s.code} value={s.code}>
@@ -3061,10 +3063,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   <button
                     type="button"
                     onClick={() => setRuleType("fixed")}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
                       ruleType === "fixed"
                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        : "bg-zinc-800 text-zinc-400 border border-transparent"
+                        : "bg-muted text-muted-foreground border border-transparent"
                     }`}
                   >
                     🏷️ Sabit Satış Fiyatı (₺)
@@ -3072,10 +3074,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   <button
                     type="button"
                     onClick={() => setRuleType("margin")}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
                       ruleType === "margin"
                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        : "bg-zinc-800 text-zinc-400 border border-transparent"
+                        : "bg-muted text-muted-foreground border border-transparent"
                     }`}
                   >
                     📈 Özel Kâr % + Sabit Ücret
@@ -3084,17 +3086,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                 {ruleType === "fixed" ? (
                   <div className="space-y-1">
-                    <label className="text-[11px] text-zinc-400 block">
+                    <label className="text-[11px] text-muted-foreground block">
                       Sabit Satış Fiyatı (Maliyet ve kurdan bağımsız bu fiyata satılır):
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-xs text-zinc-500">₺</span>
+                      <span className="absolute left-3 top-2.5 text-xs text-muted-foreground/80">₺</span>
                       <input
                         type="number"
                         step="0.5"
                         value={ruleFixedPrice}
                         onChange={(e) => setRuleFixedPrice(e.target.value)}
-                        className="w-full pl-7 bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        className="w-full pl-7 bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground focus:border-amber-500"
                         placeholder="Örn: 18.00"
                       />
                     </div>
@@ -3102,24 +3104,24 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-zinc-400 block">Özel Kâr Oranı (%):</label>
+                      <label className="text-[10px] text-muted-foreground block">Özel Kâr Oranı (%):</label>
                       <input
                         type="number"
                         step="5"
                         value={ruleMarginPercent}
                         onChange={(e) => setRuleMarginPercent(e.target.value)}
-                        className="w-full bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground focus:border-amber-500"
                         placeholder="%50"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] text-zinc-400 block">Ek Hizmet Ücreti (₺):</label>
+                      <label className="text-[10px] text-muted-foreground block">Ek Hizmet Ücreti (₺):</label>
                       <input
                         type="number"
                         step="0.5"
                         value={ruleFixedFee}
                         onChange={(e) => setRuleFixedFee(e.target.value)}
-                        className="w-full bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-amber-500"
+                        className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground focus:border-amber-500"
                         placeholder="5.00"
                       />
                     </div>
@@ -3131,7 +3133,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={handleSaveCustomPriceRule}
                 disabled={savingRule}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                className="w-full py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>{savingRule ? "Kaydediliyor..." : "Özel Fiyat Kuralını Tanımla"}</span>
@@ -3140,12 +3142,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Tanımlı Kurallar Listesi */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-zinc-300 block">
+              <span className="text-xs font-medium text-foreground/80 block">
                 Aktif Özel Fiyat Kuralları ({Object.keys(customPriceRules).length}):
               </span>
 
               {Object.keys(customPriceRules).length === 0 ? (
-                <div className="p-4 rounded-xl bg-zinc-900/40 border border-dashed border-white/10 text-center text-xs text-zinc-500">
+                <div className="p-4 rounded-xl bg-card/40 border border-dashed border-border text-center text-xs text-muted-foreground/80">
                   Henüz özel fiyat kuralı eklenmedi. Tüm servis ve ülkelerde genel kâr marjı (%{marginPercent} + ₺{fixedFee}) geçerlidir.
                 </div>
               ) : (
@@ -3153,19 +3155,19 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   {Object.entries(customPriceRules).map(([key, rule]: [string, any]) => (
                     <div
                       key={key}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/90 border border-white/5 hover:border-amber-500/30 transition-all text-xs"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-card/90 border border-border hover:border-amber-500/30 transition-all text-xs"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{rule.countryFlag || "🌐"}</span>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-white">{rule.countryName || `Ülke ${rule.countryId}`}</span>
-                            <span className="text-zinc-600">•</span>
-                            <span className="text-amber-300 font-semibold">{rule.serviceName || rule.serviceCode}</span>
+                            <span className="font-semibold text-foreground">{rule.countryName || `Ülke ${rule.countryId}`}</span>
+                            <span className="text-muted-foreground/60">•</span>
+                            <span className="text-amber-300 font-medium">{rule.serviceName || rule.serviceCode}</span>
                           </div>
-                          <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                          <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                             {rule.fixedPriceTry !== undefined ? (
-                              <span className="text-emerald-400 font-bold">Sabit Fiyat: ₺{Number(rule.fixedPriceTry).toFixed(2)}</span>
+                              <span className="text-brand font-semibold">Sabit Fiyat: ₺{Number(rule.fixedPriceTry).toFixed(2)}</span>
                             ) : (
                               <span>Özel Kâr: %{rule.marginPercent || 0} + ₺{rule.fixedFee || 0}</span>
                             )}
@@ -3189,7 +3191,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             }
                             haptic.selection();
                           }}
-                          className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold"
+                          className="px-2 py-1 rounded-lg bg-muted hover:bg-input text-foreground/80 text-[10px] font-medium"
                         >
                           Düzenle
                         </button>
@@ -3211,11 +3213,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
           {/* Hide / Show Services Toggles */}
           <Card className="p-4 space-y-3">
-            <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Eye className="w-4 h-4 text-emerald-400" />
+            <h4 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
+              <Eye className="w-4 h-4 text-brand" />
               <span>Servis Görünürlük Kontrolü</span>
             </h4>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-muted-foreground">
               Kullanıcıların görmesini istemediğiniz servisleri tek tıkla gizleyin.
             </p>
 
@@ -3229,11 +3231,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
                       isHidden
                         ? "bg-rose-950/20 border-rose-500/30 text-rose-300"
-                        : "bg-zinc-900 border-white/5 text-zinc-200 hover:border-white/20"
+                        : "bg-card border-border text-foreground hover:border-foreground/15"
                     }`}
                   >
                     <span className="truncate">{s.name}</span>
-                    {isHidden ? <EyeOff className="w-3.5 h-3.5 text-rose-400" /> : <Eye className="w-3.5 h-3.5 text-emerald-400" />}
+                    {isHidden ? <EyeOff className="w-3.5 h-3.5 text-rose-400" /> : <Eye className="w-3.5 h-3.5 text-brand" />}
                   </div>
                 );
               })}
@@ -3246,8 +3248,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "bank" && (
         <div className="space-y-4">
           {/* SİSTEM BAKIM MODU & DUYURU AYARLARI */}
-          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+          <Card className="p-4 bg-background/80 border-border space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-3">
                 <div
                   className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
@@ -3259,19 +3261,19 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Sistem Bakım Modu & Duyuru</span>
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                         maintenanceMode
                           ? "bg-red-500/20 text-red-300 border-red-500/40"
-                          : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                          : "bg-muted text-muted-foreground border-border"
                       }`}
                     >
                       {maintenanceMode ? "Aktif (Kullanıcılara Kapalı)" : "Pasif (Sistem Açık)"}
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Bakım modundayken kullanıcılara gösterilecek samimi duyuruyu belirleyin.
                   </p>
                 </div>
@@ -3280,10 +3282,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={() => handleToggleMaintenance()}
                 disabled={togglingMaintenance}
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 ${
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 ${
                   maintenanceMode
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30"
-                    : "bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30"
+                    ? "bg-foreground hover:bg-foreground/85 text-background shadow-md "
+                    : "bg-red-600 hover:bg-red-500 text-white shadow-md "
                 }`}
               >
                 {togglingMaintenance ? (
@@ -3296,7 +3298,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
+              <label className="text-xs font-medium text-foreground/80 block">
                 Özel Bakım Mesajı / Duyurusu (İsteğe Bağlı)
               </label>
               <textarea
@@ -3304,9 +3306,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 onChange={(e) => setMaintenanceMessage(e.target.value)}
                 placeholder="Boş bırakılırsa samimi varsayılan mesaj kullanılır: 'Değerli Kullanıcımız, sistemimizde bakım çalışması yapılmaktadır. Numara almak için yöneticilerle iletişime geçiniz...'"
                 rows={4}
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
+                className="w-full bg-card border border-border rounded-xl p-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
               />
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-muted-foreground/80">
                 Bu mesaj hem Telegram botunda (/start, menü butonları) hem de Web Mini App bakım ekranında gösterilir. Yöneticilerin Telegram iletişim butonları otomatik olarak altına eklenir.
               </p>
               <div className="flex justify-end pt-1">
@@ -3314,7 +3316,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   type="button"
                   onClick={handleSaveMaintenanceMessage}
                   disabled={savingMaintenance}
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 active:scale-95 transition-all disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
                 >
                   {savingMaintenance ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -3328,15 +3330,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </Card>
 
           {/* Otomatik Kripto (TRX & USDT & CryptoBot) Cüzdan Ayarları */}
-          <Card className="p-4 space-y-4 border-emerald-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-brand/30">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                <div className="p-2 rounded-xl bg-brand/20 text-brand">
                   <Coins className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Otomatik Kripto (TRX & USDT) Ödeme Ayarları</h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <h3 className="text-sm font-semibold text-foreground">Otomatik Kripto (TRX & USDT) Ödeme Ayarları</h3>
+                  <p className="text-[11px] text-muted-foreground">
                     Kullanıcılar bu adrese transfer yapıp TXID yapıştırdığında TronScan ile anında otomatik bakiye eklenir
                   </p>
                 </div>
@@ -3345,31 +3347,31 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">USDT (TRC-20) Cüzdan Adresi</label>
+                <label className="text-xs font-medium text-foreground/80">USDT (TRC-20) Cüzdan Adresi</label>
                 <input
                   type="text"
                   value={usdtTrc20Address}
                   onChange={(e) => setUsdtTrc20Address(e.target.value)}
                   placeholder="Örn: T9yD14Nj9j7xAB4dbGeiX9h8unkKHXUnC"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono text-brand font-semibold focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">TRX (Tron) Cüzdan Adresi</label>
+                <label className="text-xs font-medium text-foreground/80">TRX (Tron) Cüzdan Adresi</label>
                 <input
                   type="text"
                   value={trxAddress}
                   onChange={(e) => setTrxAddress(e.target.value)}
                   placeholder="Örn: T9yD14Nj9j7xAB4dbGeiX9h8unkKHXUnC"
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono text-brand font-semibold focus:outline-none focus:border-brand"
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-white/5">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-card/80 border border-border">
                 <div>
-                  <span className="text-xs font-semibold text-white block">TronScan Canlı Otomatik Onay</span>
-                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                  <span className="text-xs font-medium text-foreground block">TronScan Canlı Otomatik Onay</span>
+                  <span className="text-[11px] text-muted-foreground block mt-0.5">
                     Kullanıcı işlem kodunu girdiğinde sistem Tron ağında transferi doğrular ve bakiyeyi anında yükler.
                   </span>
                 </div>
@@ -3377,57 +3379,57 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   type="checkbox"
                   checked={autoVerifyEnabled}
                   onChange={(e) => setAutoVerifyEnabled(e.target.checked)}
-                  className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                  className="w-5 h-5 accent-brand rounded cursor-pointer"
                 />
               </div>
 
               {/* Otomatik Kripto (Apirone Non-Custodial Gateway) API & Ayarlar Bölümü */}
-              <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/35 space-y-3.5 shadow-lg shadow-emerald-500/5">
+              <div className="p-3.5 rounded-xl bg-card/90 border border-brand/35 space-y-3.5 shadow-lg ">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-white">Otomatik Kripto Ödeme Sistemi (Apirone Gateway)</span>
+                    <ShieldCheck className="w-4 h-4 text-brand" />
+                    <span className="text-xs font-semibold text-foreground">Otomatik Kripto Ödeme Sistemi (Apirone Gateway)</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/20 text-brand font-medium border border-brand/30">
                     KYC Yok • Non-Custodial Forwarding
                   </span>
                 </div>
 
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   Apirone, OxaPay gibi KYC veya şirket onayı istemez. Kullanıcılar ödeme yaptığında blokzincir onayından sonra para <b>doğrudan kişisel TRC20/TRX cüzdanınıza</b> aktarılır ve bakiyeleri anında yüklenir.
                 </p>
 
                 {/* Kişisel Apirone Hesap Girdileri */}
-                <div className="space-y-2.5 bg-black/40 p-3 rounded-xl border border-white/5">
+                <div className="space-y-2.5 bg-foreground/5 p-3 rounded-xl border border-border">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">Kişisel Apirone Hesap Bilgileri</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+                    <span className="text-[11px] font-semibold text-foreground">Kişisel Apirone Hesap Bilgileri</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-brand/10 text-brand font-medium border border-brand/20">
                       Özel Hesap • Otomatik Oluşturulmaz
                     </span>
                   </div>
-                  <p className="text-[10.5px] text-zinc-400 leading-relaxed">
+                  <p className="text-[10.5px] text-muted-foreground leading-relaxed">
                     Kendi Apirone Account ID ve Transfer Key bilgilerinizi aşağıya girin. Sistem yalnızca sizin girdiğiniz bu hesabı kullanır; arka planda asla otomatik yeni hesap üretilmez.
                   </p>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-zinc-400">Apirone Account ID</label>
+                    <label className="text-[10px] font-medium text-muted-foreground">Apirone Account ID</label>
                     <input
                       type="text"
                       value={apironeAccount}
                       onChange={(e) => setApironeAccount(e.target.value)}
                       placeholder="Örn: apr-28a9319739bc0e540fe5f4b2930e1bef"
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-muted border border-border rounded-xl px-3.5 py-2 text-xs font-mono text-foreground focus:outline-none focus:border-brand"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-zinc-400">Apirone Transfer Key (Güvenlik Anahtarı)</label>
+                    <label className="text-[10px] font-medium text-muted-foreground">Apirone Transfer Key (Güvenlik Anahtarı)</label>
                     <input
                       type="password"
                       value={apironeTransferKey}
                       onChange={(e) => setApironeTransferKey(e.target.value)}
                       placeholder="Örn: 9vze07JpR0JOpUfUaV1dK8fNXowYQaCE"
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-muted border border-border rounded-xl px-3.5 py-2 text-xs font-mono text-foreground focus:outline-none focus:border-brand"
                     />
                   </div>
 
@@ -3436,7 +3438,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       type="button"
                       onClick={handleSaveCryptoSettings}
                       disabled={savingCrypto || !apironeAccount.trim()}
-                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50"
+                      className="px-3.5 py-1.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
                       title="Girdiğiniz Apirone Account ID ve Transfer Key bilgilerini veritabanına ve buluta kalıcı olarak kaydeder"
                     >
                       {savingCrypto ? (
@@ -3456,7 +3458,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       type="button"
                       onClick={handleTestApironeAccount}
                       disabled={testingApirone || !apironeAccount.trim()}
-                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-xl bg-muted hover:bg-input text-brand font-semibold text-xs border border-brand/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       {testingApirone ? (
                         <>
@@ -3475,7 +3477,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       type="button"
                       onClick={handleSetApironeForwarding}
                       disabled={settingForwarding || !apironeAccount.trim() || !apironeTransferKey.trim()}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 font-bold text-xs border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-xl bg-brand/10 hover:bg-brand/10 text-brand font-semibold text-xs border border-brand/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       {settingForwarding ? (
                         <>
@@ -3496,7 +3498,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     <div
                       className={`p-2.5 rounded-xl text-xs font-medium border ${
                         apironeTestResult.success
-                          ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                          ? "bg-brand/10 border-brand/40 text-brand"
                           : "bg-rose-950/60 border-rose-500/40 text-rose-300"
                       }`}
                     >
@@ -3506,13 +3508,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </div>
 
                 {/* Webhook URL Kopyalama Kutusu */}
-                <div className="space-y-1 pt-1 border-t border-white/5">
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                <div className="space-y-1 pt-1 border-t border-border">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Apirone Webhook Callback URL:</span>
-                    <span className="text-[10px] text-zinc-500">Otomatik Anında Bakiye Yükleme İçin</span>
+                    <span className="text-[10px] text-muted-foreground/80">Otomatik Anında Bakiye Yükleme İçin</span>
                   </div>
-                  <div className="flex items-center justify-between bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[11px]">
-                    <span className="truncate text-zinc-300 mr-2 select-all">
+                  <div className="flex items-center justify-between bg-muted p-2 rounded-xl border border-border font-mono text-[11px]">
+                    <span className="truncate text-foreground/80 mr-2 select-all">
                       {typeof window !== "undefined"
                         ? `${window.location.origin}/api/user/deposit/crypto-webhook`
                         : "https://azfur-sms.vercel.app/api/user/deposit/crypto-webhook"}
@@ -3520,11 +3522,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     <button
                       type="button"
                       onClick={handleCopyWebhookUrl}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[10px] font-sans font-bold transition-all active:scale-95"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-brand hover:text-brand shrink-0 text-[10px] font-sans font-semibold transition-all active:scale-95"
                     >
                       {copiedWebhook ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <Check className="w-3.5 h-3.5 text-brand" />
                           <span>Kopyalandı</span>
                         </>
                       ) : (
@@ -3535,7 +3537,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       )}
                     </button>
                   </div>
-                  <p className="text-[10px] text-zinc-500 pt-0.5">
+                  <p className="text-[10px] text-muted-foreground/80 pt-0.5">
                     💡 <b>Bilgi:</b> Sistem her ödeme faturası oluşturulduğunda bu webhook adresini Apirone&apos;a otomatik iletir. Blokzincirinde ödeme tespit edildiğinde bakiye 0 saniyede kullanıcının hesabına yüklenir.
                   </p>
                 </div>
@@ -3545,7 +3547,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <button
               onClick={handleSaveCryptoSettings}
               disabled={savingCrypto}
-              className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {savingCrypto ? (
                 <>
@@ -3559,20 +3561,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </Card>
 
           {/* Telegram Bot Webhook Kurulum & Hızlı Bağlantı Kutusu */}
-          <Card className="p-4 space-y-4 border-cyan-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-foreground/15">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
+                <div className="p-2 rounded-xl bg-foreground/10 text-foreground/90">
                   <Bot className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Telegram Bot Webhook Kurulumu</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-foreground/10 text-foreground font-mono">
                       0 Gecikme
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Botun /start ve butonlara anında tepki vermesi için webhook bağlantısını kurun.
                   </p>
                 </div>
@@ -3580,11 +3582,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-zinc-400">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>Bot Webhook Endpoint URL:</span>
               </div>
-              <div className="flex items-center justify-between bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[11px]">
-                <span className="truncate text-zinc-300 mr-2 select-all">
+              <div className="flex items-center justify-between bg-muted p-2 rounded-xl border border-border font-mono text-[11px]">
+                <span className="truncate text-foreground/80 mr-2 select-all">
                   {typeof window !== "undefined"
                     ? `${window.location.origin}/api/bot/webhook`
                     : "https://azfur-sms.vercel.app/api/bot/webhook"}
@@ -3592,11 +3594,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <button
                   type="button"
                   onClick={handleCopyTgWebhookUrl}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-cyan-400 hover:text-cyan-300 shrink-0 text-[10px] font-sans font-bold transition-all active:scale-95"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-foreground/90 hover:text-foreground shrink-0 text-[10px] font-sans font-semibold transition-all active:scale-95"
                 >
                   {copiedTgWebhook ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <Check className="w-3.5 h-3.5 text-brand" />
                       <span>Kopyalandı</span>
                     </>
                   ) : (
@@ -3609,7 +3611,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               </div>
 
               {webhookStatus && (
-                <div className={`p-2.5 rounded-xl text-xs font-semibold ${webhookStatus.startsWith("✅") ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300" : "bg-rose-500/15 border border-rose-500/30 text-rose-300"}`}>
+                <div className={`p-2.5 rounded-xl text-xs font-medium ${webhookStatus.startsWith("✅") ? "bg-brand/15 border border-brand/30 text-brand" : "bg-rose-500/15 border border-rose-500/30 text-rose-300"}`}>
                   {webhookStatus}
                 </div>
               )}
@@ -3618,7 +3620,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={handleSetupTelegramWebhook}
                 disabled={settingWebhook}
-                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs shadow-md shadow-cyan-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {settingWebhook ? (
                   <>
@@ -3636,20 +3638,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </Card>
 
           {/* Canlı Destek & Telegram Yönetici İletişim Ayarları */}
-          <Card className="p-4 space-y-4 border-purple-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-foreground/15">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                <div className="p-2 rounded-xl bg-foreground/10 text-foreground/90">
                   <Headphones className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Canlı Destek & Yönetici Kullanıcı Adları</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-foreground/10 text-foreground font-mono">
                       {supportTelegramUsernames.length} Hesap
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Bot ve Mini App yardım menülerinde gösterilir. İstediğiniz kadar yönetici ekleyip silebilirsiniz.
                   </p>
                 </div>
@@ -3658,12 +3660,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Mevcut Ekli Kullanıcı Adları Listesi */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
+              <label className="text-xs font-medium text-foreground/80 block">
                 Aktif Destek Hesapları ({supportTelegramUsernames.length})
               </label>
 
               {supportTelegramUsernames.length === 0 ? (
-                <div className="p-3 rounded-xl bg-zinc-900 border border-white/5 text-center text-xs text-zinc-500">
+                <div className="p-3 rounded-xl bg-card border border-border text-center text-xs text-muted-foreground/80">
                   Henüz destek hesabı eklenmedi. Aşağıdan ekleyebilirsiniz.
                 </div>
               ) : (
@@ -3671,17 +3673,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   {supportTelegramUsernames.map((user, idx) => (
                     <div
                       key={user}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 hover:border-purple-500/30 transition-all"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-card/90 border border-border hover:border-foreground/15 transition-all"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-lg bg-foreground/10 text-foreground/90 text-xs font-semibold flex items-center justify-center">
                           {idx + 1}
                         </span>
                         <div>
-                          <span className="font-mono text-xs font-bold text-purple-300">
+                          <span className="font-mono text-xs font-semibold text-foreground">
                             @{user}
                           </span>
-                          <span className="ml-2 text-[10px] text-zinc-500">
+                          <span className="ml-2 text-[10px] text-muted-foreground/80">
                             (t.me/{user})
                           </span>
                         </div>
@@ -3692,7 +3694,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                           href={`https://t.me/${user}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 hover:text-white transition-colors"
+                          className="px-2 py-1 rounded-lg bg-muted hover:bg-input text-[11px] text-foreground/80 hover:text-foreground transition-colors"
                         >
                           Test Et ↗
                         </a>
@@ -3712,13 +3714,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Yeni Kullanıcı Adı Ekleme Alanı */}
-            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-              <label className="text-xs font-semibold text-zinc-300 block">
+            <div className="space-y-2 pt-2 border-t border-border">
+              <label className="text-xs font-medium text-foreground/80 block">
                 Yeni Destek / Yönetici Hesabı Ekle
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono">@</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 text-xs font-mono">@</span>
                   <input
                     type="text"
                     value={newSupportUsername}
@@ -3730,13 +3732,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       }
                     }}
                     placeholder="Örn: azfur_admin veya mehmet_destek"
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-xs font-mono text-purple-300 font-bold focus:outline-none focus:border-purple-500"
+                    className="w-full bg-card border border-border rounded-xl pl-8 pr-3.5 py-2.5 text-xs font-mono text-foreground font-semibold focus:outline-none focus:border-foreground/40"
                   />
                 </div>
                 <button
                   onClick={handleAddSupportUser}
                   disabled={savingSupportUser || !newSupportUsername.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                 >
                   {savingSupportUser ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -3746,33 +3748,33 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   <span>Ekle</span>
                 </button>
               </div>
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-muted-foreground/80">
                 Eklenen tüm hesaplar botun yardım mesajında ve Mini App destek penceresinde buton olarak yer alır.
               </p>
             </div>
           </Card>
 
           {/* BOT HAREKETLİ STİCKER / ANİMASYON YÖNETİMİ */}
-          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
+          <Card className="p-4 bg-background/80 border-border space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Telegram Bot Hareketli Sticker & Animasyon</span>
                     {customStickerFileId ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/20 text-brand font-mono">
                         Özel Sticker Aktif
                       </span>
                     ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-foreground/10 text-foreground font-mono">
                         3D Animasyon (🎯 / 🎰)
                       </span>
                     )}
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Botta /start, /bakiye, /yardim ve siparişlerde gösterilen animasyonlu görseli yönetin.
                   </p>
                 </div>
@@ -3780,16 +3782,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-2">
-              <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                 <span>💡 En Pratik Tanımlama Yöntemi:</span>
               </div>
-              <p className="text-[11px] text-zinc-300 leading-relaxed">
+              <p className="text-[11px] text-foreground/80 leading-relaxed">
                 Telegram&apos;da bota yönetici hesabınızdan <b>herhangi bir hareketli veya video sticker</b> göndermeniz yeterlidir! Bot gönderdiğiniz sticker&apos;ı otomatik olarak yakalar ve anında aktif eder.
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
+              <label className="text-xs font-medium text-foreground/80 block">
                 Sticker File ID (Manuel Giriş veya Değiştirme)
               </label>
               <div className="flex gap-2">
@@ -3798,12 +3800,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   value={customStickerFileId}
                   onChange={(e) => setCustomStickerFileId(e.target.value)}
                   placeholder="Örn: CAACAgIAAxkBAAE..."
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono text-foreground focus:outline-none focus:border-amber-500"
                 />
                 <button
                   onClick={() => handleSaveSticker()}
                   disabled={savingSticker}
-                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                 >
                   {savingSticker ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   <span>Kaydet</span>
@@ -3811,7 +3813,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               </div>
               {customStickerFileId && (
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[220px]">
+                  <span className="text-[10px] text-muted-foreground/80 font-mono truncate max-w-[220px]">
                     ID: {customStickerFileId}
                   </span>
                   <button
@@ -3829,17 +3831,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </Card>
 
           {/* HERO-SMS API KEY YÖNETİMİ */}
-          <Card className="p-4 bg-zinc-950/80 border-white/10 space-y-4">
+          <Card className="p-4 bg-background/80 border-border space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <div className="w-9 h-9 rounded-xl bg-foreground/5 border border-foreground/10 flex items-center justify-center text-foreground/90">
                   <Key className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Hero-SMS API Anahtarı</span>
                     {heroSmsApiKey.trim() ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/20 text-brand font-mono">
                         Aktif
                       </span>
                     ) : (
@@ -3848,7 +3850,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       </span>
                     )}
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Sanal numara sağlama, ülke/servis listesi ve SMS kod çekme işlemlerinde kullanılan sağlayıcı anahtarı.
                   </p>
                 </div>
@@ -3856,7 +3858,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
+              <label className="text-xs font-medium text-foreground/80 block">
                 API Key
               </label>
               <div className="flex gap-2">
@@ -3866,12 +3868,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     value={heroSmsApiKey}
                     onChange={(e) => setHeroSmsApiKey(e.target.value)}
                     placeholder="Örn: e1006858662edcAd8d348c9f07dfe8c5"
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 pr-10 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-card border border-border rounded-xl px-3.5 pr-10 py-2.5 text-xs font-mono text-foreground focus:outline-none focus:border-foreground/40"
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-foreground/80 transition-colors"
                   >
                     {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -3879,7 +3881,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <button
                   onClick={() => handleSaveHeroApiKey()}
                   disabled={savingApiKey}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md shadow-cyan-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                 >
                   {savingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   <span>Kaydet</span>
@@ -3890,7 +3892,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <button
                   onClick={handleTestHeroApiKey}
                   disabled={testingApiKey || !heroSmsApiKey.trim()}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-xl bg-muted hover:bg-input text-foreground/80 hover:text-foreground text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   {testingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   <span>Bağlantıyı & Bakiyeyi Test Et</span>
@@ -3915,13 +3917,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <div
                   className={`p-3 rounded-xl border text-xs font-medium transition-all ${
                     apiKeyTestResult.success
-                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                      ? "bg-brand/10 border-brand/20 text-brand"
                       : "bg-rose-500/10 border-rose-500/20 text-rose-300"
                   }`}
                 >
                   {apiKeyTestResult.success ? (
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <CheckCircle className="w-4 h-4 shrink-0 text-brand" />
                       <span>{apiKeyTestResult.message}</span>
                     </div>
                   ) : (
@@ -3936,43 +3938,38 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </Card>
 
           {/* VIP ÜYELİK VE İNDİRİM AYARLARI */}
-          <Card className="p-4 space-y-4 border-amber-500/30 bg-gradient-to-br from-amber-950/10 via-zinc-900 to-zinc-900">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-amber-500/30 bg-gradient-to-br from-amber-950/10 via-card to-card">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
                   <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>⭐ VIP Üyelik & Otomatik İndirim Sistemi</span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Özel müşterilere indirim tanımlama ve yüksek bakiye yükleyenleri otomatik VIP yapma
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400 font-medium">VIP Sistemi:</span>
-                <button
-                  type="button"
-                  onClick={() => setVipSettingsEnabled(!vipSettingsEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    vipSettingsEnabled ? "bg-amber-500" : "bg-zinc-700"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      vipSettingsEnabled ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
+                <span className="text-xs text-muted-foreground font-medium">VIP Sistemi:</span>
+                <HaloSwitch
+                  aria-label="VIP sistemi"
+                  checked={vipSettingsEnabled}
+                  onCheckedChange={(checked) => {
+                    haptic.selection();
+                    setVipSettingsEnabled(checked);
+                  }}
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">
+                <label className="text-xs font-medium text-foreground/80">
                   Varsayılan VIP İndirim Oranı (%)
                 </label>
                 <div className="relative">
@@ -3982,17 +3979,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     max="90"
                     value={vipSettingsDefaultDiscount}
                     onChange={(e) => setVipSettingsDefaultDiscount(Number(e.target.value))}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-foreground focus:outline-none focus:border-amber-500"
                   />
-                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-amber-400">%</span>
+                  <span className="absolute right-3.5 top-2.5 text-xs font-semibold text-amber-400">%</span>
                 </div>
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-[10px] text-muted-foreground/80">
                   VIP üyeler hem Telegram botunda hem WebApp&apos;te tüm numaraları bu indirimle satın alır.
                 </p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">
+                <label className="text-xs font-medium text-foreground/80">
                   Otomatik VIP Yükleme Eşiği (₺)
                 </label>
                 <div className="relative">
@@ -4002,11 +3999,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     step="50"
                     value={vipSettingsAutoDeposit}
                     onChange={(e) => setVipSettingsAutoDeposit(Number(e.target.value))}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-foreground focus:outline-none focus:border-amber-500"
                   />
-                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-emerald-400">₺</span>
+                  <span className="absolute right-3.5 top-2.5 text-xs font-semibold text-brand">₺</span>
                 </div>
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-[10px] text-muted-foreground/80">
                   Kullanıcı tek seferde bu tutar ve üzerinde kripto veya banka bakiyesi yüklediğinde otomatik VIP yapılır. (0 = Devre Dışı)
                 </p>
               </div>
@@ -4015,7 +4012,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <button
               onClick={handleSaveVipSettings}
               disabled={savingVipSettings}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {savingVipSettings ? (
                 <>
@@ -4038,11 +4035,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "users" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-              <Users className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4 text-brand" />
               <span>Kayıtlı Telegram Kullanıcıları ({users.length})</span>
             </h3>
-            <span className="text-[11px] text-zinc-400">Kullanıcı & Yetki Yönetimi</span>
+            <span className="text-[11px] text-muted-foreground">Kullanıcı & Yetki Yönetimi</span>
           </div>
 
           {/* Kullanıcı Filtre Sekmeleri (VIP / Standart) */}
@@ -4052,10 +4049,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 haptic.selection();
                 setUserVipFilter("all");
               }}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                 userVipFilter === "all"
-                  ? "bg-zinc-200 text-black shadow-sm"
-                  : "bg-zinc-800/80 text-zinc-400 hover:text-white"
+                  ? "bg-muted-foreground text-black shadow-sm"
+                  : "bg-muted/80 text-muted-foreground hover:text-foreground"
               }`}
             >
               Tümü ({users.length})
@@ -4065,10 +4062,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 haptic.selection();
                 setUserVipFilter("vip");
               }}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1 transition-all ${
                 userVipFilter === "vip"
-                  ? "bg-amber-400 text-black shadow-md shadow-amber-400/20"
-                  : "bg-zinc-800/80 text-amber-300/80 hover:text-amber-300 hover:bg-amber-500/10"
+                  ? "bg-amber-400 text-black shadow-md "
+                  : "bg-muted/80 text-amber-300/80 hover:text-amber-300 hover:bg-amber-500/10"
               }`}
             >
               <Star className="w-3.5 h-3.5 fill-current" />
@@ -4079,10 +4076,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 haptic.selection();
                 setUserVipFilter("standard");
               }}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                 userVipFilter === "standard"
-                  ? "bg-zinc-200 text-black shadow-sm"
-                  : "bg-zinc-800/80 text-zinc-400 hover:text-white"
+                  ? "bg-muted-foreground text-black shadow-sm"
+                  : "bg-muted/80 text-muted-foreground hover:text-foreground"
               }`}
             >
               Standart ({users.filter((u) => !u.isVip).length})
@@ -4091,18 +4088,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
           {/* Arama Çubuğu */}
           <div className="relative">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-muted-foreground/80 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="İsim, kullanıcı adı (@) veya Telegram ID ara..."
               value={userSearchQuery}
               onChange={(e) => setUserSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900/90 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+              className="w-full bg-card/90 border border-border rounded-xl pl-9 pr-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
             />
           </div>
 
           {filteredUsers.length === 0 ? (
-            <Card className="p-6 text-center text-xs text-zinc-500">
+            <Card className="p-6 text-center text-xs text-muted-foreground/80">
               Arama kriterinize uygun kullanıcı bulunamadı.
             </Card>
           ) : (
@@ -4110,7 +4107,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               {filteredUsers.map((u) => {
                 const isActionLoading = userActionLoadingId === u.telegramId;
                 return (
-                  <Card key={u.telegramId} className="p-3.5 space-y-3 border-white/10 hover:border-white/20 transition-all">
+                  <Card key={u.telegramId} className="p-3.5 space-y-3 border-border hover:border-foreground/15 transition-all">
                     {/* Üst Kısım: Kullanıcı Bilgisi & Rozetler */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -4134,63 +4131,63 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   {isOnline ? (
                                     <span className="relative flex h-2.5 w-2.5 shrink-0" title="Şu An Çevrimiçi">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand shadow-sm "></span>
                                     </span>
                                   ) : (
-                                    <span className="h-2 w-2 rounded-full bg-zinc-600 shrink-0" title="Çevrimdışı" />
+                                    <span className="h-2 w-2 rounded-full bg-input shrink-0" title="Çevrimdışı" />
                                   )}
-                                  <span className="font-bold text-xs text-white truncate">
+                                  <span className="font-semibold text-xs text-foreground truncate">
                                     {displayTitle}
                                   </span>
                                 </div>
 
                                 {/* Rozetler */}
                                 {u.isBanned ? (
-                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-semibold">
                                     ⛔ BANLI
                                   </span>
                                 ) : u.role === "admin" ? (
-                                  <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-foreground/10 text-foreground border border-foreground/20 px-1.5 py-0.5 rounded font-semibold">
                                     👑 ADMIN
                                   </span>
                                 ) : null}
 
                                 {u.isVip && (
-                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shadow-sm shadow-amber-500/10">
+                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 shadow-sm ">
                                     ⭐ VIP (%{u.vipDiscountPercent || 15})
                                   </span>
                                 )}
 
                                 {isOnline ? (
-                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="text-[10px] bg-brand/20 text-brand border border-brand/40 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
                                     ÇEVRİMİÇİ
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded">
+                                  <span className="text-[10px] text-muted-foreground bg-foreground/[0.04] border border-border px-1.5 py-0.5 rounded">
                                     {formatUserLastActive(u.lastActiveAt)}
                                   </span>
                                 )}
                               </div>
 
-                              <div className="text-[11px] font-mono text-zinc-400 mt-1 truncate flex items-center gap-1.5 flex-wrap">
-                                <span>ID: <span className="text-zinc-200">{u.telegramId}</span></span>
+                              <div className="text-[11px] font-mono text-muted-foreground mt-1 truncate flex items-center gap-1.5 flex-wrap">
+                                <span>ID: <span className="text-foreground">{u.telegramId}</span></span>
                                 {hasRealUsername ? (
                                   <>
-                                    <span className="text-zinc-600">•</span>
-                                    <span className="text-emerald-400 font-semibold">@{u.username}</span>
+                                    <span className="text-muted-foreground/60">•</span>
+                                    <span className="text-brand font-medium">@{u.username}</span>
                                   </>
                                 ) : (
                                   <>
-                                    <span className="text-zinc-600">•</span>
-                                    <span className="text-zinc-500 text-[10px] bg-white/[0.04] px-1.5 py-0.5 rounded">kullanıcı adı yok</span>
+                                    <span className="text-muted-foreground/60">•</span>
+                                    <span className="text-muted-foreground/80 text-[10px] bg-foreground/[0.04] px-1.5 py-0.5 rounded">kullanıcı adı yok</span>
                                   </>
                                 )}
-                                <span className="text-zinc-600">•</span>
-                                <span className="flex items-center gap-1 text-[10px] text-zinc-400">
-                                  <Clock className="w-3 h-3 text-zinc-500" />
-                                  Son aktif: <span className={isOnline ? "text-emerald-400 font-semibold" : "text-zinc-300"}>{isOnline ? "Şu an aktif (Çevrimiçi)" : formatUserLastActive(u.lastActiveAt)}</span>
+                                <span className="text-muted-foreground/60">•</span>
+                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Clock className="w-3 h-3 text-muted-foreground/80" />
+                                  Son aktif: <span className={isOnline ? "text-brand font-medium" : "text-foreground/80"}>{isOnline ? "Şu an aktif (Çevrimiçi)" : formatUserLastActive(u.lastActiveAt)}</span>
                                 </span>
                               </div>
                             </>
@@ -4200,21 +4197,21 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                       {/* Bakiye & Harcama */}
                       <div className="text-right shrink-0">
-                        <div className="font-mono font-bold text-sm text-emerald-400">
+                        <div className="font-mono font-semibold text-sm text-brand">
                           ₺{u.balance.toFixed(2)}
                         </div>
-                        <span className="text-[10px] text-zinc-500 block">
+                        <span className="text-[10px] text-muted-foreground/80 block">
                           Harcama: ₺{u.spent || 0}
                         </span>
                       </div>
                     </div>
 
                     {/* Alt Kısım: Hızlı Yönetici Aksiyonları & Detay Butonu */}
-                    <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="pt-2 border-t border-border flex items-center justify-between gap-1.5 flex-wrap">
                       {/* Detay & Numaraları İncele (Ana İstek) */}
                       <button
                         onClick={() => handleOpenUserDetail(u)}
-                        className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                        className="px-2.5 py-1.5 rounded-lg bg-foreground/8 hover:bg-foreground/13 border border-foreground/15 text-foreground text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm"
                       >
                         <Search className="w-3.5 h-3.5" />
                         <span>Detay & Numaralar ({u.totalOrdersCount || 0})</span>
@@ -4229,7 +4226,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                           setBalanceEditMode("exact");
                           setEditingUser(u);
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                        className="px-2.5 py-1.5 rounded-lg bg-brand/15 hover:bg-brand/25 border border-brand/30 text-brand text-xs font-medium flex items-center gap-1 transition-all"
                       >
                         <DollarSign className="w-3.5 h-3.5" />
                         <span>Bakiye</span>
@@ -4239,10 +4236,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       <button
                         onClick={() => handleToggleRole(u)}
                         disabled={isActionLoading}
-                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all ${
                           u.role === "admin"
-                            ? "bg-purple-500/20 hover:bg-purple-500/30 border-purple-500/40 text-purple-300"
-                            : "bg-zinc-800 hover:bg-zinc-700 border-white/10 text-zinc-300"
+                            ? "bg-foreground/10 hover:bg-foreground/15 border-foreground/20 text-foreground"
+                            : "bg-muted hover:bg-input border-border text-foreground/80"
                         }`}
                       >
                         <ShieldAlert className="w-3.5 h-3.5" />
@@ -4258,10 +4255,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                           haptic.impact("light");
                         }}
                         disabled={isActionLoading}
-                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all ${
                           u.isVip
-                            ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/20"
-                            : "bg-zinc-800 hover:bg-zinc-700 border-white/10 text-zinc-300"
+                            ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300 shadow-sm "
+                            : "bg-muted hover:bg-input border-border text-foreground/80"
                         }`}
                         title={u.isVip ? "VIP Üyeliği Düzenle veya İptal Et" : "Kullanıcıyı VIP Yap"}
                       >
@@ -4273,9 +4270,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       <button
                         onClick={() => handleToggleBan(u)}
                         disabled={isActionLoading}
-                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all ${
                           u.isBanned
-                            ? "bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-300"
+                            ? "bg-brand/20 hover:bg-brand/30 border-brand/40 text-brand"
                             : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300"
                         }`}
                       >
@@ -4314,14 +4311,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "deposits" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+            <h3 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider">
               Bakiye Yükleme Talepleri ({deposits.length})
             </h3>
-            <span className="text-[11px] text-zinc-400">Onay Bekleyenler</span>
+            <span className="text-[11px] text-muted-foreground">Onay Bekleyenler</span>
           </div>
 
           {deposits.length === 0 ? (
-            <Card className="p-6 text-center text-xs text-zinc-500">
+            <Card className="p-6 text-center text-xs text-muted-foreground/80">
               Henüz bakiye yükleme talebi bulunmuyor.
             </Card>
           ) : (
@@ -4330,18 +4327,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <Card key={dep.id} className="p-3.5 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-xs text-white">
+                      <span className="font-semibold text-xs text-foreground">
                         {dep.username && !dep.username.startsWith("user_")
                           ? `@${dep.username.replace(/^@/, "")}`
                           : `Kullanıcı #${dep.telegramId}`}
                       </span>
-                      <p className="text-[11px] font-mono text-zinc-400">
+                      <p className="text-[11px] font-mono text-muted-foreground">
                         {dep.method} • {dep.referenceCode}
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <span className="font-mono font-bold text-sm text-emerald-400">
+                      <span className="font-mono font-semibold text-sm text-brand">
                         +₺{dep.amount.toFixed(2)}
                       </span>
                       <div>
@@ -4363,16 +4360,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   </div>
 
                   {dep.status === "PENDING" && (
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/[0.04]">
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
                       <button
                         onClick={() => handleDepositAction(dep.id, "REJECTED")}
-                        className="px-3 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-xs font-semibold hover:bg-rose-500/25"
+                        className="px-3 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-xs font-medium hover:bg-rose-500/25"
                       >
                         Reddet
                       </button>
                       <button
                         onClick={() => handleDepositAction(dep.id, "APPROVED")}
-                        className="px-3 py-1 rounded-lg bg-emerald-500 text-black text-xs font-bold hover:bg-emerald-400 shadow-md shadow-emerald-500/20"
+                        className="px-3 py-1 rounded-lg bg-foreground text-background text-xs font-semibold hover:bg-foreground/85 shadow-md "
                       >
                         Onayla & Hesaba Ekle
                       </button>
@@ -4388,15 +4385,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* TAB: BROADCAST & MESSAGING */}
       {activeTab === "broadcast" && (
         <div className="space-y-4">
-          <Card className="p-4 space-y-4 border-purple-500/30">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <Card className="p-4 space-y-4 border-foreground/15">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                <div className="p-2 rounded-xl bg-foreground/10 text-foreground/90">
                   <Megaphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Telegram Duyuru ve Mesaj Gönder</h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <h3 className="text-sm font-semibold text-foreground">Telegram Duyuru ve Mesaj Gönder</h3>
+                  <p className="text-[11px] text-muted-foreground">
                     Kullanıcılara bot üzerinden doğrudan mesaj veya genel duyuru iletin
                   </p>
                 </div>
@@ -4405,7 +4402,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Hedef Seçimi */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">Mesaj Hedefi</label>
+              <label className="text-xs font-medium text-foreground/80 block">Mesaj Hedefi</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -4413,10 +4410,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     haptic.selection();
                     setBroadcastTarget("all");
                   }}
-                  className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                  className={`p-3 rounded-full border text-xs font-medium flex items-center justify-center gap-2 transition-all ${
                     broadcastTarget === "all"
-                      ? "bg-purple-500/20 border-purple-500 text-purple-300 shadow-sm"
-                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                      ? "bg-foreground/10 border-foreground/40 text-foreground shadow-sm"
+                      : "bg-card border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Users className="w-4 h-4" />
@@ -4429,10 +4426,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     haptic.selection();
                     setBroadcastTarget("user");
                   }}
-                  className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                  className={`p-3 rounded-full border text-xs font-medium flex items-center justify-center gap-2 transition-all ${
                     broadcastTarget === "user"
-                      ? "bg-purple-500/20 border-purple-500 text-purple-300 shadow-sm"
-                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                      ? "bg-foreground/10 border-foreground/40 text-foreground shadow-sm"
+                      : "bg-card border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Send className="w-4 h-4" />
@@ -4443,12 +4440,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Belirli Kullanıcı Seçimi */}
             {broadcastTarget === "user" && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900 border border-white/5">
-                <label className="text-xs font-semibold text-zinc-300">Hedef Kullanıcı Seçin</label>
+              <div className="space-y-1.5 p-3 rounded-xl bg-card border border-border">
+                <label className="text-xs font-medium text-foreground/80">Hedef Kullanıcı Seçin</label>
                 <select
                   value={selectedUserId}
                   onChange={(e) => setSelectedUserId(e.target.value)}
-                  className="w-full bg-[#181a24] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full bg-card border border-border rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-foreground/40"
                 >
                   <option value="">-- Kullanıcı Seçiniz --</option>
                   {users.map((u) => {
@@ -4469,14 +4466,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   placeholder="Veya Telegram ID giriniz"
                   value={selectedUserId}
                   onChange={(e) => setSelectedUserId(e.target.value)}
-                  className="w-full mt-2 bg-[#181a24] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                  className="w-full mt-2 bg-card border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/40"
                 />
               </div>
             )}
 
             {/* Hızlı Şablonlar */}
             <div className="space-y-1.5">
-              <span className="text-[11px] text-zinc-400 font-medium">Hızlı Şablonlar:</span>
+              <span className="text-[11px] text-muted-foreground font-medium">Hızlı Şablonlar:</span>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   {
@@ -4496,7 +4493,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     key={tpl.label}
                     type="button"
                     onClick={() => setBroadcastMessage(tpl.text)}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-[11px] text-zinc-300 transition-colors"
+                    className="px-2.5 py-1 rounded-lg bg-card border border-border hover:border-foreground/15 text-[11px] text-foreground/80 transition-colors"
                   >
                     {tpl.label}
                   </button>
@@ -4506,15 +4503,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Mesaj Metni */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-300">Mesaj Metni (HTML Destekli)</label>
+              <label className="text-xs font-medium text-foreground/80">Mesaj Metni (HTML Destekli)</label>
               <textarea
                 rows={5}
                 value={broadcastMessage}
                 onChange={(e) => setBroadcastMessage(e.target.value)}
                 placeholder="Göndermek istediğiniz mesajı buraya yazınız... (Örn: <b>Kalın</b>, <i>İtalik</i>, <code>Kod</code> vb.)"
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-sans"
+                className="w-full bg-card border border-border rounded-xl p-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/40 font-sans"
               />
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-muted-foreground/80">
                 Telegram HTML etiketleri kullanılabilir: &lt;b&gt;kalın&lt;/b&gt;, &lt;i&gt;italik&lt;/i&gt;, &lt;code&gt;kod&lt;/code&gt;
               </p>
             </div>
@@ -4523,7 +4520,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <button
               onClick={handleSendBroadcast}
               disabled={sendingBroadcast || !broadcastMessage.trim()}
-              className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/25 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {sendingBroadcast ? (
                 <>
@@ -4549,8 +4546,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "tickets" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-              <Headphones className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider flex items-center gap-2">
+              <Headphones className="w-4 h-4 text-brand" />
               <span>Kullanıcı Destek Talepleri ({tickets.length})</span>
             </h3>
             <button
@@ -4558,7 +4555,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 haptic.impact("light");
                 fetchAllData();
               }}
-              className="text-[11px] text-emerald-400 hover:underline flex items-center gap-1"
+              className="text-[11px] text-brand hover:underline flex items-center gap-1"
             >
               <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
               <span>Yenile</span>
@@ -4566,7 +4563,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </div>
 
           {/* Filter Chips */}
-          <div className="flex flex-wrap gap-1.5 p-1 bg-zinc-900/60 rounded-xl border border-white/5 text-xs font-semibold">
+          <div className="flex flex-wrap gap-1.5 p-1 bg-card/60 rounded-xl border border-border text-xs font-medium">
             {[
               { id: "ALL", label: `Tümü (${tickets.length})` },
               { id: "OPEN", label: `Bekleyen (${tickets.filter((t) => t.status === "OPEN").length})` },
@@ -4581,8 +4578,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 }}
                 className={`py-1.5 px-3 rounded-lg transition-all ${
                   ticketFilter === f.id
-                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {f.label}
@@ -4598,7 +4595,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 return t.status === ticketFilter;
               })
               .length === 0 ? (
-              <Card className="p-8 text-center text-zinc-500 text-xs">
+              <Card className="p-8 text-center text-muted-foreground/80 text-xs">
                 Bu filtrede destek talebi bulunmamaktadır.
               </Card>
             ) : (
@@ -4615,16 +4612,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       key={t.id}
                       className={`p-3.5 space-y-2.5 transition-all border ${
                         isPending
-                          ? "border-amber-500/40 bg-gradient-to-r from-amber-950/15 to-zinc-900"
-                          : "border-white/5 bg-zinc-900/80 hover:border-white/20"
+                          ? "border-amber-500/40 bg-gradient-to-r from-amber-950/15 to-card"
+                          : "border-border bg-card/80 hover:border-foreground/15"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-zinc-400 font-bold">
+                          <span className="font-mono text-[10px] text-muted-foreground font-semibold">
                             #{t.id}
                           </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-medium">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-foreground/80 font-medium">
                             {t.category === "BALANCE"
                               ? "💳 Bakiye"
                               : t.category === "SMS_NUMBER"
@@ -4636,24 +4633,24 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         </div>
 
                         {t.status === "OPEN" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
                             <Clock className="w-3 h-3" />
                             <span>BEKLİYOR (AÇIK)</span>
                           </span>
                         ) : t.status === "ANSWERED" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand/20 text-brand border border-brand/40">
                             <CheckCircle className="w-3 h-3" />
                             <span>CEVAPLANDI</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground">
                             <span>KAPATILDI</span>
                           </span>
                         )}
                       </div>
 
                       <div>
-                        <h4 className="text-xs font-bold text-white">{t.subject}</h4>
+                        <h4 className="text-xs font-semibold text-foreground">{t.subject}</h4>
                         {(() => {
                           const tUserRealName =
                             userObj?.firstName && userObj.firstName !== "Kullanıcı" && userObj.firstName !== "Misafir"
@@ -4669,16 +4666,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                               : "kullanıcı adı yok";
 
                           return (
-                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
                               <span>👤 {tUserRealName}</span>
                               <span>•</span>
                               <span className="font-mono">{tUsername}</span>
                               <span>•</span>
-                              <span className="font-mono text-zinc-500">ID: {t.telegramId}</span>
+                              <span className="font-mono text-muted-foreground/80">ID: {t.telegramId}</span>
                               {userObj && (
                                 <>
                                   <span>•</span>
-                                  <span className="font-mono text-emerald-400 font-semibold">
+                                  <span className="font-mono text-brand font-medium">
                                     ₺{userObj.balance.toFixed(2)}
                                   </span>
                                 </>
@@ -4688,16 +4685,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         })()}
                       </div>
 
-                      <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-zinc-300">
-                        <span className="text-[10px] text-zinc-500 block mb-0.5">Son Mesaj:</span>
+                      <div className="p-2.5 rounded-xl bg-foreground/5 border border-border text-xs text-foreground/80">
+                        <span className="text-[10px] text-muted-foreground/80 block mb-0.5">Son Mesaj:</span>
                         <p className="line-clamp-2">
                           {t.messages[t.messages.length - 1]?.text || "Mesaj yok"}
                         </p>
                       </div>
 
                       {/* Card Action Buttons */}
-                      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-xs">
-                        <span className="text-[10px] text-zinc-500">
+                      <div className="flex items-center justify-between pt-1 border-t border-border text-xs">
+                        <span className="text-[10px] text-muted-foreground/80">
                           {new Date(t.updatedAt).toLocaleString("tr-TR", {
                             day: "2-digit",
                             month: "2-digit",
@@ -4712,7 +4709,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                               haptic.selection();
                               setSelectedTicket(t);
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                             <span>Görüşmeyi Aç & Yanıtla ({t.messages.length})</span>
@@ -4720,11 +4717,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                           <button
                             onClick={() => handleToggleTicketStatus(t.id, t.status)}
-                            className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                            className="p-1.5 rounded-xl bg-muted hover:bg-input text-foreground/80 transition-colors"
                             title={t.status === "CLOSED" ? "Yeniden Aç" : "Talebi Kapat"}
                           >
                             {t.status === "CLOSED" ? (
-                              <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
+                              <RotateCcw className="w-3.5 h-3.5 text-foreground/90" />
                             ) : (
                               <XCircle className="w-3.5 h-3.5 text-amber-400" />
                             )}
@@ -4750,33 +4747,33 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* Admin Ticket Conversation Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg bg-[#0f111a] border border-white/10 rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="w-full max-w-lg bg-background ring-1 ring-foreground/10 rounded-3xl max-h-[90vh] flex flex-col shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] overflow-hidden">
             {/* Modal Header */}
-            <div className="p-4 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-zinc-900/60">
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0 bg-card/60">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-purple-400 font-bold">
+                  <span className="font-mono text-xs text-foreground/90 font-semibold">
                     #{selectedTicket.id}
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-semibold">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-foreground/80 font-medium">
                     {selectedTicket.category}
                   </span>
                   {selectedTicket.status === "OPEN" ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
                       AÇIK
                     </span>
                   ) : selectedTicket.status === "ANSWERED" ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/20 text-brand font-semibold">
                       CEVAPLANDI
                     </span>
                   ) : (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-bold">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">
                       KAPALI
                     </span>
                   )}
                 </div>
-                <h3 className="text-sm font-bold text-white mt-1">{selectedTicket.subject}</h3>
-                <p className="text-[11px] text-zinc-400">
+                <h3 className="text-sm font-semibold text-foreground mt-1">{selectedTicket.subject}</h3>
+                <p className="text-[11px] text-muted-foreground">
                   {selectedTicket.userFirstName} (@{selectedTicket.username || "yok"}) • Telegram ID:{" "}
                   <code>{selectedTicket.telegramId}</code>
                 </p>
@@ -4785,7 +4782,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleToggleTicketStatus(selectedTicket.id, selectedTicket.status)}
-                  className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 transition-colors"
+                  className="px-2.5 py-1.5 rounded-xl bg-muted hover:bg-input text-xs text-foreground transition-colors"
                 >
                   {selectedTicket.status === "CLOSED" ? "Yeniden Aç" : "Kapat"}
                 </button>
@@ -4798,7 +4795,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </button>
                 <button
                   onClick={() => setSelectedTicket(null)}
-                  className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -4814,14 +4811,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     key={m.id}
                     className={`flex flex-col ${isAdmin ? "items-end" : "items-start"}`}
                   >
-                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mb-1 px-1">
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-1 px-1">
                       {isAdmin ? (
                         <>
-                          <span className="font-semibold text-purple-300">AzFur Yönetici (Siz)</span>
-                          <ShieldCheck className="w-3 h-3 text-purple-400" />
+                          <span className="font-medium text-foreground">AzFur Yönetici (Siz)</span>
+                          <ShieldCheck className="w-3 h-3 text-foreground/90" />
                         </>
                       ) : (
-                        <span className="font-semibold text-zinc-200">
+                        <span className="font-medium text-foreground">
                           {m.senderName || selectedTicket.userFirstName} (Kullanıcı)
                         </span>
                       )}
@@ -4837,8 +4834,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     <div
                       className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed ${
                         isAdmin
-                          ? "bg-purple-600 text-white rounded-tr-sm shadow-md font-medium"
-                          : "bg-zinc-800/90 border border-white/10 text-zinc-100 rounded-tl-sm shadow-md"
+                          ? "bg-foreground text-background rounded-tr-sm shadow-md font-medium"
+                          : "bg-muted/90 border border-border text-foreground rounded-tl-sm shadow-md"
                       }`}
                     >
                       {m.text}
@@ -4849,7 +4846,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Quick Templates & Reply Box */}
-            <div className="p-3.5 bg-zinc-900/90 border-t border-white/[0.08] space-y-2.5 shrink-0">
+            <div className="p-3.5 bg-card/90 border-t border-border space-y-2.5 shrink-0">
               <div className="flex flex-wrap gap-1.5">
                 {[
                   "✅ Bakiyeniz hesabınıza eklenmiştir. Kontrol edebilirsiniz.",
@@ -4860,7 +4857,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     key={tpl}
                     type="button"
                     onClick={() => setTicketReplyText(tpl)}
-                    className="px-2 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-300 transition-colors"
+                    className="px-2 py-0.5 rounded-lg bg-muted hover:bg-input text-[10px] text-foreground/80 transition-colors"
                   >
                     {tpl.slice(0, 32)}...
                   </button>
@@ -4873,12 +4870,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   value={ticketReplyText}
                   onChange={(e) => setTicketReplyText(e.target.value)}
                   placeholder="Kullanıcıya iletilecek yanıtı yazınız..."
-                  className="flex-1 bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500 resize-none font-sans"
+                  className="flex-1 bg-background border border-border rounded-xl p-2.5 text-xs text-foreground focus:outline-none focus:border-foreground/40 resize-none font-sans"
                 />
                 <button
                   onClick={handleReplyTicket}
                   disabled={sendingTicketReply || !ticketReplyText.trim()}
-                  className="px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-95 transition-all disabled:opacity-40 flex flex-col items-center justify-center gap-1"
+                  className="px-4 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-40 flex flex-col items-center justify-center gap-1"
                 >
                   {sendingTicketReply ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -4890,7 +4887,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   )}
                 </button>
               </div>
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-muted-foreground/80">
                 💡 Yanıtınız kaydedildiği anda kullanıcının Telegram hesabına anlık bildirim iletilir.
               </p>
             </div>
@@ -4903,11 +4900,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Gift className="w-4 h-4 text-purple-400" />
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Gift className="w-4 h-4 text-foreground/90" />
                 <span>Kuponlar & İndirim Kampanyaları</span>
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-muted-foreground">
                 Kullanıcılar için hediye bakiye ve SMS onay indirim kodları tanımlayın
               </p>
             </div>
@@ -4916,7 +4913,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 haptic.impact("medium");
                 setCouponModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs shadow-md shadow-purple-500/20 active:scale-95 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Yeni Kupon Oluştur</span>
@@ -4925,19 +4922,19 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
           {/* İstatistikler */}
           <div className="grid grid-cols-3 gap-2">
-            <Card className="p-3 bg-zinc-950/80 border-white/5">
-              <span className="text-[10px] text-zinc-400 block font-medium">Toplam Kupon</span>
-              <span className="text-lg font-bold text-white font-mono mt-0.5 block">{coupons.length}</span>
+            <Card className="p-3 bg-background/80 border-border">
+              <span className="text-[10px] text-muted-foreground block font-medium">Toplam Kupon</span>
+              <span className="text-lg font-semibold text-foreground font-mono mt-0.5 block">{coupons.length}</span>
             </Card>
-            <Card className="p-3 bg-zinc-950/80 border-white/5">
-              <span className="text-[10px] text-zinc-400 block font-medium">Aktif Kuponlar</span>
-              <span className="text-lg font-bold text-emerald-400 font-mono mt-0.5 block">
+            <Card className="p-3 bg-background/80 border-border">
+              <span className="text-[10px] text-muted-foreground block font-medium">Aktif Kuponlar</span>
+              <span className="text-lg font-semibold text-brand font-mono mt-0.5 block">
                 {coupons.filter((c) => c.isActive).length}
               </span>
             </Card>
-            <Card className="p-3 bg-zinc-950/80 border-white/5">
-              <span className="text-[10px] text-zinc-400 block font-medium">Toplam Kullanım</span>
-              <span className="text-lg font-bold text-purple-400 font-mono mt-0.5 block">
+            <Card className="p-3 bg-background/80 border-border">
+              <span className="text-[10px] text-muted-foreground block font-medium">Toplam Kullanım</span>
+              <span className="text-lg font-semibold text-foreground/90 font-mono mt-0.5 block">
                 {coupons.reduce((sum, c) => sum + (c.usedCount || 0), 0)} kez
               </span>
             </Card>
@@ -4945,12 +4942,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
           {/* Kupon Listesi */}
           {coupons.length === 0 ? (
-            <Card className="p-8 text-center bg-zinc-950/60 border-white/5 space-y-2">
-              <Gift className="w-8 h-8 mx-auto text-zinc-600" />
-              <p className="text-xs text-zinc-400">Henüz tanımlanmış bir kupon kodu bulunmuyor.</p>
+            <Card className="p-8 text-center bg-background/60 border-border space-y-2">
+              <Gift className="w-8 h-8 mx-auto text-muted-foreground/60" />
+              <p className="text-xs text-muted-foreground">Henüz tanımlanmış bir kupon kodu bulunmuyor.</p>
               <button
                 onClick={() => setCouponModalOpen(true)}
-                className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
+                className="text-xs text-foreground/90 hover:text-foreground font-medium"
               >
                 + İlk kuponu hemen oluşturun
               </button>
@@ -4965,13 +4962,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     key={c.id}
                     className={`p-3.5 space-y-2.5 border transition-all ${
                       !c.isActive || isExpired || isFull
-                        ? "bg-zinc-950/40 border-white/5 opacity-70"
-                        : "bg-zinc-900/80 border-white/10 hover:border-purple-500/30"
+                        ? "bg-background/40 border-border opacity-70"
+                        : "bg-card/80 border-border hover:border-foreground/15"
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-1 rounded-lg bg-black/60 border border-white/10 font-mono font-black text-sm text-white tracking-wider flex items-center gap-1.5 select-all">
+                        <span className="px-2.5 py-1 rounded-lg bg-muted border border-border font-mono font-semibold text-sm text-foreground tracking-wider flex items-center gap-1.5 select-all">
                           <span>🎟️</span>
                           <span>{c.code}</span>
                         </span>
@@ -4982,7 +4979,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             setToastMsg(`📋 '${c.code}' kodu kopyalandı!`);
                             setTimeout(() => setToastMsg(null), 2000);
                           }}
-                          className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                          className="p-1 rounded-lg text-muted-foreground hover:text-foreground"
                           title="Kodu Kopyala"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -4991,12 +4988,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                       <div className="flex items-center gap-2">
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
                             c.type === "BALANCE"
-                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              ? "bg-brand/20 text-brand border border-brand/30"
                               : c.type === "DISCOUNT_PERCENT"
-                              ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                              : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                              ? "bg-foreground/10 text-foreground border border-foreground/15"
+                              : "bg-foreground/10 text-foreground border border-foreground/15"
                           }`}
                         >
                           {c.type === "BALANCE"
@@ -5007,14 +5004,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         </span>
 
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                             !c.isActive
-                              ? "bg-zinc-800 text-zinc-400"
+                              ? "bg-muted text-muted-foreground"
                               : isExpired
                               ? "bg-rose-500/20 text-rose-300"
                               : isFull
                               ? "bg-amber-500/20 text-amber-300"
-                              : "bg-emerald-500/20 text-emerald-300"
+                              : "bg-brand/20 text-brand"
                           }`}
                         >
                           {!c.isActive
@@ -5029,20 +5026,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     </div>
 
                     {c.description && (
-                      <p className="text-xs text-zinc-300 leading-relaxed font-sans">{c.description}</p>
+                      <p className="text-xs text-foreground/80 leading-relaxed font-sans">{c.description}</p>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04] text-[11px] text-zinc-400">
+                    <div className="flex items-center justify-between pt-2 border-t border-border text-[11px] text-muted-foreground">
                       <div className="flex items-center gap-3">
                         <span>
                           Kullanım:{" "}
-                          <b className="text-white font-mono">{c.usedCount || 0}</b> /{" "}
+                          <b className="text-foreground font-mono">{c.usedCount || 0}</b> /{" "}
                           <span className="font-mono">{c.maxUses > 0 ? c.maxUses : "Sınırsız"}</span>
                         </span>
                         {c.expiresAt && (
                           <span>
                             Bitiş:{" "}
-                            <b className="text-zinc-300">
+                            <b className="text-foreground/80">
                               {new Date(c.expiresAt).toLocaleDateString("tr-TR")}
                             </b>
                           </span>
@@ -5052,10 +5049,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleToggleCouponActive(c)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${
                             c.isActive
                               ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30"
-                              : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30"
+                              : "bg-brand/20 hover:bg-brand/30 text-brand border border-brand/30"
                           }`}
                         >
                           {c.isActive ? "Pasife Al" : "Aktif Et"}
@@ -5081,20 +5078,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "backups" && (
         <div className="space-y-4">
           {/* Üst Bilgi ve Durum Paneli */}
-          <Card className="p-4 bg-gradient-to-br from-[#12141e] via-[#0d1017] to-[#0a0d14] border-emerald-500/30">
+          <Card className="p-4 bg-gradient-to-br from-card via-card to-card border-brand/30">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                <div className="p-2.5 rounded-2xl bg-brand/15 border border-brand/30 text-brand">
                   <Archive className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                     <span>Sistem Yedekleme & Geri Yükleme Motoru</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/20 text-brand border border-brand/30 font-mono">
                       {backups.length} Yedek
                     </span>
                   </h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Otomatik periyodik snapshotlar, tek tıkla canlı JSON indirme ve dosyadan tam geri yükleme
                   </p>
                 </div>
@@ -5107,38 +5104,38 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     fetchAllData();
                   }}
                   disabled={refreshing}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 font-semibold flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-muted hover:bg-input text-xs text-foreground font-medium flex items-center gap-1.5 transition-colors"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-emerald-400" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-brand" : ""}`} />
                   <span>Yenile</span>
                 </button>
               </div>
             </div>
 
             {/* Durum Rozetleri */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-white/[0.06]">
-              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Otomatik Yedekleme</span>
-                <span className={`text-xs font-bold flex items-center gap-1 mt-0.5 ${backupSettings.autoBackupEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${backupSettings.autoBackupEnabled ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-border">
+              <div className="p-2 rounded-xl bg-card/60 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Otomatik Yedekleme</span>
+                <span className={`text-xs font-semibold flex items-center gap-1 mt-0.5 ${backupSettings.autoBackupEnabled ? "text-brand" : "text-muted-foreground/80"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${backupSettings.autoBackupEnabled ? "bg-brand animate-pulse" : "bg-input"}`} />
                   {backupSettings.autoBackupEnabled ? "AKTİF" : "KAPALI"}
                 </span>
               </div>
-              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Yedekleme Sıklığı</span>
-                <span className="text-xs font-bold text-blue-400 font-mono mt-0.5 block">
+              <div className="p-2 rounded-xl bg-card/60 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Yedekleme Sıklığı</span>
+                <span className="text-xs font-semibold text-foreground/90 font-mono mt-0.5 block">
                   Her {backupSettings.autoBackupIntervalHours} Saatte Bir
                 </span>
               </div>
-              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Maksimum Saklama</span>
-                <span className="text-xs font-bold text-purple-400 font-mono mt-0.5 block">
+              <div className="p-2 rounded-xl bg-card/60 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Maksimum Saklama</span>
+                <span className="text-xs font-semibold text-foreground/90 font-mono mt-0.5 block">
                   {backupSettings.maxBackupsCount} Snapshot
                 </span>
               </div>
-              <div className="p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Son Yedek Zamanı</span>
-                <span className="text-xs font-semibold text-amber-300 mt-0.5 block truncate">
+              <div className="p-2 rounded-xl bg-card/60 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Son Yedek Zamanı</span>
+                <span className="text-xs font-medium text-amber-300 mt-0.5 block truncate">
                   {(() => {
                     const latest =
                       backupSettings?.lastBackupAt ||
@@ -5153,8 +5150,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Güvenlik & Rate Limit Bildirimi */}
-            <div className="mt-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-2 text-[11px] text-blue-300">
-              <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="mt-3 p-2.5 rounded-xl bg-foreground/5 border border-foreground/10 flex items-center gap-2 text-[11px] text-foreground">
+              <ShieldAlert className="w-4 h-4 text-foreground/90 shrink-0" />
               <span>
                 <b>Brute-force ve Güvenlik Koruması Aktif:</b> Yedekleme ve geri yükleme uç noktaları rate limit ile korunur. 5 hatalı PIN denemesinde IP adresi 15 dakika boyunca kilitlenir.
               </span>
@@ -5164,13 +5161,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           {/* 3 BÜYÜK HIZLI EYLEM KARTI */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Kart 1: Şimdi Manuel Yedek Al */}
-            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-emerald-500/40 transition-all">
+            <Card className="p-4 bg-card/80 border-border flex flex-col justify-between space-y-3 hover:border-brand/40 transition-all">
               <div className="space-y-1.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <div className="w-10 h-10 rounded-xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand">
                   <HardDrive className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-white">Şimdi Manuel Yedek Al</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className="text-sm font-semibold text-foreground">Şimdi Manuel Yedek Al</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   Sistemin güncel veritabanını anında yeni bir snapshot olarak buluta kaydeder.
                 </p>
               </div>
@@ -5178,7 +5175,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 onClick={() => handleCreateBackup()}
                 disabled={creatingBackup}
-                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {creatingBackup ? (
                   <>
@@ -5195,20 +5192,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </Card>
 
             {/* Kart 2: Canlı SQL Veritabanını İndir (.sql) */}
-            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-blue-500/40 transition-all">
+            <Card className="p-4 bg-card/80 border-border flex flex-col justify-between space-y-3 hover:border-foreground/20 transition-all">
               <div className="space-y-1.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <div className="w-10 h-10 rounded-xl bg-foreground/10 border border-foreground/15 flex items-center justify-center text-foreground/90">
                   <ArrowDownToLine className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-white">Canlı SQL Veritabanını İndir</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  Şu anki canlı PostgreSQL veritabanını cihazınıza <code className="text-blue-300 font-mono">.sql</code> dosyası olarak indirir.
+                <h4 className="text-sm font-semibold text-foreground">Canlı SQL Veritabanını İndir</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Şu anki canlı PostgreSQL veritabanını cihazınıza <code className="text-foreground font-mono">.sql</code> dosyası olarak indirir.
                 </p>
               </div>
 
               <button
                 onClick={handleDownloadCurrentDatabase}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 <span>📥 SQL Olarak İndir (.sql)</span>
@@ -5216,14 +5213,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </Card>
 
             {/* Kart 3: Dosyadan Geri Yükle (.sql / .json Yükle) */}
-            <Card className="p-4 bg-zinc-900/80 border-white/10 flex flex-col justify-between space-y-3 hover:border-purple-500/40 transition-all">
+            <Card className="p-4 bg-card/80 border-border flex flex-col justify-between space-y-3 hover:border-foreground/20 transition-all">
               <div className="space-y-1.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <div className="w-10 h-10 rounded-xl bg-foreground/10 border border-foreground/15 flex items-center justify-center text-foreground/90">
                   <ArrowUpFromLine className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-white">Dosyadan Geri Yükle</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  İndirmiş olduğunuz bir <code className="text-purple-300 font-mono">.sql</code> veya <code className="text-purple-300 font-mono">.json</code> yedek dosyasını yükleyip sistemi geri yükleyin.
+                <h4 className="text-sm font-semibold text-foreground">Dosyadan Geri Yükle</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  İndirmiş olduğunuz bir <code className="text-foreground font-mono">.sql</code> veya <code className="text-foreground font-mono">.json</code> yedek dosyasını yükleyip sistemi geri yükleyin.
                 </p>
               </div>
 
@@ -5237,7 +5234,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 />
                 <label
                   htmlFor="backup-file-uploader"
-                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+                  className="w-full py-2.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
                 >
                   <Upload className="w-4 h-4" />
                   <span>📤 Yedek Dosyası Seç (.sql / .json)</span>
@@ -5247,39 +5244,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </div>
 
           {/* OTOMATİK YEDEKLEME AYARLARI */}
-          <Card className="p-4 bg-zinc-900/80 border-white/10 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+          <Card className="p-4 bg-card/80 border-border space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-sm font-bold text-white">Otomatik Periyodik Yedekleme Ayarları</h4>
+                <Sliders className="w-4 h-4 text-brand" />
+                <h4 className="text-sm font-semibold text-foreground">Otomatik Periyodik Yedekleme Ayarları</h4>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400 font-medium">Otomatik Çalışma:</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSaveBackupSettings({
-                      autoBackupEnabled: !backupSettings.autoBackupEnabled,
-                    })
-                  }
+                <span className="text-xs text-muted-foreground font-medium">Otomatik Çalışma:</span>
+                <HaloSwitch
+                  aria-label="Otomatik yedekleme"
+                  checked={backupSettings.autoBackupEnabled}
                   disabled={savingBackupSettings}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    backupSettings.autoBackupEnabled ? "bg-emerald-500" : "bg-zinc-700"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      backupSettings.autoBackupEnabled ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
+                  onCheckedChange={(checked) => {
+                    haptic.selection();
+                    handleSaveBackupSettings({ autoBackupEnabled: checked });
+                  }}
+                />
               </div>
             </div>
 
             <div className="space-y-3">
               {/* Sıklık Seçimi */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                <label className="text-xs font-medium text-foreground/80 block mb-1.5">
                   ⏱️ Yedekleme Sıklığı (Aralık)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -5298,12 +5286,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       }
                       className={`p-2.5 rounded-xl border text-center transition-all ${
                         backupSettings.autoBackupIntervalHours === item.hours
-                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm"
-                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                          ? "bg-brand/20 border-brand text-brand font-semibold shadow-sm"
+                          : "bg-card border-border text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       <span className="text-xs block">{item.label}</span>
-                      <span className="text-[10px] text-zinc-500 block">{item.desc}</span>
+                      <span className="text-[10px] text-muted-foreground/80 block">{item.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -5311,7 +5299,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
               {/* Maksimum Saklanacak Yedek Sayısı */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                <label className="text-xs font-medium text-foreground/80 block mb-1.5">
                   🗄️ Bulutta Saklanacak Maksimum Snapshot Sayısı
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -5328,19 +5316,19 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       }
                       className={`p-2.5 rounded-xl border text-center transition-all ${
                         backupSettings.maxBackupsCount === item.count
-                          ? "bg-purple-500/20 border-purple-500 text-purple-300 font-bold shadow-sm"
-                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                          ? "bg-foreground/10 border-foreground/40 text-foreground font-semibold shadow-sm"
+                          : "bg-card border-border text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       <span className="text-xs block">{item.label}</span>
-                      <span className="text-[10px] text-zinc-500 block">{item.desc}</span>
+                      <span className="text-[10px] text-muted-foreground/80 block">{item.desc}</span>
                     </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-muted-foreground/80">
               💡 Belirlenen sıklık süresi dolduğunda sistem otomatik olarak güvenli bir snapshot oluşturur. Maksimum saklama sayısına ulaşıldığında en eski otomatik snapshotlar otomatik olarak arşivlenir.
             </p>
           </Card>
@@ -5348,20 +5336,20 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           {/* KAYITLI SİSTEM YEDEKLERİ GEÇMİŞİ */}
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1">
-              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-emerald-400" />
+              <h4 className="text-xs font-semibold text-foreground/80 uppercase tracking-wider flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-brand" />
                 <span>Kayıtlı Sistem Snapshotları ({backups.length})</span>
               </h4>
-              <span className="text-[11px] text-zinc-500 font-mono">
+              <span className="text-[11px] text-muted-foreground/80 font-mono">
                 Son eklenenler en üstte listelenir
               </span>
             </div>
 
             {backups.length === 0 ? (
-              <Card className="p-8 text-center space-y-2 text-zinc-500 text-xs">
-                <Archive className="w-8 h-8 text-zinc-600 mx-auto" />
+              <Card className="p-8 text-center space-y-2 text-muted-foreground/80 text-xs">
+                <Archive className="w-8 h-8 text-muted-foreground/60 mx-auto" />
                 <p>Henüz sistemde kayıtlı bir yedek bulunmuyor.</p>
-                <p className="text-[11px] text-zinc-600">
+                <p className="text-[11px] text-muted-foreground/60">
                   Yukarıdaki &quot;Şimdi Manuel Yedek Al&quot; butonuna basarak ilk yedeğinizi anında oluşturabilirsiniz.
                 </p>
               </Card>
@@ -5375,10 +5363,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       key={b.id}
                       className={`p-3.5 space-y-3 transition-all border ${
                         isPreRestore
-                          ? "border-purple-500/30 bg-gradient-to-r from-purple-950/20 to-zinc-900"
+                          ? "border-foreground/15 bg-gradient-to-r from-foreground/5 to-card"
                           : isAuto
-                          ? "border-blue-500/20 bg-zinc-900/90 hover:border-blue-500/40"
-                          : "border-emerald-500/20 bg-zinc-900/90 hover:border-emerald-500/40"
+                          ? "border-foreground/10 bg-card/90 hover:border-foreground/20"
+                          : "border-brand/20 bg-card/90 hover:border-brand/40"
                       }`}
                     >
                       {/* Üst Satır: Tür, Başlık ve Tarih */}
@@ -5386,12 +5374,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
-                              className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider ${
                                 isPreRestore
-                                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                  ? "bg-foreground/10 text-foreground border border-foreground/15"
                                   : isAuto
-                                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  ? "bg-foreground/10 text-foreground border border-foreground/15"
+                                  : "bg-brand/20 text-brand border border-brand/30"
                               }`}
                             >
                               {isPreRestore
@@ -5400,7 +5388,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                                 ? "🤖 OTOMATİK"
                                 : "👤 MANUEL"}
                             </span>
-                            <span className="font-bold text-xs text-white">
+                            <span className="font-semibold text-xs text-foreground">
                               {b.label || "Sistem Snapshotı"}
                             </span>
                           </div>
@@ -5411,11 +5399,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             const displayDate = isValidDate ? new Date(bDate).toLocaleString("tr-TR") : new Date().toLocaleString("tr-TR");
                             const relativeTime = isValidDate ? formatUserLastActive(bDate) : "Yeni oluşturuldu";
                             return (
-                              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                                <Clock className="w-3 h-3 text-zinc-500" />
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <Clock className="w-3 h-3 text-muted-foreground/80" />
                                 <span>{displayDate}</span>
-                                <span className="text-zinc-600">•</span>
-                                <span className="text-emerald-400 font-medium">
+                                <span className="text-muted-foreground/60">•</span>
+                                <span className="text-brand font-medium">
                                   {relativeTime}
                                 </span>
                               </div>
@@ -5428,7 +5416,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                           {/* İndir */}
                           <button
                             onClick={() => handleDownloadSnapshot(b.id, b.createdAt || b.timestamp)}
-                            className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                            className="p-2 rounded-xl bg-foreground/8 hover:bg-foreground/13 border border-foreground/15 text-foreground text-xs font-medium flex items-center gap-1 transition-all"
                             title="SQL Yedeğini İndir (.sql)"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -5443,7 +5431,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                               setRestoreConfirmModalOpen(true);
                               haptic.impact("medium");
                             }}
-                            className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                            className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center gap-1 transition-all"
                             title="Bu Yedeğe Geri Dön"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
@@ -5462,30 +5450,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       </div>
 
                       {/* İstatistikler */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-2 border-t border-white/[0.04] text-[11px] font-mono">
-                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
-                          <span className="text-zinc-500 text-[10px]">Kullanıcı:</span>
-                          <span className="font-bold text-white">{b.stats?.usersCount || 0}</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-2 border-t border-border text-[11px] font-mono">
+                        <div className="p-1.5 rounded-lg bg-background/60 border border-border flex items-center justify-between">
+                          <span className="text-muted-foreground/80 text-[10px]">Kullanıcı:</span>
+                          <span className="font-semibold text-foreground">{b.stats?.usersCount || 0}</span>
                         </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
-                          <span className="text-zinc-500 text-[10px]">Bakiye:</span>
-                          <span className="font-bold text-emerald-400">
+                        <div className="p-1.5 rounded-lg bg-background/60 border border-border flex items-center justify-between">
+                          <span className="text-muted-foreground/80 text-[10px]">Bakiye:</span>
+                          <span className="font-semibold text-brand">
                             ₺{Number(b.stats?.totalUserBalance ?? b.stats?.totalBalance ?? 0).toFixed(2)}
                           </span>
                         </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
-                          <span className="text-zinc-500 text-[10px]">Sipariş:</span>
-                          <span className="font-bold text-blue-400">
+                        <div className="p-1.5 rounded-lg bg-background/60 border border-border flex items-center justify-between">
+                          <span className="text-muted-foreground/80 text-[10px]">Sipariş:</span>
+                          <span className="font-semibold text-foreground/90">
                             {b.stats?.activationsCount ?? b.stats?.ordersCount ?? 0}
                           </span>
                         </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
-                          <span className="text-zinc-500 text-[10px]">Yükleme:</span>
-                          <span className="font-bold text-amber-400">{b.stats?.depositsCount || 0}</span>
+                        <div className="p-1.5 rounded-lg bg-background/60 border border-border flex items-center justify-between">
+                          <span className="text-muted-foreground/80 text-[10px]">Yükleme:</span>
+                          <span className="font-semibold text-amber-400">{b.stats?.depositsCount || 0}</span>
                         </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-950/60 border border-white/5 flex items-center justify-between">
-                          <span className="text-zinc-500 text-[10px]">Boyut:</span>
-                          <span className="font-bold text-purple-400">
+                        <div className="p-1.5 rounded-lg bg-background/60 border border-border flex items-center justify-between">
+                          <span className="text-muted-foreground/80 text-[10px]">Boyut:</span>
+                          <span className="font-semibold text-foreground/90">
                             {b.stats?.sizeKb ?? (b.sizeBytes ? Number((b.sizeBytes / 1024).toFixed(1)) : 0)} KB
                           </span>
                         </div>
@@ -5503,18 +5491,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {activeTab === "logs" && (
         <div className="space-y-4">
           {/* Üst Bilgi ve Butonlar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-zinc-900 via-zinc-900 to-indigo-950/30 p-4 rounded-2xl border border-white/10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-card via-card to-foreground/5 p-4 rounded-2xl border border-border">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                <div className="p-2 rounded-xl bg-foreground/10 text-foreground/90">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span>Sistem Denetim & Aktivite Logları</span>
                     <Badge color="purple">Canlı</Badge>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Bakiye yüklemeleri, siparişler, VIP/yetki işlemleri ve güvenlik olayları
                   </p>
                 </div>
@@ -5526,7 +5514,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={fetchLogs}
                 disabled={loadingLogs}
-                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-white/10 disabled:opacity-50"
+                className="px-3 py-2 rounded-xl bg-muted hover:bg-input text-foreground text-xs font-medium flex items-center gap-1.5 transition-all border border-border disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? "animate-spin" : ""}`} />
                 <span>Yenile</span>
@@ -5536,7 +5524,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={handleClearLogs}
                 disabled={clearingLogs || logs.length === 0}
-                className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all border border-rose-500/30 disabled:opacity-40"
+                className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-xs font-medium flex items-center gap-1.5 transition-all border border-rose-500/30 disabled:opacity-40"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{clearingLogs ? "Temizleniyor..." : "Logları Temizle"}</span>
@@ -5545,22 +5533,22 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           </div>
 
           {/* Filtre ve Arama Çubuğu */}
-          <Card className="p-3.5 bg-zinc-900/90 border-white/10 space-y-3">
+          <Card className="p-3.5 bg-card/90 border-border space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5">
               {/* Arama */}
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-muted-foreground/80 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   placeholder="İşlem adı, kullanıcı, ID veya açıklama ara..."
                   value={logSearchQuery}
                   onChange={(e) => setLogSearchQuery(e.target.value)}
-                  className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-muted border border-border rounded-xl pl-9 pr-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/40"
                 />
                 {logSearchQuery && (
                   <button
                     onClick={() => setLogSearchQuery("")}
-                    className="absolute right-2.5 top-2 text-xs text-zinc-400 hover:text-white"
+                    className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground"
                   >
                     Temizle
                   </button>
@@ -5583,8 +5571,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     onClick={() => setLogCategoryFilter(c.id)}
                     className={`px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all text-[11px] ${
                       logCategoryFilter === c.id
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
+                        ? "bg-foreground text-background shadow-sm"
+                        : "bg-muted/80 text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {c.label}
@@ -5594,15 +5582,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Seviye Filtresi */}
-            <div className="flex items-center gap-1.5 pt-1 border-t border-white/5 text-[11px]">
-              <span className="text-zinc-500 flex items-center gap-1">
+            <div className="flex items-center gap-1.5 pt-1 border-t border-border text-[11px]">
+              <span className="text-muted-foreground/80 flex items-center gap-1">
                 <Filter className="w-3 h-3" />
                 Seviye:
               </span>
               {[
                 { id: "ALL", label: "Tümü" },
-                { id: "SUCCESS", label: "Başarılı", color: "text-emerald-400" },
-                { id: "INFO", label: "Bilgi", color: "text-blue-400" },
+                { id: "SUCCESS", label: "Başarılı", color: "text-brand" },
+                { id: "INFO", label: "Bilgi", color: "text-foreground/90" },
                 { id: "WARN", label: "Uyarı", color: "text-amber-400" },
                 { id: "ERROR", label: "Hata", color: "text-rose-400" },
               ].map((lvl) => (
@@ -5611,15 +5599,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   onClick={() => setLogLevelFilter(lvl.id)}
                   className={`px-2 py-0.5 rounded-md font-medium transition-all ${
                     logLevelFilter === lvl.id
-                      ? "bg-white/10 text-white font-bold"
-                      : "text-zinc-400 hover:text-zinc-200"
+                      ? "bg-foreground/10 text-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span className={lvl.color}>{lvl.label}</span>
                 </button>
               ))}
 
-              <span className="ml-auto text-zinc-500 font-mono text-[10px]">
+              <span className="ml-auto text-muted-foreground/80 font-mono text-[10px]">
                 {filteredLogs.length} / {logs.length} kayıt
               </span>
             </div>
@@ -5628,14 +5616,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           {/* Log Listesi */}
           {loadingLogs ? (
             <div className="p-12 text-center space-y-2">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mx-auto" />
-              <p className="text-xs text-zinc-400">Denetim kayıtları yükleniyor...</p>
+              <Loader2 className="w-8 h-8 animate-spin text-foreground/90 mx-auto" />
+              <p className="text-xs text-muted-foreground">Denetim kayıtları yükleniyor...</p>
             </div>
           ) : filteredLogs.length === 0 ? (
-            <Card className="p-8 text-center space-y-2 text-zinc-500 text-xs">
-              <FileText className="w-8 h-8 text-zinc-600 mx-auto" />
+            <Card className="p-8 text-center space-y-2 text-muted-foreground/80 text-xs">
+              <FileText className="w-8 h-8 text-muted-foreground/60 mx-auto" />
               <p>Filtreye uygun log kaydı bulunamadı.</p>
-              <p className="text-[11px] text-zinc-600">
+              <p className="text-[11px] text-muted-foreground/60">
                 Sistemde işlem gerçekleştikçe (bakiye yükleme, sipariş, ayar değişiklikleri) loglar burada listelenecektir.
               </p>
             </Card>
@@ -5654,65 +5642,65 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         : isWarn
                         ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50"
                         : isSuccess
-                        ? "bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-500/50"
-                        : "bg-zinc-900/80 border-white/10 hover:border-white/20"
+                        ? "bg-brand/10 border-brand/30 hover:border-brand/50"
+                        : "bg-card/80 border-border hover:border-foreground/15"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${
                               isError
                                 ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                                 : isWarn
                                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                                 : isSuccess
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                ? "bg-brand/20 text-brand border border-brand/30"
+                                : "bg-foreground/10 text-foreground border border-foreground/15"
                             }`}
                           >
                             {l.level}
                           </span>
 
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-zinc-300 border border-white/5">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-foreground/5 text-foreground/80 border border-border">
                             {l.category}
                           </span>
 
-                          <span className="font-bold font-mono text-xs text-white">
+                          <span className="font-semibold font-mono text-xs text-foreground">
                             {l.action}
                           </span>
                         </div>
 
                         {l.details && (
-                          <div className="text-[11px] text-zinc-300 font-mono bg-black/40 p-2 rounded-lg border border-white/5 break-all whitespace-pre-wrap">
+                          <div className="text-[11px] text-foreground/80 font-mono bg-foreground/5 p-2 rounded-lg border border-border break-all whitespace-pre-wrap">
                             {typeof l.details === "object"
                               ? JSON.stringify(l.details, null, 2)
                               : String(l.details)}
                           </div>
                         )}
 
-                        <div className="flex items-center gap-2 text-[10px] text-zinc-400 flex-wrap">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
                           {l.telegramId && (
                             <span>
-                              Kullanıcı: <b className="text-zinc-200">#{l.telegramId}</b>
-                              {l.username && <span className="text-emerald-400"> (@{l.username})</span>}
+                              Kullanıcı: <b className="text-foreground">#{l.telegramId}</b>
+                              {l.username && <span className="text-brand"> (@{l.username})</span>}
                             </span>
                           )}
                           {l.ip && (
                             <span>
-                              IP: <b className="text-zinc-300 font-mono">{l.ip}</b>
+                              IP: <b className="text-foreground/80 font-mono">{l.ip}</b>
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 text-[10px] text-zinc-400">
+                      <div className="text-right shrink-0 text-[10px] text-muted-foreground">
                         <div className="flex items-center gap-1 justify-end font-mono">
-                          <Clock className="w-3 h-3 text-zinc-500" />
+                          <Clock className="w-3 h-3 text-muted-foreground/80" />
                           <span>{new Date(l.timestamp).toLocaleTimeString("tr-TR")}</span>
                         </div>
-                        <span className="text-zinc-500 block">
+                        <span className="text-muted-foreground/80 block">
                           {new Date(l.timestamp).toLocaleDateString("tr-TR")}
                         </span>
                       </div>
@@ -5728,17 +5716,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* Yeni Kupon Oluşturma Modalı */}
       {couponModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#11131a] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300">
+                <div className="p-1.5 rounded-lg bg-foreground/10 text-foreground">
                   <Gift className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Yeni Kupon / Kampanya Tanımla</h3>
+                <h3 className="text-sm font-semibold text-foreground">Yeni Kupon / Kampanya Tanımla</h3>
               </div>
               <button
                 onClick={() => setCouponModalOpen(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -5746,18 +5734,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">Kupon Kodu</label>
+                <label className="text-xs font-medium text-foreground/80 block mb-1">Kupon Kodu</label>
                 <input
                   type="text"
                   placeholder="ÖRN: HOSGELDIN, YAZ2026, VIP50"
                   value={couponCode}
                   onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold tracking-wider text-white uppercase focus:outline-none focus:border-purple-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold tracking-wider text-foreground uppercase focus:outline-none focus:border-foreground/40"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">Kupon Türü</label>
+                <label className="text-xs font-medium text-foreground/80 block mb-1">Kupon Türü</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
                     { id: "BALANCE", label: "🎁 Bakiye", desc: "Doğrudan TL Yükler" },
@@ -5770,12 +5758,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       onClick={() => setCouponType(t.id as any)}
                       className={`p-2 rounded-xl border text-center transition-all ${
                         couponType === t.id
-                          ? "bg-purple-500/20 border-purple-500 text-purple-200"
-                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                          ? "bg-foreground/10 border-foreground/40 text-foreground"
+                          : "bg-card border-border text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      <span className="text-xs font-bold block">{t.label}</span>
-                      <span className="text-[9px] text-zinc-500 block">{t.desc}</span>
+                      <span className="text-xs font-semibold block">{t.label}</span>
+                      <span className="text-[9px] text-muted-foreground/80 block">{t.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -5783,7 +5771,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  <label className="text-xs font-medium text-foreground/80 block mb-1">
                     {couponType === "DISCOUNT_PERCENT" ? "İndirim Oranı (%)" : "Tutar (₺)"}
                   </label>
                   <input
@@ -5791,11 +5779,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     placeholder={couponType === "DISCOUNT_PERCENT" ? "Örn: 20" : "Örn: 25"}
                     value={couponValue}
                     onChange={(e) => setCouponValue(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-purple-500"
+                    className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono text-brand font-semibold focus:outline-none focus:border-foreground/40"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  <label className="text-xs font-medium text-foreground/80 block mb-1">
                     Kullanım Limiti (0 = Sınırsız)
                   </label>
                   <input
@@ -5803,25 +5791,25 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     placeholder="Örn: 100"
                     value={couponMaxUses}
                     onChange={(e) => setCouponMaxUses(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-500"
+                    className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs font-mono text-foreground focus:outline-none focus:border-foreground/40"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                <label className="text-xs font-medium text-foreground/80 block mb-1">
                   Son Geçerlilik Tarihi (Opsiyonel)
                 </label>
                 <input
                   type="date"
                   value={couponExpiresAt}
                   onChange={(e) => setCouponExpiresAt(e.target.value)}
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground focus:outline-none focus:border-foreground/40"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                <label className="text-xs font-medium text-foreground/80 block mb-1">
                   Kampanya Açıklaması / Notu
                 </label>
                 <textarea
@@ -5829,7 +5817,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   placeholder="Örn: İlk defa kayıt olan kullanıcılara hoş geldin hediyesi."
                   value={couponDesc}
                   onChange={(e) => setCouponDesc(e.target.value)}
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full bg-card border border-border rounded-xl p-2.5 text-xs text-foreground focus:outline-none focus:border-foreground/40 resize-none"
                 />
               </div>
             </div>
@@ -5838,7 +5826,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 type="button"
                 onClick={() => setCouponModalOpen(false)}
-                className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all"
+                className="py-2.5 rounded-xl bg-muted hover:bg-input text-foreground/80 font-semibold text-xs transition-all"
               >
                 Vazgeç
               </button>
@@ -5846,7 +5834,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={handleCreateCoupon}
                 disabled={savingCoupon || !couponCode.trim()}
-                className="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="py-2.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {savingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 <span>Kuponu Yayınla</span>
@@ -5859,33 +5847,33 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* Manual Balance Adjustment Modal */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-[#11131a] border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3.5">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <div className="w-full max-w-sm bg-background ring-1 ring-foreground/10 rounded-3xl p-4 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                   <span>💳 Bakiye Düzenle</span>
                 </h3>
-                <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                   {editingUser.firstName} (@{editingUser.username || editingUser.telegramId})
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-zinc-500 block font-medium">Mevcut Bakiye</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">
+                <span className="text-[10px] text-muted-foreground/80 block font-medium">Mevcut Bakiye</span>
+                <span className="font-mono font-semibold text-brand text-sm">
                   ₺{editingUser.balance?.toFixed(2) || "0.00"}
                 </span>
               </div>
             </div>
 
             {/* Mod Seçimi: Net Bakiye Belirle vs Miktar Ekle/Düş */}
-            <div className="grid grid-cols-2 p-0.5 rounded-xl bg-zinc-900 border border-white/5">
+            <div className="grid grid-cols-2 p-0.5 rounded-xl bg-card border border-border">
               <button
                 type="button"
                 onClick={() => setBalanceEditMode("exact")}
-                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   balanceEditMode === "exact"
-                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Net Tutar Belirle (=)
@@ -5893,10 +5881,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 type="button"
                 onClick={() => setBalanceEditMode("delta")}
-                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   balanceEditMode === "delta"
-                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Miktar Ekle / Düş (±)
@@ -5907,11 +5895,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               /* MOD 1: Doğrudan Net Bakiye Belirleme */
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <span className="text-[11px] text-zinc-400 font-medium">
+                  <span className="text-[11px] text-muted-foreground font-medium">
                     Yeni Net Bakiye Tutarı (₺):
                   </span>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-sm">₺</span>
+                    <span className="absolute left-3 top-2.5 text-muted-foreground/80 font-mono text-sm">₺</span>
                     <input
                       type="number"
                       step="any"
@@ -5919,11 +5907,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       value={exactBalanceInput}
                       onChange={(e) => setExactBalanceInput(e.target.value)}
                       placeholder="Örn: 100"
-                      className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-base font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-card border border-border rounded-xl pl-8 pr-3 py-2 text-base font-mono font-semibold text-foreground focus:outline-none focus:border-brand"
                       autoFocus
                     />
                   </div>
-                  <p className="text-[10px] text-zinc-500">
+                  <p className="text-[10px] text-muted-foreground/80">
                     Kullanıcının bakiyesi doğrudan bu rakama eşitlenecektir.
                   </p>
                 </div>
@@ -5934,7 +5922,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       key={val}
                       type="button"
                       onClick={() => setExactBalanceInput(String(val))}
-                      className="py-1 px-1.5 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-xs font-mono text-zinc-300"
+                      className="py-1 px-1.5 rounded-lg bg-card border border-border hover:border-foreground/15 text-xs font-mono text-foreground/80"
                     >
                       {val}₺
                     </button>
@@ -5943,7 +5931,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                 <button
                   onClick={handleSetExactBalance}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                  className="bg-foreground w-full py-2.5 rounded-full text-background font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
                 >
                   <CheckCircle className="w-4 h-4 stroke-[2.5]" />
                   <span>Yeni Bakiyeyi Doğrudan Kaydet</span>
@@ -5954,14 +5942,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <div className="space-y-3">
                 {/* Hızlı Miktar Butonları */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] text-zinc-400 font-medium">Hızlı Tutarlar:</span>
+                  <span className="text-[11px] text-muted-foreground font-medium">Hızlı Tutarlar:</span>
                   <div className="grid grid-cols-4 gap-1.5">
                     {[20, 50, 100, 250].map((val) => (
                       <button
                         key={val}
                         type="button"
                         onClick={() => setBalanceDelta(String(val))}
-                        className="py-1 px-2 rounded-lg bg-zinc-900 border border-white/5 hover:border-white/20 text-xs font-mono text-zinc-300"
+                        className="py-1 px-2 rounded-lg bg-card border border-border hover:border-foreground/15 text-xs font-mono text-foreground/80"
                       >
                         +{val}₺
                       </button>
@@ -5971,9 +5959,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                 {/* Özel Miktar Girişi */}
                 <div className="space-y-1">
-                  <span className="text-[11px] text-zinc-400 font-medium">Eklenecek / Düşülecek Tutar (₺):</span>
+                  <span className="text-[11px] text-muted-foreground font-medium">Eklenecek / Düşülecek Tutar (₺):</span>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-sm">₺</span>
+                    <span className="absolute left-3 top-2.5 text-muted-foreground/80 font-mono text-sm">₺</span>
                     <input
                       type="number"
                       step="any"
@@ -5981,7 +5969,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                       value={balanceDelta}
                       onChange={(e) => setBalanceDelta(e.target.value)}
                       placeholder="Örn: 50"
-                      className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-card border border-border rounded-xl pl-8 pr-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-brand"
                     />
                   </div>
                 </div>
@@ -5990,14 +5978,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     onClick={() => handleAdjustBalance(false)}
-                    className="py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                    className="py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
                   >
                     <Minus className="w-4 h-4 stroke-[3]" />
                     <span>- {balanceDelta || 0} ₺ Düş</span>
                   </button>
                   <button
                     onClick={() => handleAdjustBalance(true)}
-                    className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+                    className="py-2.5 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" />
                     <span>+ {balanceDelta || 0} ₺ Ekle</span>
@@ -6008,7 +5996,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             <button
               onClick={() => setEditingUser(null)}
-              className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors"
+              className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Kapat / Vazgeç
             </button>
@@ -6019,60 +6007,60 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* 7. DETAYLI KULLANICI İNCELEME MODALI (TÜM NUMARALAR, SMS KODLARI, YÜKLEMELER) */}
       {selectedUserDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-2xl bg-[#11131a] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+          <div className="w-full max-w-2xl bg-background ring-1 ring-foreground/10 rounded-3xl sm:rounded-3xl p-4 sm:p-6 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-4 max-h-[92vh] flex flex-col">
             {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-white/[0.08]">
+            <div className="flex items-start justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-base shadow-inner">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-foreground/10 to-foreground/10 border border-foreground/15 flex items-center justify-center text-foreground/90 font-semibold text-base shadow-inner">
                   {selectedUserDetail.firstName ? selectedUserDetail.firstName[0].toUpperCase() : "U"}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-white">
+                    <h3 className="text-base font-semibold text-foreground">
                       {selectedUserDetail.firstName || "Kullanıcı"} {selectedUserDetail.lastName || ""}
                     </h3>
                     {selectedUserDetail.role === "admin" && (
-                      <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full font-bold">
+                      <span className="text-[10px] bg-foreground/10 text-foreground border border-foreground/20 px-2 py-0.5 rounded-full font-semibold">
                         👑 ADMIN
                       </span>
                     )}
                     {selectedUserDetail.isBanned && (
-                      <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">
+                      <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-semibold">
                         ⛔ BANLI
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 mt-0.5">
+                  <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mt-0.5">
                     {selectedUserDetail.username ? (
-                      <span className="text-emerald-400 font-semibold">@{selectedUserDetail.username}</span>
+                      <span className="text-brand font-medium">@{selectedUserDetail.username}</span>
                     ) : (
-                      <span className="text-zinc-500">kullanıcı adı yok</span>
+                      <span className="text-muted-foreground/80">kullanıcı adı yok</span>
                     )}
-                    <span className="text-zinc-600">•</span>
+                    <span className="text-muted-foreground/60">•</span>
                     <button
                       onClick={() => handleCopyDetail(String(selectedUserDetail.telegramId), "id")}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-foreground transition-colors"
                       title="ID Kopyala"
                     >
                       <span>ID: {selectedUserDetail.telegramId}</span>
                       {copiedDetailText === "id" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-brand" />
                       ) : (
-                        <Copy className="w-3 h-3 text-zinc-500" />
+                        <Copy className="w-3 h-3 text-muted-foreground/80" />
                       )}
                     </button>
-                    <span className="text-zinc-600">•</span>
+                    <span className="text-muted-foreground/60">•</span>
                     {(() => {
                       const latMs = selectedUserDetail.lastActiveAt ? new Date(selectedUserDetail.lastActiveAt).getTime() : 0;
                       const isDetailOnline = latMs > 0 && Date.now() - latMs < 5 * 60 * 1000;
                       return isDetailOnline ? (
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-brand font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
                           Şu an aktif (Çevrimiçi)
                         </span>
                       ) : (
-                        <span className="text-zinc-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-zinc-500" />
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-muted-foreground/80" />
                           Son aktif: {formatUserLastActive(selectedUserDetail.lastActiveAt)}
                         </span>
                       );
@@ -6083,7 +6071,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
               <button
                 onClick={() => setSelectedUserDetail(null)}
-                className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -6091,40 +6079,40 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* İstatistik Özet Kartları */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Mevcut Bakiye</span>
-                <span className="text-sm font-bold font-mono text-emerald-400">
+              <div className="p-2.5 rounded-xl bg-card/80 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Mevcut Bakiye</span>
+                <span className="text-sm font-semibold font-mono text-brand">
                   ₺{selectedUserDetail.balance?.toFixed(2) || "0.00"}
                 </span>
               </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Toplam Harcama</span>
-                <span className="text-sm font-bold font-mono text-blue-400">
+              <div className="p-2.5 rounded-xl bg-card/80 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Toplam Harcama</span>
+                <span className="text-sm font-semibold font-mono text-foreground/90">
                   ₺{selectedUserDetail.spent || 0}
                 </span>
               </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Alınan Numara</span>
-                <span className="text-sm font-bold font-mono text-purple-400">
+              <div className="p-2.5 rounded-xl bg-card/80 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Alınan Numara</span>
+                <span className="text-sm font-semibold font-mono text-foreground/90">
                   {userActivations.length} Adet
                 </span>
               </div>
-              <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-white/5">
-                <span className="text-[10px] text-zinc-400 block">Gelen SMS Kodu</span>
-                <span className="text-sm font-bold font-mono text-amber-400">
+              <div className="p-2.5 rounded-xl bg-card/80 border border-border">
+                <span className="text-[10px] text-muted-foreground block">Gelen SMS Kodu</span>
+                <span className="text-sm font-semibold font-mono text-amber-400">
                   {userActivations.filter((a) => a.smsCode).length} Adet
                 </span>
               </div>
             </div>
 
             {/* İç Sekmeler */}
-            <div className="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-xl border border-white/5 text-xs font-semibold overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5 p-1 bg-card rounded-xl border border-border text-xs font-medium overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setUserDetailTab("numbers")}
                 className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
                   userDetailTab === "numbers"
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-foreground/10 text-foreground border border-foreground/15 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 📱 Aldığı Numaralar ({userActivations.length})
@@ -6133,8 +6121,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 onClick={() => setUserDetailTab("deposits")}
                 className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
                   userDetailTab === "deposits"
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-brand/20 text-brand border border-brand/30 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 💳 Bakiye Yüklemeleri ({userDeposits.length})
@@ -6143,8 +6131,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 onClick={() => setUserDetailTab("tickets")}
                 className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
                   userDetailTab === "tickets"
-                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-foreground/10 text-foreground border border-foreground/15 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 🎫 Destek Talepleri ({userTickets.length})
@@ -6154,7 +6142,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
                   userDetailTab === "actions"
                     ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 ⚡ Yönetici İşlemleri
@@ -6165,8 +6153,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <div className="overflow-y-auto flex-1 pr-1 space-y-2 max-h-[50vh]">
               {userDetailLoading ? (
                 <div className="p-8 text-center space-y-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-400 mx-auto" />
-                  <p className="text-xs text-zinc-400">Kullanıcının sipariş ve numara geçmişi yükleniyor...</p>
+                  <Loader2 className="w-6 h-6 animate-spin text-foreground/90 mx-auto" />
+                  <p className="text-xs text-muted-foreground">Kullanıcının sipariş ve numara geçmişi yükleniyor...</p>
                 </div>
               ) : (
                 <>
@@ -6174,38 +6162,38 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   {userDetailTab === "numbers" && (
                     <div className="space-y-2">
                       {userActivations.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div className="p-6 text-center text-xs text-muted-foreground/80 bg-card/40 rounded-2xl border border-border">
                           Bu kullanıcı henüz hiç numara satın almamış.
                         </div>
                       ) : (
                         userActivations.map((a) => (
                           <div
                             key={a.id}
-                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-2 hover:border-blue-500/30 transition-all"
+                            className="p-3 rounded-2xl bg-card/90 border border-border space-y-2 hover:border-foreground/15 transition-all"
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span className="text-base">{a.countryFlag || "🌐"}</span>
-                                <span className="font-bold text-xs text-white">
+                                <span className="font-semibold text-xs text-foreground">
                                   {a.serviceName} ({a.countryName})
                                 </span>
                               </div>
 
                               <div>
                                 {a.smsCode ? (
-                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-brand/20 text-brand border border-brand/40 px-2 py-0.5 rounded font-semibold">
                                     ✅ KOD ALINDI
                                   </span>
                                 ) : a.status === "WAIT_CODE" ? (
-                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-bold animate-pulse">
+                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold animate-pulse">
                                     ⏳ KOD BEKLENİYOR
                                   </span>
                                 ) : a.status === "CANCELLED" ? (
-                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-semibold">
                                     🚫 İPTAL EDİLDİ
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded font-semibold">
                                     {a.status}
                                   </span>
                                 )}
@@ -6213,21 +6201,21 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             </div>
 
                             {/* Telefon Numarası & Kopyalama Kutusu */}
-                            <div className="p-2.5 rounded-xl bg-black/60 border border-white/5 flex items-center justify-between gap-2">
+                            <div className="p-2.5 rounded-xl bg-muted border border-border flex items-center justify-between gap-2">
                               <div>
-                                <span className="text-[10px] text-zinc-400 block font-sans">Tahsis Edilen Numara:</span>
-                                <span className="font-mono font-bold text-sm text-zinc-200 select-all">
+                                <span className="text-[10px] text-muted-foreground block font-sans">Tahsis Edilen Numara:</span>
+                                <span className="font-mono font-semibold text-sm text-foreground select-all">
                                   {a.phoneNumber}
                                 </span>
                               </div>
 
                               <button
                                 onClick={() => handleCopyDetail(a.phoneNumber, `phone_${a.id}`)}
-                                className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white text-xs flex items-center gap-1 font-mono transition-colors"
+                                className="px-2 py-1 rounded-lg bg-muted text-foreground/80 hover:text-foreground text-xs flex items-center gap-1 font-mono transition-colors"
                               >
                                 {copiedDetailText === `phone_${a.id}` ? (
                                   <>
-                                    <Check className="w-3 h-3 text-emerald-400" />
+                                    <Check className="w-3 h-3 text-brand" />
                                     <span>Kopyalandı</span>
                                   </>
                                 ) : (
@@ -6241,23 +6229,23 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                             {/* Gelen SMS Kodu Vurgusu */}
                             {a.smsCode ? (
-                              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                              <div className="p-2.5 rounded-xl bg-brand/10 border border-brand/30 flex items-center justify-between">
                                 <div>
-                                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                                  <span className="text-[10px] font-semibold text-brand uppercase tracking-wider block">
                                     Gelen SMS Onay Kodu:
                                   </span>
-                                  <span className="text-base font-black font-mono text-emerald-300 tracking-wider">
+                                  <span className="text-base font-semibold font-mono text-brand tracking-wider">
                                     {a.smsCode}
                                   </span>
                                   {a.smsText && (
-                                    <p className="text-[11px] text-zinc-400 mt-1 italic select-all">
+                                    <p className="text-[11px] text-muted-foreground mt-1 italic select-all">
                                       &ldquo;{a.smsText}&rdquo;
                                     </p>
                                   )}
                                 </div>
                                 <button
                                   onClick={() => handleCopyDetail(a.smsCode, `code_${a.id}`)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1 transition-all"
+                                  className="px-2.5 py-1.5 rounded-lg bg-brand/20 hover:bg-brand/30 text-brand font-semibold text-xs flex items-center gap-1 transition-all"
                                 >
                                   {copiedDetailText === `code_${a.id}` ? "Kopyalandı" : "Kodu Kopyala"}
                                 </button>
@@ -6265,12 +6253,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             ) : null}
 
                             {/* Fiyat ve Tarih */}
-                            <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-white/[0.04]">
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground/80 pt-1 border-t border-border">
                               <span className="font-mono">Ücret: ₺{a.chargedPrice?.toFixed(2) || "0.00"}</span>
                               <span>
                                 {a.createdAt ? new Date(a.createdAt).toLocaleString("tr-TR") : ""}
                               </span>
-                              <span className="font-mono text-[10px] text-zinc-600">#{a.id}</span>
+                              <span className="font-mono text-[10px] text-muted-foreground/60">#{a.id}</span>
                             </div>
                           </div>
                         ))
@@ -6282,23 +6270,23 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   {userDetailTab === "deposits" && (
                     <div className="space-y-2">
                       {userDeposits.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div className="p-6 text-center text-xs text-muted-foreground/80 bg-card/40 rounded-2xl border border-border">
                           Bu kullanıcı henüz bakiye yükleme talebinde bulunmamış.
                         </div>
                       ) : (
                         userDeposits.map((dep) => (
                           <div
                             key={dep.id}
-                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-1.5"
+                            className="p-3 rounded-2xl bg-card/90 border border-border space-y-1.5"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-bold text-xs text-emerald-400 font-mono">
+                              <span className="font-semibold text-xs text-brand font-mono">
                                 +₺{dep.amount?.toFixed(2)}
                               </span>
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
                                   dep.status === "APPROVED"
-                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    ? "bg-brand/20 text-brand border border-brand/30"
                                     : dep.status === "REJECTED"
                                     ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                                     : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
@@ -6307,12 +6295,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                                 {dep.status === "APPROVED" ? "ONAYLANDI" : dep.status === "REJECTED" ? "REDDEDİLDİ" : "BEKLEMEDE"}
                               </span>
                             </div>
-                            <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                            <div className="text-[11px] text-muted-foreground flex items-center justify-between">
                               <span>Yöntem: {dep.method || "Kripto / Havale"}</span>
                               <span>{dep.createdAt ? new Date(dep.createdAt).toLocaleString("tr-TR") : ""}</span>
                             </div>
                             {dep.txid && (
-                              <p className="text-[10px] font-mono text-zinc-500 truncate">
+                              <p className="text-[10px] font-mono text-muted-foreground/80 truncate">
                                 TXID: {dep.txid}
                               </p>
                             )}
@@ -6326,30 +6314,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   {userDetailTab === "tickets" && (
                     <div className="space-y-2">
                       {userTickets.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-zinc-500 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div className="p-6 text-center text-xs text-muted-foreground/80 bg-card/40 rounded-2xl border border-border">
                           Bu kullanıcının henüz destek talebi bulunmuyor.
                         </div>
                       ) : (
                         userTickets.map((t) => (
                           <div
                             key={t.id}
-                            className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-1.5"
+                            className="p-3 rounded-2xl bg-card/90 border border-border space-y-1.5"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-bold text-xs text-white">{t.subject}</span>
+                              <span className="font-semibold text-xs text-foreground">{t.subject}</span>
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
                                   t.status === "OPEN"
                                     ? "bg-amber-500/20 text-amber-300"
                                     : t.status === "ANSWERED"
-                                    ? "bg-emerald-500/20 text-emerald-300"
-                                    : "bg-zinc-800 text-zinc-400"
+                                    ? "bg-brand/20 text-brand"
+                                    : "bg-muted text-muted-foreground"
                                 }`}
                               >
                                 {t.status}
                               </span>
                             </div>
-                            <p className="text-[11px] text-zinc-400 truncate">
+                            <p className="text-[11px] text-muted-foreground truncate">
                               Son Güncelleme: {new Date(t.updatedAt).toLocaleString("tr-TR")}
                             </p>
                           </div>
@@ -6360,8 +6348,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                   {/* 4. YÖNETİCİ HIZLI AKSİYONLARI */}
                   {userDetailTab === "actions" && (
-                    <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-white/5 space-y-3">
-                      <span className="text-xs font-bold text-white block">
+                    <div className="p-3.5 rounded-2xl bg-card/80 border border-border space-y-3">
+                      <span className="text-xs font-semibold text-foreground block">
                         Kullanıcıya Özel Yönetici İşlemleri
                       </span>
 
@@ -6375,7 +6363,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             setBalanceEditMode("exact");
                             setEditingUser(selectedUserDetail);
                           }}
-                          className="p-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                          className="p-3 rounded-full bg-brand/15 hover:bg-brand/25 border border-brand/30 text-brand text-xs font-medium flex items-center justify-center gap-2 transition-all"
                         >
                           <DollarSign className="w-4 h-4" />
                           <span>Bakiye Ekle / Düzenle</span>
@@ -6389,7 +6377,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                               prev ? { ...prev, role: prev.role === "admin" ? "user" : "admin" } : prev
                             );
                           }}
-                          className="p-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                          className="p-3 rounded-full bg-foreground/8 hover:bg-foreground/13 border border-foreground/15 text-foreground text-xs font-medium flex items-center justify-center gap-2 transition-all"
                         >
                           <ShieldAlert className="w-4 h-4" />
                           <span>
@@ -6405,7 +6393,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                               prev ? { ...prev, isBanned: !prev.isBanned } : prev
                             );
                           }}
-                          className="p-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                          className="p-3 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center justify-center gap-2 transition-all"
                         >
                           {selectedUserDetail.isBanned ? (
                             <>
@@ -6426,7 +6414,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                             await handleDeleteUser(selectedUserDetail);
                             setSelectedUserDetail(null);
                           }}
-                          className="p-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                          className="p-3 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center justify-center gap-2 transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
                           <span>Kullanıcıyı Kalıcı Sil</span>
@@ -6439,10 +6427,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             </div>
 
             {/* Modal Alt Kapatma */}
-            <div className="pt-2 border-t border-white/[0.08] flex justify-end">
+            <div className="pt-2 border-t border-border flex justify-end">
               <button
                 onClick={() => setSelectedUserDetail(null)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-white font-semibold transition-colors"
+                className="px-4 py-2 rounded-xl bg-muted hover:bg-input text-xs text-foreground/80 hover:text-foreground font-medium transition-colors"
               >
                 Kapat
               </button>
@@ -6454,21 +6442,21 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* 8. GERİ YÜKLEME ONAY MODALI (PIN & BRUTEFORCE GÜVENLİK KORUMALI) */}
       {restoreConfirmModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg bg-[#11131a] border border-amber-500/40 rounded-2xl p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-lg bg-background border border-amber-500/40 rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-4">
             {/* Modal Başlık */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Sistemi Yedeğe Geri Yükleme</h3>
-                  <p className="text-[11px] text-zinc-400">Veritabanı önceki durumuna geri yüklenecektir</p>
+                  <h3 className="text-sm font-semibold text-foreground">Sistemi Yedeğe Geri Yükleme</h3>
+                  <p className="text-[11px] text-muted-foreground">Veritabanı önceki durumuna geri yüklenecektir</p>
                 </div>
               </div>
               <button
                 onClick={() => setRestoreConfirmModalOpen(false)}
-                className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -6476,22 +6464,22 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* Güvenlik Uyarısı */}
             <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-1 text-xs text-amber-200">
-              <span className="font-bold block">⚠️ Dikkat: Mevcut veritabanı seçilen yedek ile değiştirilecektir!</span>
+              <span className="font-semibold block">⚠️ Dikkat: Mevcut veritabanı seçilen yedek ile değiştirilecektir!</span>
               <p className="text-[11px] text-amber-300/80 leading-relaxed">
                 İşlem öncesinde sistem otomatik olarak şu anki durumun <b>&quot;PRE_RESTORE&quot; (Güvenlik Yedeği)</b> kopyasını alacaktır. İstediğiniz an mevcut duruma da geri dönebilirsiniz.
               </p>
             </div>
 
             {/* Geri Yüklenecek Yedek Özeti */}
-            <div className="p-3 rounded-xl bg-zinc-900 border border-white/5 space-y-2">
-              <span className="text-xs font-bold text-zinc-300 block">Hedef Yedek Özeti:</span>
+            <div className="p-3 rounded-xl bg-card border border-border space-y-2">
+              <span className="text-xs font-semibold text-foreground/80 block">Hedef Yedek Özeti:</span>
               {restoreTargetType === "file" && uploadedFileBackup && (
                 <div className="text-xs font-mono space-y-1">
-                  <div className="text-emerald-400">📁 Yüklenen Dosya: <b>{uploadedFileName}</b></div>
-                  <div className="text-zinc-300">
+                  <div className="text-brand">📁 Yüklenen Dosya: <b>{uploadedFileName}</b></div>
+                  <div className="text-foreground/80">
                     👥 Kullanıcı: <b>{Object.keys(uploadedFileBackup.users || {}).length} Kişi</b>
                   </div>
-                  <div className="text-zinc-400 text-[11px]">
+                  <div className="text-muted-foreground text-[11px]">
                     📦 Sipariş Kayıtları: <b>{Object.keys(uploadedFileBackup.activations || {}).length} Adet</b>
                   </div>
                 </div>
@@ -6499,11 +6487,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
               {restoreTargetType === "snapshot" && selectedBackupToRestore && (
                 <div className="text-xs font-mono space-y-1">
-                  <div className="text-emerald-400">🏷️ Yedek Etiketi: <b>{selectedBackupToRestore.label}</b></div>
-                  <div className="text-zinc-300">
+                  <div className="text-brand">🏷️ Yedek Etiketi: <b>{selectedBackupToRestore.label}</b></div>
+                  <div className="text-foreground/80">
                     🕒 Tarih: <b>{new Date(selectedBackupToRestore.createdAt).toLocaleString("tr-TR")}</b>
                   </div>
-                  <div className="text-zinc-400 text-[11px]">
+                  <div className="text-muted-foreground text-[11px]">
                     👥 {selectedBackupToRestore.stats?.usersCount} Kullanıcı • 💰 ₺{selectedBackupToRestore.stats?.totalBalance?.toFixed(2)} Toplam Bakiye • 📦 {selectedBackupToRestore.stats?.ordersCount} Sipariş
                   </div>
                 </div>
@@ -6512,29 +6500,29 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
             {/* PIN Kodu Güvenlik Girişi */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+              <label className="text-xs font-medium text-foreground/80 flex items-center justify-between">
                 <span>Yönetici PIN Kodu Doğrulaması</span>
-                <span className="text-[10px] text-zinc-500 font-mono">Brute-force Korumalı</span>
+                <span className="text-[10px] text-muted-foreground/80 font-mono">Brute-force Korumalı</span>
               </label>
               <input
                 type="password"
                 value={backupSecurityPin}
                 onChange={(e) => setBackupSecurityPin(e.target.value)}
                 placeholder="Yönetici PIN kodu (veritabanında tanımlıysa)"
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-foreground focus:outline-none focus:border-amber-500"
               />
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-muted-foreground/80">
                 🔒 Güvenlik uyarısı: 5 defa hatalı PIN girilirse IP adresiniz sistem tarafından 15 dakika boyunca kilitlenir.
               </p>
             </div>
 
             {/* Eylem Butonları */}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.08]">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => setRestoreConfirmModalOpen(false)}
                 disabled={restoringBackup}
-                className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-colors"
+                className="py-2.5 rounded-xl bg-muted hover:bg-input text-foreground/80 font-semibold text-xs transition-colors"
               >
                 Vazgeç
               </button>
@@ -6542,7 +6530,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 type="button"
                 onClick={handleConfirmRestore}
                 disabled={restoringBackup || !backupSecurityPin.trim()}
-                className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {restoringBackup ? (
                   <>
@@ -6564,17 +6552,17 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       {/* VIP Üyelik & Özel İndirim Modalı */}
       {vipModalOpen && vipTargetUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#11131a] border border-amber-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <div className="w-full max-w-md bg-background border border-amber-500/30 rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
                   <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     {vipTargetUser.isVip ? "⭐ VIP Üyeliği Düzenle" : "⭐ VIP Üyelik Tanımla"}
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     {vipTargetUser.firstName || vipTargetUser.username || vipTargetUser.telegramId} için özel indirim
                   </p>
                 </div>
@@ -6582,34 +6570,34 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 type="button"
                 onClick={() => setVipModalOpen(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Kullanıcı Özeti */}
-            <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex items-center justify-between text-xs">
+            <div className="bg-muted border border-border rounded-xl p-3 flex items-center justify-between text-xs">
               <div>
-                <div className="font-bold text-white flex items-center gap-1.5">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
                   <span>{vipTargetUser.firstName || "Kullanıcı"}</span>
                   {vipTargetUser.username && (
-                    <span className="text-emerald-400 font-mono text-[11px]">@{vipTargetUser.username}</span>
+                    <span className="text-brand font-mono text-[11px]">@{vipTargetUser.username}</span>
                   )}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono">
+                <div className="text-[10px] text-muted-foreground font-mono">
                   ID: {vipTargetUser.telegramId}
                 </div>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-zinc-500 block">Mevcut Bakiye</span>
-                <span className="font-mono font-bold text-emerald-400 text-xs">₺{vipTargetUser.balance.toFixed(2)}</span>
+                <span className="text-[10px] text-muted-foreground/80 block">Mevcut Bakiye</span>
+                <span className="font-mono font-semibold text-brand text-xs">₺{vipTargetUser.balance.toFixed(2)}</span>
               </div>
             </div>
 
             {/* İndirim Oranı Belirleme */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 block">
+              <label className="text-xs font-medium text-foreground/80 block">
                 Özel VIP İndirim Oranı (%)
               </label>
               <div className="relative">
@@ -6619,9 +6607,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   max="90"
                   value={vipDiscountInput}
                   onChange={(e) => setVipDiscountInput(Math.max(1, Math.min(90, Number(e.target.value))))}
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-foreground focus:outline-none focus:border-amber-500"
                 />
-                <span className="absolute right-3.5 top-2.5 text-xs font-bold text-amber-400">%</span>
+                <span className="absolute right-3.5 top-2.5 text-xs font-semibold text-amber-400">%</span>
               </div>
 
               {/* Hızlı Seçim Butonları */}
@@ -6631,10 +6619,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     key={pct}
                     type="button"
                     onClick={() => setVipDiscountInput(pct)}
-                    className={`py-1 rounded-lg border text-xs font-mono font-bold transition-all ${
+                    className={`py-1 rounded-lg border text-xs font-mono font-semibold transition-all ${
                       vipDiscountInput === pct
                         ? "bg-amber-500/20 border-amber-500 text-amber-300"
-                        : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                        : "bg-card border-border text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     %{pct}
@@ -6642,13 +6630,13 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 ))}
               </div>
 
-              <p className="text-[10px] text-zinc-500 leading-relaxed pt-1">
+              <p className="text-[10px] text-muted-foreground/80 leading-relaxed pt-1">
                 💡 Kullanıcı bu indirimi hem Telegram Botunda hem WebApp üzerinde SMS satın alırken otomatik olarak kullanır. İndirimli fiyatlar sipariş onay ekranında belirgin olarak gösterilir.
               </p>
             </div>
 
             {/* Eylemler */}
-            <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+            <div className="space-y-2 pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => {
@@ -6656,7 +6644,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   setVipModalOpen(false);
                 }}
                 disabled={userActionLoadingId === vipTargetUser.telegramId}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <Star className="w-4 h-4 fill-black text-black" />
                 <span>
@@ -6674,7 +6662,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                     setVipModalOpen(false);
                   }}
                   disabled={userActionLoadingId === vipTargetUser.telegramId}
-                  className="w-full py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 font-semibold text-xs border border-rose-500/30 transition-all"
+                  className="w-full py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 font-medium text-xs border border-rose-500/30 transition-all"
                 >
                   VIP Üyeliği ve İndirimi Kaldır
                 </button>
@@ -6683,7 +6671,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               <button
                 type="button"
                 onClick={() => setVipModalOpen(false)}
-                className="w-full py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs transition-colors"
+                className="w-full py-2 rounded-xl bg-card hover:bg-muted text-muted-foreground hover:text-foreground text-xs transition-colors"
               >
                 Vazgeç
               </button>

@@ -216,7 +216,7 @@ export function SupportModal({
   const getStatusBadge = (status: string) => {
     if (status === "ANSWERED") {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand/20 text-brand border border-brand/40 animate-pulse">
           <Sparkles className="w-3 h-3" />
           <span>CEVAPLANDI</span>
         </span>
@@ -224,14 +224,14 @@ export function SupportModal({
     }
     if (status === "OPEN") {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
           <Clock className="w-3 h-3" />
           <span>BEKLİYOR</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/5">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
         <CheckCircle className="w-3 h-3" />
         <span>KAPATILDI</span>
       </span>
@@ -253,24 +253,24 @@ export function SupportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-[#0d0f17] border border-white/10 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-lg bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] overflow-hidden">
         {/* Glow ambient header light */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-16 bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20 blur-2xl pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-16 bg-gradient-to-r from-brand/20 via-foreground/10 to-foreground/10 blur-2xl pointer-events-none" />
 
         {/* Modal Top Bar */}
-        <div className="relative flex items-center justify-between p-4 border-b border-white/[0.08] shrink-0">
+        <div className="relative flex items-center justify-between p-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-blue-500/20 text-emerald-400 border border-emerald-500/30">
+            <div className="p-2 rounded-2xl bg-gradient-to-br from-brand/20 to-foreground/10 text-brand border border-brand/30">
               <Headphones className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                 <span>Destek & Yardım Merkezi</span>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-foreground/10 text-foreground border border-foreground/15">
                   7/24
                 </span>
               </h2>
-              <p className="text-[11px] text-zinc-400">Canlı Telegram yöneticisi ve destek talepleri</p>
+              <p className="text-[11px] text-muted-foreground">Canlı Telegram yöneticisi ve destek talepleri</p>
             </div>
           </div>
 
@@ -279,7 +279,7 @@ export function SupportModal({
               haptic.impact("light");
               onClose();
             }}
-            className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-muted/80 hover:bg-input text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -287,17 +287,17 @@ export function SupportModal({
 
         {/* Toast */}
         {toastMsg && (
-          <div className="px-4 py-2 bg-emerald-950/90 border-b border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+          <div className="px-4 py-2 bg-brand/10 border-b border-brand/40 text-brand text-xs font-medium flex items-center gap-2 animate-in fade-in">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>{toastMsg}</span>
           </div>
         )}
 
         {/* Direct Telegram Admin Contact Box */}
-        <div className="p-3.5 bg-gradient-to-r from-blue-950/40 via-zinc-900/60 to-purple-950/40 border-b border-white/[0.06] shrink-0 space-y-2">
+        <div className="p-3.5 bg-gradient-to-r from-foreground/5 via-card/60 to-foreground/5 border-b border-border shrink-0 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-blue-400" />
+            <span className="text-[10px] uppercase font-semibold text-foreground/90 tracking-wider flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-foreground/90" />
               <span>Birebir Hızlı İletişim ({supportUsernames.length} Yetkili)</span>
             </span>
           </div>
@@ -313,7 +313,7 @@ export function SupportModal({
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => haptic.impact("medium")}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-foreground/45 hover:bg-foreground/60 text-foreground font-semibold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5"
                 >
                   <Headphones className="w-3.5 h-3.5" />
                   <span>@{clean}</span>
@@ -325,17 +325,17 @@ export function SupportModal({
         </div>
 
         {/* Tabs Bar */}
-        <div className="flex items-center gap-1 p-2 bg-zinc-900/50 border-b border-white/[0.06] text-xs font-semibold shrink-0">
+        <div className="flex items-center gap-1 p-2 bg-card/50 border-b border-border text-xs font-medium shrink-0">
           <button
             onClick={() => {
               haptic.selection();
               setActiveTab("list");
               setSelectedTicket(null);
             }}
-            className={`flex-1 py-2 px-3 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 px-3 rounded-full transition-all text-center flex items-center justify-center gap-1.5 ${
               activeTab === "list"
-                ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
+                ? "bg-foreground text-background shadow-md "
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
@@ -348,10 +348,10 @@ export function SupportModal({
               setActiveTab("create");
               setSelectedTicket(null);
             }}
-            className={`flex-1 py-2 px-3 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 px-3 rounded-full transition-all text-center flex items-center justify-center gap-1.5 ${
               activeTab === "create"
-                ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
+                ? "bg-foreground text-background shadow-md "
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -365,18 +365,18 @@ export function SupportModal({
           {activeTab === "list" && (
             <div className="space-y-2.5">
               {loading && tickets.length === 0 ? (
-                <div className="py-12 text-center text-zinc-500 flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+                <div className="py-12 text-center text-muted-foreground/80 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand" />
                   <span className="text-xs">Talepler yükleniyor...</span>
                 </div>
               ) : tickets.length === 0 ? (
                 <div className="py-12 text-center space-y-3">
-                  <div className="w-14 h-14 mx-auto rounded-3xl bg-zinc-800/80 border border-white/5 flex items-center justify-center text-zinc-500">
+                  <div className="w-14 h-14 mx-auto rounded-3xl bg-muted/80 border border-border flex items-center justify-center text-muted-foreground/80">
                     <LifeBuoy className="w-7 h-7" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white">Henüz Destek Talebiniz Yok</h4>
-                    <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">
+                    <h4 className="text-sm font-semibold text-foreground">Henüz Destek Talebiniz Yok</h4>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
                       Bir sorunla mı karşılaştınız? Yukarıdaki butondan yeni bir talep oluşturabilirsiniz.
                     </p>
                   </div>
@@ -385,7 +385,7 @@ export function SupportModal({
                       haptic.selection();
                       setActiveTab("create");
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                    className="px-4 py-2 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-md active:scale-95 transition-all"
                   >
                     + İlk Destek Talebini Aç
                   </button>
@@ -399,23 +399,23 @@ export function SupportModal({
                       setSelectedTicket(t);
                       setActiveTab("detail");
                     }}
-                    className="p-3.5 rounded-2xl bg-zinc-900/80 border border-white/5 hover:border-emerald-500/30 transition-all cursor-pointer space-y-2 active:scale-[0.99]"
+                    className="p-3.5 rounded-2xl bg-card/80 border border-border hover:border-brand/30 transition-all cursor-pointer space-y-2 active:scale-[0.99]"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] text-zinc-400 font-bold">
+                      <span className="font-mono text-[10px] text-muted-foreground font-semibold">
                         #{t.id}
                       </span>
                       {getStatusBadge(t.status)}
                     </div>
 
                     <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{t.subject}</h4>
-                      <p className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">
+                      <h4 className="text-xs font-semibold text-foreground truncate">{t.subject}</h4>
+                      <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
                         {t.messages[t.messages.length - 1]?.text || "Mesaj yok"}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-[10px] text-zinc-500">
+                    <div className="flex items-center justify-between pt-1 border-t border-border text-[10px] text-muted-foreground/80">
                       <span>{getCategoryLabel(t.category)}</span>
                       <span>
                         {new Date(t.updatedAt).toLocaleDateString("tr-TR", {
@@ -434,7 +434,7 @@ export function SupportModal({
           {activeTab === "create" && (
             <form onSubmit={handleCreateTicket} className="space-y-3.5 animate-in fade-in">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Kategori</label>
+                <label className="text-xs font-medium text-foreground/80">Kategori</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   {(
                     [
@@ -451,10 +451,10 @@ export function SupportModal({
                         haptic.selection();
                         setCategory(cat.id);
                       }}
-                      className={`p-2 rounded-xl border text-xs font-semibold text-left transition-all ${
+                      className={`p-2 rounded-xl border text-xs font-medium text-left transition-all ${
                         category === cat.id
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                          : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-white"
+                          ? "bg-brand/20 border-brand/50 text-brand"
+                          : "bg-card border-border text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {cat.label}
@@ -464,25 +464,25 @@ export function SupportModal({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Konu Başlığı</label>
+                <label className="text-xs font-medium text-foreground/80">Konu Başlığı</label>
                 <input
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="Örn: WhatsApp onay kodu ulaşmadı / Bakiye yükleme hk."
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-brand"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Detaylı Açıklama</label>
+                <label className="text-xs font-medium text-foreground/80">Detaylı Açıklama</label>
                 <textarea
                   rows={4}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Yaşadığınız sorunu, sipariş numaranızı veya talebinizi detaylıca açıklayınız..."
-                  className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 resize-none"
+                  className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-brand resize-none"
                   required
                 />
               </div>
@@ -490,7 +490,7 @@ export function SupportModal({
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {creating ? (
                   <>
@@ -511,12 +511,12 @@ export function SupportModal({
           {activeTab === "detail" && selectedTicket && (
             <div className="space-y-3 animate-in fade-in flex flex-col h-full">
               {/* Ticket Top Info */}
-              <div className="p-3 rounded-2xl bg-zinc-900 border border-white/5 space-y-1.5 shrink-0">
+              <div className="p-3 rounded-2xl bg-card border border-border space-y-1.5 shrink-0">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 font-bold">
+                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground font-semibold">
                     <button
                       onClick={() => setActiveTab("list")}
-                      className="text-emerald-400 hover:underline mr-1"
+                      className="text-brand hover:underline mr-1"
                     >
                       ← Geri
                     </button>
@@ -525,8 +525,8 @@ export function SupportModal({
                   {getStatusBadge(selectedTicket.status)}
                 </div>
 
-                <h3 className="text-sm font-bold text-white">{selectedTicket.subject}</h3>
-                <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                <h3 className="text-sm font-semibold text-foreground">{selectedTicket.subject}</h3>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground/80">
                   <span>{getCategoryLabel(selectedTicket.category)}</span>
                   {selectedTicket.status !== "CLOSED" && (
                     <button
@@ -549,9 +549,9 @@ export function SupportModal({
                       key={m.id}
                       className={`flex flex-col ${isAdmin ? "items-start" : "items-end"}`}
                     >
-                      <div className="flex items-center gap-1 text-[10px] text-zinc-400 mb-1 px-1">
-                        {isAdmin && <ShieldCheck className="w-3 h-3 text-purple-400" />}
-                        <span className="font-semibold text-zinc-300">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1 px-1">
+                        {isAdmin && <ShieldCheck className="w-3 h-3 text-foreground/90" />}
+                        <span className="font-medium text-foreground/80">
                           {isAdmin ? "AzFur Yönetici" : m.senderName || "Siz"}
                         </span>
                         <span>•</span>
@@ -566,8 +566,8 @@ export function SupportModal({
                       <div
                         className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed ${
                           isAdmin
-                            ? "bg-purple-950/40 border border-purple-500/30 text-purple-100 rounded-tl-sm shadow-md"
-                            : "bg-emerald-600 text-black font-medium rounded-tr-sm shadow-md"
+                            ? "bg-foreground/5 border border-foreground/15 text-foreground rounded-tl-sm shadow-md"
+                            : "bg-foreground text-background font-medium rounded-tr-sm shadow-md"
                         }`}
                       >
                         {m.text}
@@ -579,7 +579,7 @@ export function SupportModal({
 
               {/* Reply Box */}
               {selectedTicket.status !== "CLOSED" ? (
-                <div className="pt-2 border-t border-white/[0.08] flex items-center gap-2 shrink-0">
+                <div className="pt-2 border-t border-border flex items-center gap-2 shrink-0">
                   <input
                     type="text"
                     value={replyMessage}
@@ -591,18 +591,18 @@ export function SupportModal({
                       }
                     }}
                     placeholder="Bir yanıt yazın..."
-                    className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="flex-1 bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-brand"
                   />
                   <button
                     onClick={handleSendReply}
                     disabled={replying || !replyMessage.trim()}
-                    className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold active:scale-95 transition-all disabled:opacity-40"
+                    className="p-2.5 rounded-xl bg-foreground hover:bg-foreground/85 text-background font-semibold active:scale-95 transition-all disabled:opacity-40"
                   >
                     {replying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </button>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-zinc-900 border border-white/5 text-center text-xs text-zinc-500">
+                <div className="p-2.5 rounded-xl bg-card border border-border text-center text-xs text-muted-foreground/80">
                   Bu destek talebi kapatılmıştır. Yeni bir konu için lütfen yeni talep açınız.
                 </div>
               )}

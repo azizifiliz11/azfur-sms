@@ -396,8 +396,8 @@ export function RentPanel({
       <Card className="p-3.5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+            <Globe className="w-4 h-4 text-brand" />
+            <span className="text-xs font-medium text-foreground/80 uppercase tracking-wider">
               Ülke Seçimi
             </span>
           </div>
@@ -407,7 +407,7 @@ export function RentPanel({
               haptic.impact("light");
               setCountryModalOpen(true);
             }}
-            className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+            className="flex items-center gap-1.5 text-xs text-brand hover:text-brand font-medium transition-colors"
           >
             <span>Tüm Ülkeler ({countries.length})</span>
             <ChevronDown className="w-3.5 h-3.5" />
@@ -422,12 +422,12 @@ export function RentPanel({
               <button
                 key={c.id}
                 onClick={() => handleCountryPick(c)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all ${
                   isSelected
-                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                    ? "bg-foreground text-background shadow-md "
                     : isFav
                     ? "bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:border-amber-400/50"
-                    : "bg-zinc-900 border border-white/5 text-zinc-300 hover:border-white/20"
+                    : "bg-card border border-border text-foreground/80 hover:border-foreground/15"
                 }`}
               >
                 <CountryFlag country={c} size="sm" />
@@ -446,13 +446,13 @@ export function RentPanel({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+            <span className="text-xs font-medium text-foreground/80 uppercase tracking-wider">
               Servis & Platform
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
             {isCatalogLoading && (
-              <span className="flex items-center gap-1 text-emerald-400 animate-pulse">
+              <span className="flex items-center gap-1 text-brand animate-pulse">
                 <Loader2 className="w-3 h-3 animate-spin" /> Güncelleniyor...
               </span>
             )}
@@ -462,18 +462,18 @@ export function RentPanel({
 
         {/* Arama Çubuğu */}
         <div className="relative">
-          <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-muted-foreground/80 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="WhatsApp, Telegram, OpenAI ara..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900/90 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
+            className="w-full bg-card/90 border border-border rounded-xl pl-9 pr-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50 transition-colors"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
             >
               ✕
             </button>
@@ -481,13 +481,13 @@ export function RentPanel({
         </div>
 
         {/* Anlık Sıralama Filtreleri (Scrollable Pills) */}
-        <div className="space-y-2 pt-1 border-t border-white/[0.05]">
-          <div className="flex items-center justify-between text-[11px] text-zinc-400">
-            <span className="flex items-center gap-1 text-zinc-400 font-medium">
-              <SlidersHorizontal className="w-3 h-3 text-emerald-400" />
+        <div className="space-y-2 pt-1 border-t border-border">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1 text-muted-foreground font-medium">
+              <SlidersHorizontal className="w-3 h-3 text-brand" />
               <span>Anlık Sıralama:</span>
             </span>
-            <span className="text-[10px] text-emerald-400/80 font-mono">0ms Real-Time</span>
+            <span className="text-[10px] text-brand/80 font-mono">0ms Real-Time</span>
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
@@ -497,10 +497,10 @@ export function RentPanel({
                 haptic.selection();
                 setSortMode("popular");
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
                 sortMode === "popular"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/10"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm "
+                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
               }`}
             >
               <Flame className="w-3 h-3 text-amber-400" />
@@ -513,13 +513,13 @@ export function RentPanel({
                 haptic.selection();
                 setSortMode("price_asc");
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
                 sortMode === "price_asc"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-500/10"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+                  ? "bg-brand/20 text-brand border border-brand/50 shadow-sm "
+                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
               }`}
             >
-              <TrendingDown className="w-3 h-3 text-emerald-400" />
+              <TrendingDown className="w-3 h-3 text-brand" />
               <span>En Ucuz</span>
             </button>
 
@@ -529,13 +529,13 @@ export function RentPanel({
                 haptic.selection();
                 setSortMode("price_desc");
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
                 sortMode === "price_desc"
-                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-500/10"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+                  ? "bg-foreground/10 text-foreground border border-foreground/25 shadow-sm "
+                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
               }`}
             >
-              <TrendingUp className="w-3 h-3 text-purple-400" />
+              <TrendingUp className="w-3 h-3 text-foreground/90" />
               <span>En Pahalı</span>
             </button>
 
@@ -545,13 +545,13 @@ export function RentPanel({
                 haptic.selection();
                 setSortMode("stock");
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
                 sortMode === "stock"
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/50 shadow-sm shadow-blue-500/10"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+                  ? "bg-foreground/10 text-foreground border border-foreground/25 shadow-sm "
+                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
               }`}
             >
-              <Package className="w-3 h-3 text-blue-400" />
+              <Package className="w-3 h-3 text-foreground/90" />
               <span>Çok Stok</span>
             </button>
 
@@ -561,10 +561,10 @@ export function RentPanel({
                 haptic.selection();
                 setSortMode("quality");
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
                 sortMode === "quality"
-                  ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 shadow-sm shadow-yellow-500/10"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:border-white/15"
+                  ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 shadow-sm "
+                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
               }`}
             >
               <Sparkles className="w-3 h-3 text-yellow-400" />
@@ -580,20 +580,20 @@ export function RentPanel({
                 haptic.selection();
                 setFilterFavoritesOnly(!filterFavoritesOnly);
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-full text-xs font-medium transition-all ${
                 filterFavoritesOnly
-                  ? "bg-amber-500/25 border border-amber-500/60 text-amber-200 shadow-sm shadow-amber-500/20"
-                  : "bg-zinc-900/80 border border-white/10 text-zinc-400 hover:text-zinc-200"
+                  ? "bg-amber-500/25 border border-amber-500/60 text-amber-200 shadow-sm "
+                  : "bg-card/80 border border-border text-muted-foreground hover:text-foreground"
               }`}
             >
               <Star
                 className={`w-3.5 h-3.5 ${
-                  filterFavoritesOnly ? "fill-amber-400 text-amber-400" : "text-zinc-400"
+                  filterFavoritesOnly ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
                 }`}
               />
               <span>Favorilerim</span>
               {favoriteServices.length > 0 && (
-                <span className="text-[10px] bg-amber-500/30 text-amber-300 font-bold px-1.5 py-0.2 rounded-full">
+                <span className="text-[10px] bg-amber-500/30 text-amber-300 font-semibold px-1.5 py-0.2 rounded-full">
                   {favoriteServices.length}
                 </span>
               )}
@@ -605,15 +605,15 @@ export function RentPanel({
                 haptic.selection();
                 setFilterInStockOnly(!filterInStockOnly);
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-full text-xs font-medium transition-all ${
                 filterInStockOnly
-                  ? "bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm shadow-emerald-500/20"
-                  : "bg-zinc-900/80 border border-white/10 text-zinc-400 hover:text-zinc-200"
+                  ? "bg-brand/20 border border-brand/60 text-brand shadow-sm "
+                  : "bg-card/80 border border-border text-muted-foreground hover:text-foreground"
               }`}
             >
               <CheckCircle2
                 className={`w-3.5 h-3.5 ${
-                  filterInStockOnly ? "text-emerald-400" : "text-zinc-400"
+                  filterInStockOnly ? "text-brand" : "text-muted-foreground"
                 }`}
               />
               <span>Yalnızca Stokta</span>
@@ -623,16 +623,16 @@ export function RentPanel({
 
         {/* Servis Listesi Grid */}
         {filteredCatalog.length === 0 ? (
-          <div className="p-6 text-center rounded-2xl bg-zinc-900/50 border border-white/5 space-y-2">
+          <div className="p-6 text-center rounded-2xl bg-card/50 border border-border space-y-2">
             <div className="w-10 h-10 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
               <Star className="w-5 h-5" />
             </div>
-            <p className="text-xs font-medium text-zinc-300">
+            <p className="text-xs font-medium text-foreground/80">
               {filterFavoritesOnly
                 ? "Henüz favori servis eklemediniz."
                 : "Arama kriterine uygun servis bulunamadı."}
             </p>
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-muted-foreground/80">
               {filterFavoritesOnly
                 ? "Servislerin sağ üst köşesindeki yıldız (⭐) butonuna basarak favorilerinize ekleyebilirsiniz."
                 : "Filtreleri veya arama kelimesini değiştirmeyi deneyin."}
@@ -640,7 +640,7 @@ export function RentPanel({
             {filterFavoritesOnly && (
               <button
                 onClick={() => setFilterFavoritesOnly(false)}
-                className="mt-2 text-xs text-amber-400 font-semibold underline"
+                className="mt-2 text-xs text-amber-400 font-medium underline"
               >
                 Tüm Servisleri Göster
               </button>
@@ -662,25 +662,25 @@ export function RentPanel({
                   }}
                   className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative group ${
                     isSelected
-                      ? "bg-emerald-500/15 border-emerald-500/60 shadow-sm ring-1 ring-emerald-500/30"
-                      : "bg-zinc-900/70 border-white/5 hover:border-white/20"
+                      ? "bg-brand/15 border-brand/60 shadow-sm ring-1 ring-brand/30"
+                      : "bg-card/70 border-border hover:border-foreground/15"
                   }`}
                 >
                   {/* Başlık & Favori Yıldız Butonu */}
                   <div className="flex items-start justify-between gap-1">
-                    <span className="font-semibold text-xs text-white truncate max-w-[80%]">
+                    <span className="font-medium text-xs text-foreground truncate max-w-[80%]">
                       {item.serviceName}
                     </span>
                     <button
                       onClick={(e) => toggleFavoriteService(item.serviceCode, e)}
                       title={isFav ? "Favorilerden Çıkar" : "Favorilere Ekle"}
-                      className="p-0.5 rounded-md text-zinc-500 hover:text-amber-400 transition-colors shrink-0"
+                      className="p-0.5 rounded-md text-muted-foreground/80 hover:text-amber-400 transition-colors shrink-0"
                     >
                       <Star
                         className={`w-3.5 h-3.5 transition-transform active:scale-125 ${
                           isFav
                             ? "fill-amber-400 text-amber-400"
-                            : "text-zinc-600 hover:text-amber-400/80"
+                            : "text-muted-foreground/60 hover:text-amber-400/80"
                         }`}
                       />
                     </button>
@@ -688,7 +688,7 @@ export function RentPanel({
 
                   {/* Kalite & Stok Rozetleri */}
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className="text-[10px] text-zinc-400 font-mono">
+                    <span className="text-[10px] text-muted-foreground font-mono">
                       {item.stock <= 0
                         ? "Tükendi"
                         : item.stock < 1000
@@ -696,18 +696,18 @@ export function RentPanel({
                         : `${item.stock.toLocaleString("tr-TR")} stok`}
                     </span>
                     {item.stock > 0 && (
-                      <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-mono">
+                      <span className="text-[9px] font-medium px-1 py-0.2 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-mono">
                         %{quality} Kalite
                       </span>
                     )}
                   </div>
 
                   {/* Fiyat ve Seçili İkonu */}
-                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04]">
-                    <span className="text-xs font-mono font-bold text-emerald-400">
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-border">
+                    <span className="text-xs font-mono font-semibold text-brand">
                       ₺{item.calculatedPriceTry.toFixed(2)}
                     </span>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-brand shrink-0" />}
                   </div>
                 </div>
               );
@@ -718,12 +718,12 @@ export function RentPanel({
 
       {/* 3. Seçim Özeti ve Satın Alma Kartı */}
       {selectedCountry && (
-        <Card className="p-4 bg-gradient-to-b from-[#131622] to-[#0c0e15] border-emerald-500/30 shadow-xl">
+        <Card className="p-4 bg-gradient-to-b from-card to-card border-brand/30 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               <CountryFlag country={selectedCountry} size="lg" />
               <div className="min-w-0">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5 truncate">
                   <span>{selectedItem?.serviceName || selectedServiceCode.toUpperCase()}</span>
                   {selectedItem && (
                     <Badge size="sm" color={selectedItem.stock > 0 ? "emerald" : "rose"} hasPing={selectedItem.stock > 0}>
@@ -731,7 +731,7 @@ export function RentPanel({
                     </Badge>
                   )}
                 </h4>
-                <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
                   {selectedCountry.flag || "🌐"} {selectedCountry.nameTr || selectedCountry.eng} • 15 Dakika Kullanım • %{selectedItem ? getItemQuality(selectedItem) : 95} Kalite
                 </p>
               </div>
@@ -740,7 +740,7 @@ export function RentPanel({
             {/* Fiyat Alanı */}
             <div className="text-right shrink-0">
               {isCatalogLoading ? (
-                <div className="flex items-center gap-1 text-xs text-emerald-400 font-mono animate-pulse">
+                <div className="flex items-center gap-1 text-xs text-brand font-mono animate-pulse">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Hesaplanıyor...</span>
                 </div>
@@ -749,29 +749,29 @@ export function RentPanel({
                   {activeDiscount ? (
                     <div className="flex flex-col items-end">
                       <div className="flex items-center gap-1.5">
-                        <span className="line-through text-zinc-500 text-xs font-mono">
+                        <span className="line-through text-muted-foreground/80 text-xs font-mono">
                           ₺{selectedItem.calculatedPriceTry.toFixed(2)}
                         </span>
-                        <span className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                        <span className="text-lg sm:text-xl font-semibold font-mono text-brand">
                           ₺{finalPriceWithDiscount.toFixed(2)}
                         </span>
                       </div>
-                      <span className="text-[10px] text-purple-400 font-semibold flex items-center gap-0.5">
+                      <span className="text-[10px] text-foreground/90 font-medium flex items-center gap-0.5">
                         <span>🎟️</span>
                         <span>{activeDiscount.code} ({activeDiscount.type === "DISCOUNT_PERCENT" ? `%${activeDiscount.value}` : `₺${activeDiscount.value}`} İndirim)</span>
                       </span>
                     </div>
                   ) : (
                     <>
-                      <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                      <div className="text-lg sm:text-xl font-semibold font-mono text-brand">
                         ₺{selectedItem.calculatedPriceTry.toFixed(2)}
                       </div>
-                      <span className="text-[10px] text-zinc-500 block">Net Ücret</span>
+                      <span className="text-[10px] text-muted-foreground/80 block">Net Ücret</span>
                     </>
                   )}
                 </>
               ) : (
-                <span className="text-xs text-rose-400 font-semibold">Stok Yok</span>
+                <span className="text-xs text-rose-400 font-medium">Stok Yok</span>
               )}
             </div>
           </div>
@@ -784,7 +784,7 @@ export function RentPanel({
                 {selectedItem && userBalance < selectedItem.calculatedPriceTry && (
                   <button
                     onClick={onOpenDeposit}
-                    className="block mt-1.5 font-bold underline text-rose-200"
+                    className="block mt-1.5 font-semibold underline text-rose-200"
                   >
                     Hemen Bakiye Yükle ➔
                   </button>
@@ -797,7 +797,7 @@ export function RentPanel({
           <button
             onClick={handleStartPurchase}
             disabled={ordering || isCatalogLoading || !selectedItem || selectedItem.stock === 0}
-            className="w-full mt-3.5 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-3.5 flex items-center justify-center gap-2 py-3.5 px-4 rounded-full bg-foreground hover:bg-foreground/85 active:scale-[0.98] text-background font-semibold text-sm shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {ordering ? (
               <span className="flex items-center gap-2">
@@ -821,38 +821,38 @@ export function RentPanel({
       {/* 4. Ülke Seçim Modalı (Favori Ülke Yönetimi Destekli) */}
       {countryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#11131a] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+          <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-white">Ülke Seçin</h3>
+                <Globe className="w-5 h-5 text-brand" />
+                <h3 className="text-base font-semibold text-foreground">Ülke Seçin</h3>
               </div>
               <button
                 onClick={() => setCountryModalOpen(false)}
-                className="text-xs text-zinc-400 hover:text-white"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Kapat
               </button>
             </div>
 
             {/* Modal Sekmeleri: Tüm Ülkeler vs Favori Ülkelerim */}
-            <div className="flex items-center gap-2 mt-3 p-1 bg-zinc-900 rounded-xl border border-white/5">
+            <div className="flex items-center gap-2 mt-3 p-1 bg-card rounded-xl border border-border">
               <button
                 onClick={() => setCountryModalTab("all")}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
                   countryModalTab === "all"
-                    ? "bg-zinc-800 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-muted text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Tüm Ülkeler ({countries.length})
               </button>
               <button
                 onClick={() => setCountryModalTab("favorites")}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1 transition-all ${
+                className={`flex-1 py-1.5 text-xs font-medium rounded-full flex items-center justify-center gap-1 transition-all ${
                   countryModalTab === "favorites"
                     ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Star
@@ -865,19 +865,19 @@ export function RentPanel({
             </div>
 
             <div className="relative my-3">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-muted-foreground/80 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Ülke adı ara..."
                 value={countrySearch}
                 onChange={(e) => setCountrySearch(e.target.value)}
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+                className="w-full bg-card border border-border rounded-xl pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
               />
             </div>
 
             <div className="overflow-y-auto space-y-1 pr-1 flex-1">
               {filteredCountries.length === 0 ? (
-                <div className="p-6 text-center text-xs text-zinc-400 space-y-2">
+                <div className="p-6 text-center text-xs text-muted-foreground space-y-2">
                   <Star className="w-6 h-6 mx-auto text-amber-400/50" />
                   <p>
                     {countryModalTab === "favorites"
@@ -887,7 +887,7 @@ export function RentPanel({
                   {countryModalTab === "favorites" && (
                     <button
                       onClick={() => setCountryModalTab("all")}
-                      className="text-amber-400 font-semibold underline text-xs"
+                      className="text-amber-400 font-medium underline text-xs"
                     >
                       Tüm Ülkelere Dön
                     </button>
@@ -904,13 +904,13 @@ export function RentPanel({
                       onClick={() => handleCountryPick(c)}
                       className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
                         isSelected
-                          ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300"
-                          : "hover:bg-zinc-800 text-zinc-200"
+                          ? "bg-brand/15 border border-brand/40 text-brand"
+                          : "hover:bg-muted text-foreground"
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
                         <CountryFlag country={c} size="md" />
-                        <span className="text-xs font-semibold">{c.nameTr || c.eng}</span>
+                        <span className="text-xs font-medium">{c.nameTr || c.eng}</span>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -918,17 +918,17 @@ export function RentPanel({
                         <button
                           onClick={(e) => toggleFavoriteCountry(c.id, e)}
                           title={isFav ? "Favorilerden Çıkar" : "Favorilere Ekle"}
-                          className="p-1 rounded-md text-zinc-500 hover:text-amber-400 transition-colors"
+                          className="p-1 rounded-md text-muted-foreground/80 hover:text-amber-400 transition-colors"
                         >
                           <Star
                             className={`w-4 h-4 transition-transform active:scale-125 ${
                               isFav
                                 ? "fill-amber-400 text-amber-400"
-                                : "text-zinc-600 hover:text-amber-400"
+                                : "text-muted-foreground/60 hover:text-amber-400"
                             }`}
                           />
                         </button>
-                        {isSelected && <Check className="w-4 h-4 text-emerald-400" />}
+                        {isSelected && <Check className="w-4 h-4 text-brand" />}
                       </div>
                     </div>
                   );
@@ -942,22 +942,22 @@ export function RentPanel({
       {/* 5. Satın Alma Onay Modalı (Sorulu Onay) */}
       {confirmModalOpen && selectedItem && selectedCountry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-[#12141e] border border-emerald-500/30 rounded-3xl p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-sm bg-background border border-brand/30 rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] space-y-4">
             {/* Modal Başlık */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
                   <HelpCircle className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Satın Alma Onayı</h3>
-                  <p className="text-[10px] text-zinc-400">İşlem Özeti ve Onay</p>
+                  <h3 className="text-sm font-semibold text-foreground">Satın Alma Onayı</h3>
+                  <p className="text-[10px] text-muted-foreground">İşlem Özeti ve Onay</p>
                 </div>
               </div>
               <button
                 onClick={() => !ordering && setConfirmModalOpen(false)}
                 disabled={ordering}
-                className="text-xs text-zinc-400 hover:text-white p-1"
+                className="text-xs text-muted-foreground hover:text-foreground p-1"
               >
                 ✕
               </button>
@@ -966,10 +966,10 @@ export function RentPanel({
             {/* Soru Metni */}
             <div className="text-center py-1">
               <span className="text-3xl block mb-1.5 animate-bounce">🛒</span>
-              <h4 className="text-base font-extrabold text-white">
+              <h4 className="text-base font-semibold text-foreground">
                 Bu numarayı satın almak istiyor musunuz?
               </h4>
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Onayladığınız anda numaranız tahsis edilecek ve SMS bekleme süresi başlayacaktır.
               </p>
             </div>
@@ -977,15 +977,15 @@ export function RentPanel({
             {userBalance < finalPriceWithDiscount && (
               <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between">
                 <div>
-                  <span className="font-semibold block">⚠️ Yetersiz Bakiye</span>
-                  <span className="text-[11px] text-zinc-400">Gereken: ₺{finalPriceWithDiscount.toFixed(2)} (Mevcut: ₺{userBalance.toFixed(2)})</span>
+                  <span className="font-medium block">⚠️ Yetersiz Bakiye</span>
+                  <span className="text-[11px] text-muted-foreground">Gereken: ₺{finalPriceWithDiscount.toFixed(2)} (Mevcut: ₺{userBalance.toFixed(2)})</span>
                 </div>
                 <button
                   onClick={() => {
                     setConfirmModalOpen(false);
                     onOpenDeposit();
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs shrink-0 hover:bg-emerald-400 transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg bg-foreground text-background font-semibold text-xs shrink-0 hover:bg-foreground/85 transition-colors"
                 >
                   Bakiye Yükle ➔
                 </button>
@@ -993,48 +993,48 @@ export function RentPanel({
             )}
 
             {/* Sipariş Detay Kartı */}
-            <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/5 space-y-2 text-xs">
+            <div className="p-3.5 rounded-2xl bg-card/90 border border-border space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Servis Platformu:</span>
-                <span className="font-semibold text-white truncate max-w-[55%]">
+                <span className="text-muted-foreground">Servis Platformu:</span>
+                <span className="font-medium text-foreground truncate max-w-[55%]">
                   {selectedItem.serviceName}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Hedef Ülke:</span>
-                <span className="font-semibold text-white flex items-center gap-1.5">
+                <span className="text-muted-foreground">Hedef Ülke:</span>
+                <span className="font-medium text-foreground flex items-center gap-1.5">
                   <CountryFlag country={selectedCountry} size="md" />
                   <span>{selectedCountry.nameTr || selectedCountry.eng}</span>
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Tahsis Süresi:</span>
-                <span className="font-mono text-zinc-300">15 Dakika (Tek Kullanımlık)</span>
+                <span className="text-muted-foreground">Tahsis Süresi:</span>
+                <span className="font-mono text-foreground/80">15 Dakika (Tek Kullanımlık)</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Tahmini Kalite:</span>
-                <span className="font-mono text-emerald-400 font-bold">
+                <span className="text-muted-foreground">Tahmini Kalite:</span>
+                <span className="font-mono text-brand font-semibold">
                   %{getItemQuality(selectedItem)} Başarı
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-zinc-400">Numara Tutarı:</span>
+              <div className="pt-2 border-t border-border flex items-center justify-between">
+                <span className="text-muted-foreground">Numara Tutarı:</span>
                 <div className="text-right">
                   {activeDiscount ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="line-through text-zinc-500 font-mono text-[11px]">
+                      <span className="line-through text-muted-foreground/80 font-mono text-[11px]">
                         ₺{selectedItem.calculatedPriceTry.toFixed(2)}
                       </span>
-                      <span className="font-bold text-emerald-400 font-mono text-sm">
+                      <span className="font-semibold text-brand font-mono text-sm">
                         ₺{finalPriceWithDiscount.toFixed(2)}
                       </span>
                     </div>
                   ) : (
-                    <span className="font-bold text-emerald-400 font-mono text-sm">
+                    <span className="font-semibold text-brand font-mono text-sm">
                       ₺{finalPriceWithDiscount.toFixed(2)}
                     </span>
                   )}
@@ -1042,21 +1042,21 @@ export function RentPanel({
               </div>
 
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-500">Mevcut Bakiyeniz:</span>
-                <span className="font-mono text-zinc-400">₺{userBalance.toFixed(2)}</span>
+                <span className="text-muted-foreground/80">Mevcut Bakiyeniz:</span>
+                <span className="font-mono text-muted-foreground">₺{userBalance.toFixed(2)}</span>
               </div>
 
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-500">İşlem Sonrası Kalan:</span>
-                <span className="font-mono text-zinc-300 font-semibold">
+                <span className="text-muted-foreground/80">İşlem Sonrası Kalan:</span>
+                <span className="font-mono text-foreground/80 font-medium">
                   ₺{Math.max(0, userBalance - finalPriceWithDiscount).toFixed(2)}
                 </span>
               </div>
             </div>
 
             {/* Garanti Bilgisi */}
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 flex items-start gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-xl bg-brand/10 border border-brand/20 text-[11px] text-brand flex items-start gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
               <span>
                 15 dakika içinde SMS kodu gelmezse iptal edebilir, bakiyenizi anında %100 iade alabilirsiniz.
               </span>
@@ -1075,7 +1075,7 @@ export function RentPanel({
               <button
                 onClick={() => setConfirmModalOpen(false)}
                 disabled={ordering}
-                className="w-full py-3 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs active:scale-95 transition-all disabled:opacity-50"
+                className="w-full py-3 px-3 rounded-xl bg-card hover:bg-muted border border-border text-foreground/80 font-medium text-xs active:scale-95 transition-all disabled:opacity-50"
               >
                 ❌ Vazgeç
               </button>
@@ -1083,7 +1083,7 @@ export function RentPanel({
               <button
                 onClick={handleExecutePurchase}
                 disabled={ordering}
-                className="w-full py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full py-3 px-3 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {ordering ? (
                   <>

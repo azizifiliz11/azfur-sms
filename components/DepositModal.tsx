@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, Check, Copy, Coins, ShieldCheck, Loader2, RefreshCw, Zap, Gift, Tag } from "lucide-react";
+import { DirectionAwareTabs } from "@/components/ui/direction-aware-tabs";
 import { haptic } from "@/lib/haptic";
 import { CryptoSettings } from "@/lib/types";
 import { APIRONE_PAYMENT_COINS, getApironePaymentOptionsForCoin } from "@/lib/crypto-currencies";
@@ -145,8 +146,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
   const quickAmountSelector = (
     <div className="mt-4">
       <div className="flex items-center justify-between mb-2">
-        <label className="text-xs text-zinc-400 font-medium">Yüklenecek Tutar (₺)</label>
-        <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+        <label className="text-xs text-muted-foreground font-medium">Yüklenecek Tutar (₺)</label>
+        <span className="text-[11px] font-mono text-brand font-medium">
           ≈ ${(currentFinalAmount / (exchangeRate || 49.2)).toFixed(2)} USD
         </span>
       </div>
@@ -155,10 +156,10 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           <button
             key={q}
             onClick={() => handleSelectAmount(q)}
-            className={`py-2 px-1 rounded-xl border text-sm font-mono font-bold transition-all ${
+            className={`py-2 px-1 rounded-xl border text-sm font-mono font-semibold transition-all ${
               amount === q && !customAmount
-                ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
-                : "bg-zinc-900 border-white/10 text-zinc-300 hover:border-white/20"
+                ? "bg-foreground text-background border-brand shadow-md "
+                : "bg-card border-border text-foreground/80 hover:border-foreground/15"
             }`}
           >
             ₺{q}
@@ -173,7 +174,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
           placeholder="Özel tutar girin (₺)"
           value={customAmount}
           onChange={(e) => setCustomAmount(e.target.value)}
-          className="w-full bg-zinc-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+          className="w-full bg-card/90 border border-border rounded-xl px-3.5 py-2.5 text-sm font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
         />
       </div>
     </div>
@@ -339,21 +340,21 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-[#11131a] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto">
+      <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] flex flex-col max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+        <div className="flex items-center justify-between pb-3 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+            <div className="p-2 rounded-xl bg-brand/15 text-brand">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+              <h3 className="text-base font-semibold text-foreground flex items-center gap-1.5">
                 <span>Kripto ile Bakiye Yükle</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand/20 text-brand border border-brand/30">
                   Otomatik Onay
                 </span>
               </h3>
-              <p className="text-xs text-zinc-400">Anında QR Kod ve cüzdan adresi ile bakiye yükleyin</p>
+              <p className="text-xs text-muted-foreground">Anında QR Kod ve cüzdan adresi ile bakiye yükleyin</p>
             </div>
           </div>
           <button
@@ -361,7 +362,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
               haptic.impact("light");
               onClose();
             }}
-            className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white"
+            className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground"
           >
             <X className="w-5 h-5" />
           </button>
@@ -369,83 +370,47 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
         {/* YÖNTEMLER SEÇİMİ */}
         <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-950/80 rounded-2xl border border-white/5">
-            <button
-              type="button"
-              onClick={() => {
-                haptic.selection();
-                setCryptoSubMethod("AutoCrypto");
-              }}
-              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
-                cryptoSubMethod === "AutoCrypto"
-                  ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Kripto (Oto)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                haptic.selection();
-                setCryptoSubMethod("DirectWallet");
-              }}
-              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
-                cryptoSubMethod === "DirectWallet"
-                  ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              <Coins className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">TRON Cüzdan</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                haptic.selection();
-                setCryptoSubMethod("Coupon");
-              }}
-              className={`py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all text-center ${
-                cryptoSubMethod === "Coupon"
-                  ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              <Gift className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Kupon Kodu</span>
-            </button>
-          </div>
+          <DirectionAwareTabs
+            value={cryptoSubMethod}
+            onValueChange={(id) => {
+              haptic.selection();
+              setCryptoSubMethod(id);
+            }}
+            tabs={[
+              { id: "AutoCrypto", label: <><Zap className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Kripto (Oto)</span></> },
+              { id: "DirectWallet", label: <><Coins className="w-3.5 h-3.5 shrink-0" /><span className="truncate">TRON Cüzdan</span></> },
+              { id: "Coupon", label: <><Gift className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Kupon Kodu</span></> },
+            ]}
+            tabClassName="px-1.5"
+          />
 
           {cryptoSubMethod !== "AutoCrypto" && quickAmountSelector}
 
           {/* SEÇENEK A: KRİPTO İLE ÖDE (OTOMATİK) */}
           {cryptoSubMethod === "AutoCrypto" && (
             <div className="space-y-3">
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#121824] to-[#0c0f18] border border-emerald-500/30 space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-card to-card border border-brand/30 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-border">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                    <div className="p-1.5 rounded-lg bg-brand/20 text-brand">
                       <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-white block">Kripto ile Öde (Otomatik)</span>
-                      <span className="text-[10px] text-zinc-400 block">QR kod ve cüzdan adresi ile anında otomatik onay</span>
+                      <span className="text-xs font-semibold text-foreground block">Kripto ile Öde (Otomatik)</span>
+                      <span className="text-[10px] text-muted-foreground block">QR kod ve cüzdan adresi ile anında otomatik onay</span>
                     </div>
                   </div>
-                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-brand/20 text-brand font-medium border border-brand/30">
                     Önerilen
                   </span>
                 </div>
 
                 {(activePayment || (selectedAutoCoin && selectedAutoNetwork)) && (
-                  <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5 text-xs">
-                    <span className="text-zinc-400">Ödenecek Tutar:</span>
-                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                  <div className="flex items-center justify-between bg-foreground/5 p-2.5 rounded-xl border border-border text-xs">
+                    <span className="text-muted-foreground">Ödenecek Tutar:</span>
+                    <span className="font-mono font-semibold text-brand text-sm">
                       ₺{currentFinalAmount.toFixed(2)}{" "}
-                      <span className="text-xs text-zinc-400 font-normal">
+                      <span className="text-xs text-muted-foreground font-normal">
                         (≈ ${(currentFinalAmount / (exchangeRate || 49.2)).toFixed(2)} USD)
                       </span>
                     </span>
@@ -453,9 +418,9 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 )}
 
                 {!activePayment && (
-                  <div className="space-y-3 rounded-xl border border-white/[0.07] bg-black/20 p-3">
+                  <div className="space-y-3 rounded-xl border border-border bg-foreground/5 p-3">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 block mb-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5">
                         1. Ödeme yapılacak kripto para birimini seçin
                       </span>
                       <div className="grid grid-cols-3 gap-1.5">
@@ -468,10 +433,10 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                               setSelectedAutoCoin(coin);
                               setSelectedAutoNetwork("");
                             }}
-                            className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
+                            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
                               selectedAutoCoin === coin
-                                ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
-                                : "border-white/10 bg-zinc-900 text-zinc-300 hover:border-white/20"
+                                ? "border-brand bg-brand/15 text-brand"
+                                : "border-border bg-card text-foreground/80 hover:border-foreground/15"
                             }`}
                           >
                             {coin}
@@ -482,7 +447,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
                     {selectedAutoCoin && (
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 block mb-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5">
                           2. Göndereceğiniz ağı seçin
                         </span>
                         <div className="grid grid-cols-2 gap-1.5">
@@ -494,10 +459,10 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                                 haptic.selection();
                                 setSelectedAutoNetwork(option.networkKey);
                               }}
-                              className={`rounded-lg border px-2 py-2 text-[10px] font-semibold transition-colors ${
+                              className={`rounded-lg border px-2 py-2 text-[10px] font-medium transition-colors ${
                                 selectedAutoNetwork === option.networkKey
-                                  ? "border-sky-400 bg-sky-500/15 text-sky-200"
-                                  : "border-white/10 bg-zinc-900 text-zinc-300 hover:border-white/20"
+                                  ? "border-foreground/40 bg-foreground/8 text-foreground"
+                                  : "border-border bg-card text-foreground/80 hover:border-foreground/15"
                               }`}
                             >
                               {option.networkLabel}
@@ -516,7 +481,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                     type="button"
                     onClick={handleCreateAutoCrypto}
                     disabled={creatingPayment || currentFinalAmount < 10 || !selectedAutoCoin || !selectedAutoNetwork}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-full bg-foreground hover:bg-foreground/85 active:scale-[0.98] text-background font-semibold text-xs shadow-md transition-all disabled:opacity-50"
                   >
                     {creatingPayment ? (
                       <>
@@ -531,9 +496,9 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                     )}
                   </button>
                 ) : (
-                  <div className="space-y-3 pt-2 border-t border-white/[0.08]">
+                  <div className="space-y-3 pt-2 border-t border-border">
                     {/* QR Kod Görseli */}
-                    <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+                    <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-foreground/5 border border-border space-y-2">
                       <div className="p-2 bg-white rounded-xl shadow-lg">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -543,11 +508,11 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                         />
                       </div>
                       <div className="text-center space-y-0.5">
-                        <span className="text-[11px] text-zinc-400 block">Yatırılacak Tutar:</span>
-                        <span className="font-mono font-bold text-base text-emerald-400">
+                        <span className="text-[11px] text-muted-foreground block">Yatırılacak Tutar:</span>
+                        <span className="font-mono font-semibold text-base text-brand">
                           {activePayment.payAmount} {activePayment.payCurrency}
                         </span>
-                        <span className="text-[10px] text-zinc-500 block font-mono">
+                        <span className="text-[10px] text-muted-foreground/80 block font-mono">
                           Ağ: {activePayment.network}
                         </span>
                       </div>
@@ -555,15 +520,15 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
                     {/* Cüzdan Adresi Kopyalama Alanı */}
                     <div className="space-y-1">
-                      <label className="text-[11px] text-zinc-400 font-medium">Cüzdan Adresi (Dokun-Kopyala):</label>
-                      <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-white/10 text-xs font-mono">
-                        <span className="truncate text-emerald-300 mr-2 select-all font-semibold">
+                      <label className="text-[11px] text-muted-foreground font-medium">Cüzdan Adresi (Dokun-Kopyala):</label>
+                      <div className="flex items-center justify-between bg-muted p-2.5 rounded-xl border border-border text-xs font-mono">
+                        <span className="truncate text-brand mr-2 select-all font-medium">
                           {activePayment.address}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopyAddress(activePayment.address)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[11px] font-sans font-bold transition-all active:scale-95"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-brand hover:text-brand shrink-0 text-[11px] font-sans font-semibold transition-all active:scale-95"
                         >
                           {isAddressCopied ? (
                             <>
@@ -580,9 +545,9 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-zinc-400 leading-relaxed bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-500/20">
+                    <p className="text-[10px] text-muted-foreground leading-relaxed bg-brand/10 p-2.5 rounded-xl border border-brand/20">
                       ℹ️ Herhangi bir borsadan (Binance, Paribu, vb.) veya cüzdandan bu adrese gönderim yaptığınızda, ağ onayının ardından bakiyeniz <b>otomatik yüklenecektir</b>.
-                      <span className="block mt-1 text-emerald-400 font-medium">💡 Borsa çekim küsuratlarında 10 ₺'ye kadar olan küçük eksiklikler sistemimizce tolere edilir; 10 ₺ altı ödemeler kabul edilmez.</span>
+                      <span className="block mt-1 text-brand font-medium">💡 Borsa çekim küsuratlarında 10 ₺'ye kadar olan küçük eksiklikler sistemimizce tolere edilir; 10 ₺ altı ödemeler kabul edilmez.</span>
                     </p>
 
                     <div className="grid grid-cols-2 gap-2 pt-1">
@@ -590,7 +555,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                         type="button"
                         onClick={handleCheckAutoPaymentStatus}
                         disabled={verifyingPayment}
-                        className="col-span-2 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all disabled:opacity-50 shadow-md shadow-emerald-500/20"
+                        className="col-span-2 flex items-center justify-center gap-1.5 py-3 px-3 rounded-full bg-foreground hover:bg-foreground/85 text-background font-semibold text-xs transition-all disabled:opacity-50 shadow-md "
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${verifyingPayment ? "animate-spin" : ""}`} />
                         <span>{verifyingPayment ? "Doğrulanıyor..." : "Ödemeyi Kontrol Et"}</span>
@@ -602,7 +567,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                           setActivePayment(null);
                           setMessage(null);
                         }}
-                        className="col-span-2 text-center text-[10px] text-zinc-500 hover:text-zinc-300 py-1"
+                        className="col-span-2 text-center text-[10px] text-muted-foreground/80 hover:text-foreground/80 py-1"
                       >
                         Farklı Tutarla Yeni Ödeme Başlat
                       </button>
@@ -620,14 +585,14 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 <button
                   type="button"
                   onClick={() => setCryptoType("USDT_TRC20")}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
                     cryptoType === "USDT_TRC20"
-                      ? "bg-emerald-500/15 border-emerald-500 text-emerald-300"
-                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                      ? "bg-brand/15 border-brand text-brand"
+                      : "bg-card border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>USDT (TRC-20)</span>
-                  <span className="text-[10px] font-mono font-normal text-zinc-400">
+                  <span className="text-[10px] font-mono font-normal text-muted-foreground">
                     ≈ {calculatedUsdt} USDT
                   </span>
                 </button>
@@ -635,33 +600,33 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 <button
                   type="button"
                   onClick={() => setCryptoType("TRX")}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
                     cryptoType === "TRX"
-                      ? "bg-emerald-500/15 border-emerald-500 text-emerald-300"
-                      : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-200"
+                      ? "bg-brand/15 border-brand text-brand"
+                      : "bg-card border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>TRX (Tron)</span>
-                  <span className="text-[10px] font-mono font-normal text-zinc-400">
+                  <span className="text-[10px] font-mono font-normal text-muted-foreground">
                     ≈ {calculatedTrx} TRX
                   </span>
                 </button>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-2.5">
-                <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="p-3.5 rounded-2xl bg-card/90 border border-border space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Gönderilecek Adres:</span>
-                  <span className="text-[10px] text-emerald-400 font-mono">Tron (TRC-20) Ağı</span>
+                  <span className="text-[10px] text-brand font-mono">Tron (TRC-20) Ağı</span>
                 </div>
 
-                <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-white/10 font-mono text-xs">
-                  <span className="truncate text-white mr-2 select-all font-semibold">
+                <div className="flex items-center justify-between bg-muted p-2.5 rounded-xl border border-border font-mono text-xs">
+                  <span className="truncate text-foreground mr-2 select-all font-medium">
                     {activeCryptoAddress}
                   </span>
                   <button
                     type="button"
                     onClick={() => handleCopy(activeCryptoAddress)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-emerald-400 hover:text-emerald-300 shrink-0 text-[11px] font-sans font-bold transition-all active:scale-95"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-brand hover:text-brand shrink-0 text-[11px] font-sans font-semibold transition-all active:scale-95"
                   >
                     {isCopied ? (
                       <>
@@ -678,7 +643,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 </div>
 
                 <div className="space-y-1 pt-1">
-                  <label className="text-[11px] text-zinc-400">
+                  <label className="text-[11px] text-muted-foreground">
                     İşlem Kodu (TXID / Transaction Hash):
                   </label>
                   <input
@@ -686,7 +651,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                     placeholder="Örn: 5a9e3bc..."
                     value={txidInput}
                     onChange={(e) => setTxidInput(e.target.value)}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-muted border border-border rounded-xl px-3.5 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -695,7 +660,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 type="button"
                 onClick={handleVerifyCrypto}
                 disabled={verifyingCrypto || !txidInput.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-bold text-xs shadow-md shadow-emerald-500/25 transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-full bg-foreground hover:bg-foreground/85 active:scale-[0.98] text-background font-semibold text-xs shadow-md transition-all disabled:opacity-50"
               >
                 {verifyingCrypto ? (
                   <>
@@ -714,26 +679,26 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
 
           {/* SEÇENEK C: KUPON VE İNDİRİM KODU KULLAN */}
           {cryptoSubMethod === "Coupon" && (
-            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-white/10 space-y-3.5">
+            <div className="p-4 rounded-2xl bg-card/90 border border-border space-y-3.5">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <div className="p-2 rounded-xl bg-foreground/5 border border-foreground/10 text-foreground/90">
                   <Gift className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Hediye Bakiye & Promosyon Kuponu</h4>
-                  <p className="text-[11px] text-zinc-400">Kodunuzu girerek anında hesabınıza tanımlayın</p>
+                  <h4 className="text-xs font-semibold text-foreground">Hediye Bakiye & Promosyon Kuponu</h4>
+                  <p className="text-[11px] text-muted-foreground">Kodunuzu girerek anında hesabınıza tanımlayın</p>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[11px] text-zinc-400 font-medium">Kupon Kodu</label>
+                <label className="text-[11px] text-muted-foreground font-medium">Kupon Kodu</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     placeholder="ÖRN: HOSGELDIN, AZFUR20"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold tracking-wider text-white uppercase placeholder-zinc-600 focus:outline-none focus:border-purple-500"
+                    className="flex-1 bg-muted border border-border rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold tracking-wider text-foreground uppercase placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/40"
                   />
                   <button
                     type="button"
@@ -775,7 +740,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                         setRedeemingCoupon(false);
                       }
                     }}
-                    className="px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 active:scale-95 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-4 py-2.5 rounded-xl bg-foreground hover:bg-foreground/85 active:scale-95 text-background font-semibold text-xs shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {redeemingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Tag className="w-3.5 h-3.5" />}
                     <span>Uygula</span>
@@ -783,8 +748,8 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1 text-[11px] text-zinc-400">
-                <p className="flex items-center gap-1 text-zinc-300 font-semibold">
+              <div className="p-2.5 rounded-xl bg-foreground/5 border border-border space-y-1 text-[11px] text-muted-foreground">
+                <p className="flex items-center gap-1 text-foreground/80 font-medium">
                   <span>💡</span> Kupon Kullanım Bilgisi:
                 </p>
                 <p>• Bakiye kuponları anında hesabınıza para olarak eklenir.</p>
@@ -800,7 +765,7 @@ export function DepositModal({ isOpen, onClose, telegramId, onSuccess }: Deposit
               className={`p-3 rounded-xl text-xs font-medium border leading-relaxed ${
                 isErrorMsg
                   ? "bg-rose-950/60 border-rose-500/40 text-rose-300"
-                  : "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                  : "bg-brand/10 border-brand/40 text-brand"
               }`}
             >
               {message}

@@ -56,12 +56,12 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
       {/* Legend */}
       <div className="flex items-center justify-end gap-4 mb-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-          <span className="text-zinc-400">Ciro (₺)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" />
+          <span className="text-muted-foreground">Ciro (₺)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-          <span className="text-zinc-400">Net Kâr (₺)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-brand" />
+          <span className="text-muted-foreground">Net Kâr (₺)</span>
         </div>
       </div>
 
@@ -72,12 +72,12 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
       >
         <defs>
           <linearGradient id="ciroGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+            <stop offset="0%" stopColor="var(--muted-foreground)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--muted-foreground)" stopOpacity="0.0" />
           </linearGradient>
           <linearGradient id="karGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.0" />
           </linearGradient>
         </defs>
 
@@ -91,7 +91,7 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
               y1={y}
               x2={width - padding.right}
               y2={y}
-              stroke="#27272a"
+              stroke="var(--border)"
               strokeDasharray="3 3"
               strokeWidth="1"
             />
@@ -103,8 +103,8 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
         <path d={karArea} fill="url(#karGrad)" />
 
         {/* Lines */}
-        <path d={ciroPath} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-        <path d={karPath} fill="none" stroke="#10b981" strokeWidth="2.5" />
+        <path d={ciroPath} fill="none" stroke="var(--muted-foreground)" strokeWidth="2.5" />
+        <path d={karPath} fill="none" stroke="var(--brand)" strokeWidth="2.5" />
 
         {/* Dots & Hit areas */}
         {data.map((d, i) => {
@@ -121,7 +121,7 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
                 y={height - 6}
                 textAnchor="middle"
                 fontSize="10"
-                fill="#71717a"
+                fill="var(--muted-foreground)"
                 className="font-mono"
               >
                 {d.date}
@@ -132,16 +132,16 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
                 cx={x}
                 cy={yCiro}
                 r={isHover ? 5 : 3}
-                fill="#3b82f6"
-                stroke="#090a0f"
+                fill="var(--muted-foreground)"
+                stroke="var(--background)"
                 strokeWidth="2"
               />
               <circle
                 cx={x}
                 cy={yKar}
                 r={isHover ? 5 : 3}
-                fill="#10b981"
-                stroke="#090a0f"
+                fill="var(--brand)"
+                stroke="var(--background)"
                 strokeWidth="2"
               />
 
@@ -164,16 +164,16 @@ export function AreaChart({ data, className = "" }: AreaChartProps) {
       {/* Floating Tooltip */}
       {hoverIndex !== null && data[hoverIndex] && (
         <div
-          className="absolute -top-3 transform -translate-x-1/2 bg-zinc-900 border border-zinc-700/80 rounded-lg px-2.5 py-1.5 shadow-xl text-[11px] pointer-events-none z-20 backdrop-blur-md"
+          className="absolute -top-3 transform -translate-x-1/2 bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-xl text-[11px] pointer-events-none z-20 backdrop-blur-md"
           style={{
             left: `${((hoverIndex / (data.length - 1)) * (chartWidth / width) + padding.left / width) * 100}%`,
           }}
         >
-          <div className="font-semibold text-zinc-300">{data[hoverIndex].date}</div>
+          <div className="font-medium text-foreground/80">{data[hoverIndex].date}</div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-blue-400 font-mono">₺{data[hoverIndex].Ciro}</span>
-            <span className="text-zinc-500">|</span>
-            <span className="text-emerald-400 font-mono font-bold">₺{data[hoverIndex].NetKar} net</span>
+            <span className="text-foreground/90 font-mono">₺{data[hoverIndex].Ciro}</span>
+            <span className="text-muted-foreground/80">|</span>
+            <span className="text-brand font-mono font-semibold">₺{data[hoverIndex].NetKar} net</span>
           </div>
         </div>
       )}
@@ -190,7 +190,7 @@ export function DonutChart({ data, className = "" }: DonutChartProps) {
   if (!data || data.length === 0) return null;
 
   const total = data.reduce((sum, item) => sum + item.count, 0) || 1;
-  const colors = ["#10b981", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#64748b"];
+  const colors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
 
   const size = 160;
   const center = size / 2;
@@ -210,7 +210,7 @@ export function DonutChart({ data, className = "" }: DonutChartProps) {
             cy={center}
             r={radius}
             fill="transparent"
-            stroke="#1e2230"
+            stroke="var(--muted)"
             strokeWidth={strokeWidth}
           />
           {data.map((item, idx) => {
@@ -240,8 +240,8 @@ export function DonutChart({ data, className = "" }: DonutChartProps) {
 
         {/* Center Text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-xl font-bold font-mono text-white">{total}</span>
-          <span className="text-[10px] text-zinc-400 font-medium">Toplam İşlem</span>
+          <span className="text-xl font-semibold font-mono text-foreground">{total}</span>
+          <span className="text-[10px] text-muted-foreground font-medium">Toplam İşlem</span>
         </div>
       </div>
 
@@ -255,11 +255,11 @@ export function DonutChart({ data, className = "" }: DonutChartProps) {
             <div key={idx} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 truncate">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-zinc-300 truncate">{item.name}</span>
+                <span className="text-foreground/80 truncate">{item.name}</span>
               </div>
-              <div className="flex items-center gap-2 font-mono text-zinc-400">
+              <div className="flex items-center gap-2 font-mono text-muted-foreground">
                 <span>{item.count}</span>
-                <span className="text-zinc-500">({pct}%)</span>
+                <span className="text-muted-foreground/80">({pct}%)</span>
               </div>
             </div>
           );

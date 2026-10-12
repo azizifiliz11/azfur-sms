@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard, InputFile } from "grammy";
+import { after } from "next/server";
 import fs from "fs";
 import path from "path";
 import { CONFIG } from "./config";
@@ -11,6 +12,51 @@ import { rateLimiter } from "./rate-limit";
 
 let botInstance: Bot | null = null;
 const pendingRestoreMap = new Map<number, any>();
+
+/**
+ * İşi HTTP cevabı Telegram'a döndükten SONRA çalıştırır (Vercel waitUntil).
+ * İstek kapsamı dışında çağrılırsa (script, polling vb.) arka planda hemen başlatır.
+ */
+export function runAfterResponse(task: () => Promise<unknown> | unknown): void {
+  const safeTask = async () => {
+    try {
+      await task();
+    } catch (e) {
+      console.error("runAfterResponse task error:", e);
+    }
+  };
+  try {
+    after(safeTask);
+  } catch {
+    void safeTask();
+  }
+}
+
+// Karşılama bannerının Telegram file_id önbelleği.
+// URL ile gönderimde Telegram görseli her seferinde sunucumuzdan indirir (yavaş);
+// file_id ile gönderimde görsel Telegram'ın kendi CDN'inden anında iletilir.
+// Format: "<APP_BUILD_VERSION>::<file_id>" — sürüm değişince (yeni banner) otomatik yenilenir.
+let bannerFileIdMemo: string | null = null;
+function getCachedBannerFileId(): string | null {
+  const raw = bannerFileIdMemo || db.getSettings().bannerFileId || "";
+  const [version, fileId] = raw.split("::");
+  return version === APP_BUILD_VERSION && fileId ? fileId : null;
+}
+function rememberBannerFileId(fileId: string | undefined): void {
+  if (!fileId) return;
+  const value = `${APP_BUILD_VERSION}::${fileId}`;
+  if (bannerFileIdMemo === value) return;
+  bannerFileIdMemo = value;
+  if (db.getSettings().bannerFileId !== value) {
+    runAfterResponse(() => db.updateSettings({ bannerFileId: value }));
+  }
+}
+function forgetBannerFileId(): void {
+  bannerFileIdMemo = null;
+}
+
+// Sohbet menü butonu sıfırlaması her /start'ta değil, süreç başına sohbet başına bir kez yapılır
+const menuButtonResetChats = new Set<number>();
 
 // Popüler Servis Tanımları
 const POPULAR_SERVICES = [
@@ -481,13 +527,27 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      const user =
-        db.getUser(from.id) ||
-        (await db.getOrCreateUser(from.id, {
-          username: from.username,
-          firstName: from.first_name,
-          lastName: from.last_name,
-        }));
+      const profile = {
+        username: from.username,
+        firstName: from.first_name,
+        lastName: from.last_name,
+      };
+
+      // Mevcut kullanıcı: bellekten anında. Yeni kullanıcı: menü için geçici kayıt,
+      // kalıcı kayıt (disk + SQL) cevap gönderildikten SONRA yapılır.
+      const existingUser = db.getUser(from.id);
+      const user: User = existingUser || {
+        telegramId: Number(from.id),
+        username: (from.username || "").replace(/^@/, "").trim(),
+        firstName: (from.first_name || "").trim() || "Telegram Kullanıcısı",
+        lastName: from.last_name ? from.last_name.trim() : undefined,
+        balance: 0,
+        spent: 0,
+        role: db.isAdmin(from.id) ? "admin" : "user",
+        isBanned: false,
+        createdAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
 
       const { appUrl, adminUrl, bannerUrl } = getAppUrls();
       const isAdmin = db.isAdmin(from.id) || user.role === "admin";
@@ -495,25 +555,53 @@ export function getTelegramBot(): Bot | null {
       const activeOrders = db.getActiveOrders(from.id);
       const messageText = buildMainMenuText(user, from.first_name, activeOrders.length);
       const keyboard = buildMainMenuKeyboard(isAdmin, appUrl, adminUrl);
+      const usePhoto = db.getSettings().useBannerPhoto !== false;
 
-      try {
-        await ctx.replyWithPhoto(bannerUrl, {
-          caption: messageText,
-          parse_mode: "HTML",
-          reply_markup: keyboard,
-        });
-      } catch (photoErr: any) {
-        console.warn("sendWelcome banner photo gönderilemedi, metin moduna geçiliyor:", photoErr?.message || photoErr);
+      let sent = false;
+      if (usePhoto) {
+        const cachedFileId = getCachedBannerFileId();
+        const photoSources = cachedFileId ? [cachedFileId, bannerUrl] : [bannerUrl];
+        for (const photo of photoSources) {
+          try {
+            const msg = await ctx.replyWithPhoto(photo, {
+              caption: messageText,
+              parse_mode: "HTML",
+              reply_markup: keyboard,
+            });
+            const sizes = msg?.photo;
+            rememberBannerFileId(Array.isArray(sizes) && sizes.length ? sizes[sizes.length - 1].file_id : undefined);
+            sent = true;
+            break;
+          } catch (photoErr: any) {
+            if (photo === cachedFileId) forgetBannerFileId();
+            console.warn("sendWelcome banner photo gönderilemedi:", photoErr?.message || photoErr);
+          }
+        }
+      }
+
+      if (!sent) {
         await ctx.reply(messageText, {
           parse_mode: "HTML",
           reply_markup: keyboard,
         });
       }
 
-      if (ctx.chat?.type === "private") {
+      // Cevap gönderildi — kalıcı işlemler kullanıcıyı bekletmeden arka planda
+      runAfterResponse(async () => {
+        if (existingUser) {
+          await db.touchUserActive(from.id, profile);
+        } else {
+          await db.getOrCreateUser(from.id, profile);
+        }
+      });
+
+      if (ctx.chat?.type === "private" && !menuButtonResetChats.has(from.id)) {
+        menuButtonResetChats.add(from.id);
         // BotFather'da belirlenen menü butonu adını ve ayarını kullanmak için
         // sohbete özel "AzFur" zorlamasını kaldırıp BotFather varsayılanına sıfırlıyoruz.
-        ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: { type: "default" } }).catch(() => {});
+        runAfterResponse(() =>
+          ctx.api.setChatMenuButton({ chat_id: from.id, menu_button: { type: "default" } }).catch(() => {})
+        );
       }
     };
 

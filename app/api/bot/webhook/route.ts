@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTelegramBot } from "@/lib/telegram-bot";
+import { getTelegramBot, runAfterResponse } from "@/lib/telegram-bot";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
 
@@ -7,33 +7,62 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const maxDuration = 15;
 
+const WELCOME_COMMAND_RE = /^\/(?:start|menu)(?:@\w+)?$/i;
+
+function getWelcomeSenderId(body: any): number | null {
+  const msg = body?.message;
+  const firstWord = typeof msg?.text === "string" ? msg.text.trim().split(/\s/, 1)[0] : "";
+  if (!WELCOME_COMMAND_RE.test(firstWord)) return null;
+  const id = Number(msg?.from?.id);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Read the update, refresh shared state, and initialize grammY concurrently.
-    const bodyPromise = req.json();
     const bot = getTelegramBot();
     if (!bot) {
       console.error("Bot token not configured");
       return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 400 });
     }
 
-    const syncPromise = db.syncFromCloud();
+    // grammY başlatma (getMe) gövde okunurken paralel başlar; botInfo önbellekteyse anında biter
     const initPromise = bot.isInited() ? Promise.resolve() : bot.init();
-    const [body] = await Promise.all([bodyPromise, syncPromise, initPromise]);
+    const body = await req.json();
+
+    // HIZLI YOL: /start ve /menu, sıcak önbellekte tüm veritabanı senkronizasyonunu beklemez.
+    // Yalnızca gönderenin tek satırı SQL'den tazelenir (bakiye/ban doğru kalır);
+    // tam senkronizasyon cevap Telegram'a döndükten sonra arka planda yapılır.
+    const welcomeSenderId = getWelcomeSenderId(body);
+    let usedFastPath = false;
+    if (welcomeSenderId && db.isCacheWarm()) {
+      try {
+        await Promise.all([db.refreshUserFromSql(welcomeSenderId), initPromise]);
+        usedFastPath = true;
+      } catch {
+        usedFastPath = false; // Tek satır sorgusu başarısızsa güvenli yola (tam senkronizasyon) düş
+      }
+    }
+
+    if (!usedFastPath) {
+      await Promise.all([db.syncFromCloud(), initPromise]);
+    }
 
     try {
       const settings = db.getSettings();
       if (settings.botInfo) bot.botInfo = settings.botInfo;
       if (!settings.botInfo && bot.botInfo) {
-        db.updateSettings({ botInfo: bot.botInfo }).catch(() => {});
+        runAfterResponse(() => db.updateSettings({ botInfo: bot.botInfo }));
       }
     } catch (e) {}
 
     // Process update directly via grammY outbound API
     await bot.handleUpdate(body);
 
-    // Arka planda otomatik yedekleme kontrolünü tetikle (non-blocking)
-    db.triggerAutoBackupIfNeeded().catch(() => {});
+    // Cevap döndükten sonra: önbelleği tazele + otomatik yedekleme kontrolü (kullanıcıyı bekletmez)
+    runAfterResponse(async () => {
+      if (usedFastPath) await db.syncFromCloud();
+      await db.triggerAutoBackupIfNeeded();
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

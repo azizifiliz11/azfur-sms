@@ -663,6 +663,31 @@ async function saveToCloudKv(data: DatabaseSchema): Promise<boolean> {
 let memoryDb: DatabaseSchema | null = null;
 let lastCloudSyncTime = 0;
 const CLOUD_SYNC_TTL_MS = 2000; // 2 saniye içinde tekrarlanan sync istekleri belleğe anında cevap verir
+let hasCloudSnapshot = false; // Bu süreçte buluttan (SQL/KV) en az bir kez tam veri çekildi mi?
+let cloudSyncInFlight: Promise<DatabaseSchema> | null = null;
+
+// Disk yazımı yalnızca soğuk başlangıç önbelleğidir; asıl kaynak bellek + SQL'dir.
+// Bu yüzden yazım event loop'u bloke etmeden, birleştirilerek (debounce) ve sıkıştırılmış JSON ile yapılır.
+let pendingDiskData: DatabaseSchema | null = null;
+let diskWriteTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleDiskWrite(data: DatabaseSchema): void {
+  pendingDiskData = data;
+  if (diskWriteTimer) return;
+  diskWriteTimer = setTimeout(() => {
+    diskWriteTimer = null;
+    const snapshot = pendingDiskData;
+    pendingDiskData = null;
+    if (!snapshot) return;
+    try {
+      ensureDbDirectory();
+      fs.promises.writeFile(DB_PATH, JSON.stringify(snapshot), "utf8").catch((err) => {
+        console.error("Error writing db.json:", err);
+      });
+    } catch (err) {
+      console.error("Error writing db.json:", err);
+    }
+  }, 250);
+}
 
 function loadDb(): DatabaseSchema {
   if (memoryDb) {
@@ -761,12 +786,7 @@ function loadDb(): DatabaseSchema {
 async function saveDb(data: DatabaseSchema, syncToCloud: boolean = true): Promise<void> {
   memoryDb = data; // Anında belleği güncelle
   lastCloudSyncTime = Date.now(); // Senkronizasyon zamanını hemen güncelle ki anında gelen istekler belleği ezmesin
-  ensureDbDirectory();
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
-  } catch (err) {
-    console.error("Error writing db.json:", err);
-  }
+  scheduleDiskWrite(data);
   // Çoklu konteyner ve kalıcı bulut senkronizasyonu için Upstash KV ve PostgreSQL'e yaz (AWAIT EDİLİR - Vercel donmasını önler)
   if (syncToCloud) {
     try {
@@ -830,6 +850,58 @@ let isAutoBackupRunning = false;
 let lastAutoBackupCheckTime = 0;
 
 export const db = {
+  /** Bu süreçte buluttan en az bir kez tam veri yüklendiyse true döner (sıcak önbellek). */
+  isCacheWarm(): boolean {
+    return Boolean(memoryDb) && hasCloudSnapshot;
+  },
+
+  /**
+   * Tek bir kullanıcının satırını SQL'den çekip bellekteki kaydı günceller.
+   * Tam senkronizasyon (8 sorgu + tüm tablolar) yerine tek satırlık hızlı sorgudur.
+   * Bakiye / ban gibi kritik alanların /start'ta güncel görünmesini sağlar.
+   */
+  async refreshUserFromSql(telegramId: number | string): Promise<User | null> {
+    const sql = getSql();
+    if (!sql || !memoryDb) return null;
+    const cleanId = String(telegramId).trim();
+    if (!/^\d+$/.test(cleanId)) return null;
+    try {
+      const rows = (await sql`SELECT * FROM users WHERE telegram_id = ${BigInt(cleanId)} LIMIT 1`) as any[];
+      const r = rows[0];
+      if (!r || !memoryDb) return null;
+      if (Array.isArray(memoryDb.settings?.deletedTelegramIds) && memoryDb.settings.deletedTelegramIds.includes(cleanId)) {
+        return null;
+      }
+      const prev = memoryDb.users[cleanId];
+      const user: User = {
+        ...(prev || {}),
+        telegramId: Number(r.telegram_id),
+        username: r.username || "",
+        firstName: r.first_name || "",
+        lastName: r.last_name || "",
+        balance: parseFloat(r.balance) || 0,
+        spent: parseFloat(r.spent) || 0,
+        role: r.role || "user",
+        isBanned: Boolean(r.is_banned),
+        isVip: Boolean(r.is_vip),
+        vipSince: r.vip_since ? new Date(r.vip_since).toISOString() : undefined,
+        vipExpiresAt: r.vip_expires_at ? new Date(r.vip_expires_at).toISOString() : null,
+        vipDiscountPercent: r.vip_discount_percent ? Number(r.vip_discount_percent) : undefined,
+        vipNote: r.vip_note || undefined,
+        activeDiscount: r.active_discount ? (typeof r.active_discount === "string" ? JSON.parse(r.active_discount) : r.active_discount) : undefined,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        lastActiveAt: r.last_active_at ? new Date(r.last_active_at).toISOString() : new Date().toISOString(),
+      };
+      memoryDb.users[cleanId] = user;
+      return user;
+    } catch (err) {
+      console.error("[PostgreSQL refreshUser Error]:", err);
+      // Hata yutulmaz: çağıran taraf tam senkronizasyona düşmeli, aksi halde
+      // mevcut bir kullanıcı yanlışlıkla "yeni" sanılıp 0 bakiyeyle yazılabilir.
+      throw err;
+    }
+  },
+
   async syncFromCloud(force: boolean = false): Promise<DatabaseSchema> {
     const now = Date.now();
     // 2 saniye içinde önbellekte varsa ve force değilse hemen bellekten dön (0ms ağ gecikmesi)
@@ -838,6 +910,22 @@ export const db = {
       return memoryDb;
     }
 
+    // Aynı anda gelen zorunlu olmayan senkronizasyonlar tek bir SQL turunu paylaşır
+    if (!force && cloudSyncInFlight) {
+      return cloudSyncInFlight;
+    }
+
+    const run = this._syncFromCloudImpl(now);
+    if (!force) {
+      cloudSyncInFlight = run;
+      run.finally(() => {
+        if (cloudSyncInFlight === run) cloudSyncInFlight = null;
+      }).catch(() => {});
+    }
+    return run;
+  },
+
+  async _syncFromCloudImpl(now: number): Promise<DatabaseSchema> {
     // 1. Önce PostgreSQL'den oku (Birincil SQL Veritabanı)
     try {
       const sqlData = await syncFromSql();
@@ -882,12 +970,10 @@ export const db = {
 
         memoryDb = sqlData;
         lastCloudSyncTime = now;
+        hasCloudSnapshot = true;
 
-        // Yerel belleğe ve diske de yaz
-        try {
-          ensureDbDirectory();
-          fs.writeFileSync(DB_PATH, JSON.stringify(sqlData, null, 2), "utf8");
-        } catch {}
+        // Diske arka planda (bloklamadan) yaz
+        scheduleDiskWrite(sqlData);
 
         return sqlData;
       }
@@ -1016,12 +1102,10 @@ export const db = {
 
           memoryDb = cloudData;
           lastCloudSyncTime = now;
+          hasCloudSnapshot = true;
 
-          // Yerel belleğe ve diske de yaz
-          try {
-            ensureDbDirectory();
-            fs.writeFileSync(DB_PATH, JSON.stringify(cloudData, null, 2), "utf8");
-          } catch {}
+          // Diske arka planda (bloklamadan) yaz
+          scheduleDiskWrite(cloudData);
 
           this.triggerAutoBackupIfNeeded().catch(() => {});
           return cloudData;

@@ -5,6 +5,7 @@ import { Search, RefreshCw, RotateCcw, Undo2, Loader2, Smartphone } from "lucide
 import { Card } from "../tremor/Card";
 import { Badge } from "../tremor/Badge";
 import { CopyButton } from "@/components/ui/copy-button";
+import { ServiceIcon } from "../ServiceIcon";
 import { haptic } from "@/lib/haptic";
 import { adminApi, fmtDate, tryFmt } from "./api";
 
@@ -15,6 +16,7 @@ interface AdminOrder {
   telegramId: number;
   username: string;
   userFullName: string;
+  serviceCode?: string;
   serviceName: string;
   countryName: string;
   countryFlag: string;
@@ -156,8 +158,11 @@ export function AdminOrdersTab() {
               <Card key={o.id} className="p-3.5 space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {o.countryFlag} {o.serviceName} <span className="text-muted-foreground">· {o.countryName}</span>
+                    <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-foreground">
+                      <ServiceIcon code={o.serviceCode} name={o.serviceName} size="sm" />
+                      <span className="truncate">
+                        {o.countryFlag} {o.serviceName} <span className="text-muted-foreground">· {o.countryName}</span>
+                      </span>
                     </p>
                     <p className="truncate text-[11px] text-muted-foreground">
                       {o.userFullName || "Kullanıcı"}

@@ -7,6 +7,7 @@ import { ActivationOrder } from "@/lib/types";
 import { haptic } from "@/lib/haptic";
 import { Card } from "./tremor/Card";
 import { Badge } from "./tremor/Badge";
+import { ServiceIcon } from "./ServiceIcon";
 
 interface RentMessage {
   from: string;
@@ -216,8 +217,11 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
             >
               {/* Header: Service, Country, Badge */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{order.countryFlag || "🌐"}</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="relative shrink-0">
+                    <ServiceIcon code={order.serviceCode} name={order.serviceName} size="lg" />
+                    <span className="absolute -bottom-1.5 -right-1.5 text-sm leading-none">{order.countryFlag || "🌐"}</span>
+                  </span>
                   <div>
                     <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
                       {order.serviceName}

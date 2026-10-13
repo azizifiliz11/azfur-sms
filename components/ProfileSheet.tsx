@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { Badge } from "./tremor/Badge";
+import { ServiceIcon } from "./ServiceIcon";
 import { CopyButton } from "@/components/ui/copy-button";
 import { RollingNumber } from "@/components/ui/rolling-number";
 import { DirectionAwareTabs } from "@/components/ui/direction-aware-tabs";
@@ -88,6 +89,7 @@ interface ProfileData {
   deposits: Array<{ id: string; amount: number; method: string; status: "PENDING" | "APPROVED" | "REJECTED"; createdAt: string }>;
   orders: Array<{
     id: string;
+    serviceCode?: string;
     serviceName: string;
     countryName: string;
     countryFlag: string;
@@ -634,7 +636,8 @@ export function ProfileSheet({
                             <p className="mb-1.5 text-[11px] text-muted-foreground">Servisler</p>
                             <div className="flex flex-wrap gap-1.5">
                               {favServices.map((code) => (
-                                <span key={code} className="inline-flex h-8 items-center gap-1 rounded-full border border-border pl-3 pr-1 text-xs text-foreground">
+                                <span key={code} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border pl-1.5 pr-1 text-xs text-foreground">
+                                  <ServiceIcon code={code} name={serviceName(code)} size="sm" />
                                   {serviceName(code)}
                                   <button
                                     type="button"
@@ -755,8 +758,11 @@ export function ProfileSheet({
                       return (
                         <li key={o.id} className="rounded-3xl p-3.5 ring-1 ring-foreground/10">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="text-lg leading-none">{o.countryFlag || "🌐"}</span>
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <span className="relative shrink-0">
+                                <ServiceIcon code={o.serviceCode} name={o.serviceName} size="lg" />
+                                <span className="absolute -bottom-1.5 -right-1.5 text-sm leading-none">{o.countryFlag || "🌐"}</span>
+                              </span>
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-foreground">{o.serviceName}</p>
                                 <p className="truncate text-[11px] text-muted-foreground">

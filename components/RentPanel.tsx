@@ -25,6 +25,7 @@ import { FAVORITES_CHANGE_EVENT, getFavoriteCountries, getFavoriteServices } fro
 import { haptic } from "@/lib/haptic";
 import { Card } from "./tremor/Card";
 import { Badge } from "./tremor/Badge";
+import { ServiceIcon } from "./ServiceIcon";
 
 interface RentPanelProps {
   countries: Country[];
@@ -679,8 +680,9 @@ export function RentPanel({
                 >
                   {/* Başlık & Favori Yıldız Butonu */}
                   <div className="flex items-start justify-between gap-1">
-                    <span className="font-medium text-xs text-foreground truncate max-w-[80%]">
-                      {item.serviceName}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <ServiceIcon code={item.serviceCode} name={item.serviceName} size="sm" />
+                      <span className="font-medium text-xs text-foreground truncate">{item.serviceName}</span>
                     </span>
                     <button
                       onClick={(e) => toggleFavoriteService(item.serviceCode, e)}
@@ -754,7 +756,12 @@ export function RentPanel({
         <Card className="p-4 bg-gradient-to-b from-card to-card border-brand/30 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
-              <CountryFlag country={selectedCountry} size="lg" />
+              <span className="relative shrink-0">
+                <ServiceIcon code={selectedServiceCode} name={selectedItem?.serviceName} size="lg" />
+                <span className="absolute -bottom-1 -right-1.5 rounded-[3px] ring-2 ring-card">
+                  <CountryFlag country={selectedCountry} size="sm" />
+                </span>
+              </span>
               <div className="min-w-0">
                 <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5 truncate">
                   <span>{selectedItem?.serviceName || selectedServiceCode.toUpperCase()}</span>
@@ -1029,8 +1036,9 @@ export function RentPanel({
             <div className="p-3.5 rounded-2xl bg-card/90 border border-border space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Servis Platformu:</span>
-                <span className="font-medium text-foreground truncate max-w-[55%]">
-                  {selectedItem.serviceName}
+                <span className="font-medium text-foreground flex items-center gap-1.5 min-w-0 max-w-[55%]">
+                  <ServiceIcon code={selectedItem.serviceCode} name={selectedItem.serviceName} size="sm" />
+                  <span className="truncate">{selectedItem.serviceName}</span>
                 </span>
               </div>
 

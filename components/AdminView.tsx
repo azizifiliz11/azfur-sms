@@ -79,6 +79,7 @@ import { RentPricingCard } from "./admin/RentPricingCard";
 import { fmtAgo } from "./admin/api";
 import { HaloSwitch } from "./ui/halo-switch";
 import { RollingNumber } from "./ui/rolling-number";
+import { ServiceIcon } from "./ServiceIcon";
 
 interface AdminViewProps {
   onBackToApp?: () => void;
@@ -3135,7 +3136,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
                   >
                     {(settingsData?.allServices || []).map((s: any) => (
                       <option key={s.code} value={s.code}>
-                        {s.icon || "📱"} {s.name} ({s.code})
+                        {s.name} ({s.code})
                       </option>
                     ))}
                   </select>
@@ -3248,7 +3249,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-foreground">{rule.countryName || `Ülke ${rule.countryId}`}</span>
                             <span className="text-muted-foreground/60">•</span>
-                            <span className="text-amber-300 font-medium">{rule.serviceName || rule.serviceCode}</span>
+                            <span className="inline-flex items-center gap-1 text-amber-300 font-medium">
+                              <ServiceIcon code={rule.serviceCode} name={rule.serviceName} size="xs" />
+                              {rule.serviceName || rule.serviceCode}
+                            </span>
                           </div>
                           <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                             {rule.fixedPriceTry !== undefined ? (
@@ -6404,6 +6408,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span className="text-base">{a.countryFlag || "🌐"}</span>
+                                <ServiceIcon code={a.serviceCode} name={a.serviceName} size="sm" />
                                 <span className="font-semibold text-xs text-foreground">
                                   {a.serviceName} ({a.countryName})
                                 </span>

@@ -5,6 +5,7 @@ import { RefreshCw, Scale, TrendingUp, BellRing, AlertTriangle, Loader2, EyeOff,
 import { Card } from "../tremor/Card";
 import { Badge } from "../tremor/Badge";
 import { HaloSwitch } from "@/components/ui/halo-switch";
+import { ServiceIcon } from "../ServiceIcon";
 import { haptic } from "@/lib/haptic";
 import { adminApi, fmtDate, tryFmt } from "./api";
 
@@ -35,6 +36,7 @@ interface Summary {
 
 interface ProfitRow {
   key: string;
+  serviceCode?: string;
   serviceName: string;
   countryName: string;
   total: number;
@@ -308,8 +310,11 @@ export function AdminReportsTab() {
                 <li key={r.key} className={`px-3 py-2.5 ${r.hidden ? "opacity-60" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-foreground">
-                        {r.serviceName} <span className="text-muted-foreground">· {r.countryName}</span>
+                      <p className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
+                        <ServiceIcon code={r.serviceCode} name={r.serviceName} size="xs" />
+                        <span className="truncate">
+                          {r.serviceName} <span className="text-muted-foreground">· {r.countryName}</span>
+                        </span>
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {r.total} sipariş · {r.succeeded} başarılı · {r.refunded} iade{r.waiting ? ` · ${r.waiting} bekliyor` : ""}

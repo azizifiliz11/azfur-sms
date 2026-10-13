@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
         })),
         orders: history.orders.map((o) => ({
           id: o.id,
+          serviceCode: o.serviceCode,
           serviceName: o.serviceName || o.serviceCode,
           countryName: o.countryName,
           countryFlag: o.countryFlag,

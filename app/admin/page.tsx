@@ -31,7 +31,7 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, [isReady, tgUser]);
 
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "support";
 
   return (
     <ClientOnly>
@@ -68,7 +68,7 @@ export default function AdminPage() {
               </Link>
             </div>
 
-            <AdminView />
+            <AdminView staffRole={currentUser?.role === "support" ? "support" : "admin"} />
           </div>
         </div>
       )}

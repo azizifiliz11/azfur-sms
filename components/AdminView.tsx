@@ -70,16 +70,25 @@ import { AreaChart, DonutChart } from "./tremor/Charts";
 import { haptic } from "@/lib/haptic";
 import { ThemeToggle } from "./ThemeToggle";
 import { getTelegramInitData } from "@/lib/telegram-fetch";
+import { AdminOrdersTab } from "./admin/AdminOrdersTab";
+import { AdminReportsTab } from "./admin/AdminReportsTab";
+import { AdminAuditTab } from "./admin/AdminAuditTab";
+import { UserLedgerPanel } from "./admin/UserLedgerPanel";
+import { MaintenanceScheduleCard } from "./admin/MaintenanceScheduleCard";
+import { fmtAgo } from "./admin/api";
 import { HaloSwitch } from "./ui/halo-switch";
 import { RollingNumber } from "./ui/rolling-number";
 
 interface AdminViewProps {
   onBackToApp?: () => void;
   onCurrentUserUpdated?: (user: any) => void;
+  /** "support": yalnızca destek talepleri sekmesi (diğer admin API'leri zaten reddeder) */
+  staffRole?: "admin" | "support";
 }
 
-export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups" | "logs">("overview");
+export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admin" }: AdminViewProps) {
+  const isSupportOnly = staffRole === "support";
+  const [activeTab, setActiveTab] = useState<"overview" | "pricing" | "bank" | "users" | "deposits" | "broadcast" | "tickets" | "coupons" | "backups" | "logs" | "orders" | "reports" | "audit">(staffRole === "support" ? "tickets" : "overview");
   const [overview, setOverview] = useState<any>(null);
   const [settingsData, setSettingsData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -150,6 +159,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
   // User management states
   const [userSearchQuery, setUserSearchQuery] = useState<string>("");
+  // Sunucu araması (telefon numarası / TXID ile): eşleşen Telegram ID'leri; null = yerel filtre
+  const [serverSearchIds, setServerSearchIds] = useState<Set<number> | null>(null);
+  const [serverSearching, setServerSearching] = useState<boolean>(false);
+  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "banned" | "balance" | "staff">("all");
   const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
 
   // User detail inspection states (Tüm numaralar, SMS kodları, yüklemeler, detaylar)
@@ -158,7 +171,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const [userActivations, setUserActivations] = useState<any[]>([]);
   const [userDeposits, setUserDeposits] = useState<any[]>([]);
   const [userTickets, setUserTickets] = useState<any[]>([]);
-  const [userDetailTab, setUserDetailTab] = useState<"numbers" | "deposits" | "tickets" | "actions">("numbers");
+  const [userDetailTab, setUserDetailTab] = useState<"numbers" | "deposits" | "tickets" | "ledger" | "actions">("numbers");
   const [copiedDetailText, setCopiedDetailText] = useState<string | null>(null);
 
   // Balance edit modal state
@@ -303,6 +316,15 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   const fetchAllData = async () => {
     setRefreshing(true);
     const headers = getAdminHeaders();
+    if (isSupportOnly) {
+      // Destek görevlisi yalnızca destek taleplerine erişebilir
+      try {
+        const tck = await fetch("/api/admin/tickets", { headers, cache: "no-store" }).then((r) => r.json());
+        if (tck.success) setTickets(tck.tickets || []);
+      } catch {}
+      setRefreshing(false);
+      return;
+    }
     try {
       const [ovRes, setRes, uRes, depRes, tckRes, cpnRes, bkpRes] = await Promise.all([
         fetch("/api/admin/overview", { headers, cache: "no-store" }),
@@ -2029,13 +2051,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   };
 
   // Admin Rolü Ver / Kaldır
-  const handleToggleRole = async (user: any) => {
-    const nextRole = user.role === "admin" ? "user" : "admin";
+  const handleToggleRole = async (user: any, targetRole?: "admin" | "support" | "user") => {
+    const nextRole = targetRole ?? (user.role === "admin" ? "user" : "admin");
+    const name = user.firstName || user.telegramId;
     if (
       !confirm(
         nextRole === "admin"
-          ? `${user.firstName || user.telegramId} kullanıcısına YÖNETİCİ (Admin) yetkisi vermek istediğinize emin misiniz?`
-          : `${user.firstName || user.telegramId} kullanıcısının admin yetkisini geri almak istediğinize emin misiniz?`
+          ? `${name} kullanıcısına YÖNETİCİ (Admin) yetkisi vermek istediğinize emin misiniz?`
+          : nextRole === "support"
+          ? `${name} kullanıcısı DESTEK GÖREVLİSİ yapılsın mı? Yalnızca destek taleplerini görüp yanıtlayabilir; bakiye, ayar ve kullanıcılara erişemez.`
+          : `${name} kullanıcısının yönetici/destek yetkisini geri almak istediğinize emin misiniz?`
       )
     ) {
       return;
@@ -2158,15 +2183,39 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       list = list.filter((u) => !u.isVip);
     }
 
+    if (userRoleFilter === "banned") list = list.filter((u) => u.isBanned);
+    else if (userRoleFilter === "balance") list = list.filter((u) => Number(u.balance) > 0);
+    else if (userRoleFilter === "staff") list = list.filter((u) => u.role === "admin" || u.role === "support");
+
+    if (serverSearchIds) return list.filter((u) => serverSearchIds.has(Number(u.telegramId)));
     if (!userSearchQuery.trim()) return list;
-    const q = userSearchQuery.toLowerCase();
+    const q = userSearchQuery.toLowerCase().replace(/^@/, "");
     return list.filter(
       (u) =>
         (u.firstName && u.firstName.toLowerCase().includes(q)) ||
+        (u.lastName && u.lastName.toLowerCase().includes(q)) ||
         (u.username && u.username.toLowerCase().includes(q)) ||
         String(u.telegramId).includes(q)
     );
-  }, [users, userSearchQuery, userVipFilter]);
+  }, [users, userSearchQuery, userVipFilter, userRoleFilter, serverSearchIds]);
+
+  // Sunucuda ara: telefon numarası (aldığı numaralar) ve TXID (ödemeler) dahil
+  const runServerUserSearch = async () => {
+    const q = userSearchQuery.trim();
+    if (!q) {
+      setServerSearchIds(null);
+      return;
+    }
+    setServerSearching(true);
+    try {
+      const res = await fetch(`/api/admin/users?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success) setServerSearchIds(new Set((data.users || []).map((u: any) => Number(u.telegramId))));
+    } catch {
+    } finally {
+      setServerSearching(false);
+    }
+  };
 
   // Filtrelenmiş Sistem Logları Listesi
   const filteredLogs = useMemo(() => {
@@ -2378,7 +2427,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
       )}
 
       {/* Admin Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-10 gap-1 bg-background/70 p-1.5 rounded-3xl ring-1 ring-foreground/10 backdrop-blur-xl text-xs font-medium">
+      {isSupportOnly && (
+        <div className="rounded-3xl bg-background/70 p-3.5 text-xs text-muted-foreground ring-1 ring-foreground/10">
+          Destek görevlisi olarak yalnızca destek taleplerini görüntüleyip yanıtlayabilirsiniz.
+        </div>
+      )}
+      <div className={`grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 gap-1 bg-background/70 p-1.5 rounded-3xl ring-1 ring-foreground/10 backdrop-blur-xl text-xs font-medium ${isSupportOnly ? "hidden" : ""}`}>
         <button
           onClick={() => {
             haptic.selection();
@@ -2514,11 +2568,37 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           <FileText className="w-3.5 h-3.5 shrink-0" />
           <span>Loglar</span>
         </button>
+        {(
+          [
+            { id: "orders", label: "Siparişler" },
+            { id: "reports", label: "Raporlar" },
+            { id: "audit", label: "İşlem Kaydı" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => {
+              haptic.selection();
+              setActiveTab(t.id);
+            }}
+            className={`py-2 px-1 rounded-full transition-all text-center ${
+              activeTab === t.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {/* Yeni sekmeler (components/admin/) */}
+      {activeTab === "orders" && <AdminOrdersTab />}
+      {activeTab === "reports" && <AdminReportsTab />}
+      {activeTab === "audit" && <AdminAuditTab />}
 
       {/* TAB 1: OVERVIEW & METRICS */}
       {activeTab === "overview" && (
         <div className="space-y-4">
+          <MaintenanceScheduleCard />
           {/* SİSTEM BAKIM DURUMU & ANINDA MESAJ DÜZENLEMELİ BAKIMA ALMA KARTI */}
           <div
             className={`p-4 rounded-2xl border transition-all duration-300 ${
@@ -4089,11 +4169,53 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
             <Search className="w-4 h-4 text-muted-foreground/80 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="İsim, kullanıcı adı (@) veya Telegram ID ara..."
+              placeholder="İsim, @kullanıcı adı, Telegram ID, telefon numarası veya TXID"
               value={userSearchQuery}
-              onChange={(e) => setUserSearchQuery(e.target.value)}
-              className="w-full bg-card/90 border border-border rounded-xl pl-9 pr-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
+              onChange={(e) => {
+                setUserSearchQuery(e.target.value);
+                setServerSearchIds(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") runServerUserSearch();
+              }}
+              className="w-full bg-card/90 border border-border rounded-full pl-9 pr-24 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
             />
+            <button
+              type="button"
+              onClick={runServerUserSearch}
+              disabled={serverSearching || !userSearchQuery.trim()}
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 rounded-full bg-foreground px-3 text-[11px] font-medium text-background disabled:opacity-40"
+            >
+              {serverSearching ? "Aranıyor…" : "Derin ara"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: "all", label: "Hepsi" },
+              { id: "balance", label: "Bakiyesi olan" },
+              { id: "banned", label: "Banlı" },
+              { id: "staff", label: "Yönetici / destek" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setUserRoleFilter(f.id as any)}
+                className={`h-7 rounded-full px-3 text-[11px] font-medium ${
+                  userRoleFilter === f.id ? "bg-foreground text-background" : "border border-border text-muted-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+            {serverSearchIds && (
+              <button
+                type="button"
+                onClick={() => setServerSearchIds(null)}
+                className="h-7 rounded-full border border-brand/40 px-3 text-[11px] text-brand"
+              >
+                Derin arama: {serverSearchIds.size} sonuç ✕
+              </button>
+            )}
           </div>
 
           {filteredUsers.length === 0 ? (
@@ -4244,6 +4366,22 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                         <span>{u.role === "admin" ? "Adminliği Al" : "Admin"}</span>
                       </button>
 
+                      {/* Destek görevlisi (yalnızca destek talepleri) */}
+                      {u.role !== "admin" && (
+                        <button
+                          onClick={() => handleToggleRole(u, u.role === "support" ? "user" : "support")}
+                          disabled={isActionLoading}
+                          className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all ${
+                            u.role === "support"
+                              ? "bg-foreground/10 hover:bg-foreground/15 border-foreground/20 text-foreground"
+                              : "bg-muted hover:bg-input border-border text-foreground/80"
+                          }`}
+                        >
+                          <Headphones className="w-3.5 h-3.5" />
+                          <span>{u.role === "support" ? "Desteği Al" : "Destek"}</span>
+                        </button>
+                      )}
+
                       {/* VIP Üyelik Durumu (Ver / Düzenle / Kaldır) */}
                       <button
                         onClick={() => {
@@ -4359,7 +4497,30 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   </div>
 
                   {dep.status === "PENDING" && (
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-border">
+                      {/^(APR|OXA)-/.test(dep.referenceCode || "") && (
+                        <button
+                          onClick={async () => {
+                            haptic.impact("light");
+                            try {
+                              const res = await fetch("/api/admin/deposits", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ action: "check_provider", depositId: dep.id }),
+                              });
+                              const data = await res.json();
+                              setToastMsg(data.success ? data.message : data.error || "Kontrol edilemedi");
+                              setTimeout(() => setToastMsg(null), 4500);
+                              if (data.approved) fetchAllData();
+                            } catch {
+                              setToastMsg("Kontrol edilemedi");
+                            }
+                          }}
+                          className="px-3 py-1 rounded-lg border border-border text-foreground text-xs font-medium hover:bg-muted"
+                        >
+                          Sağlayıcıdan kontrol et
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDepositAction(dep.id, "REJECTED")}
                         className="px-3 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-xs font-medium hover:bg-rose-500/25"
@@ -4693,13 +4854,18 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
 
                       {/* Card Action Buttons */}
                       <div className="flex items-center justify-between pt-1 border-t border-border text-xs">
-                        <span className="text-[10px] text-muted-foreground/80">
+                        <span className="flex flex-col text-[10px] text-muted-foreground/80">
                           {new Date(t.updatedAt).toLocaleString("tr-TR", {
                             day: "2-digit",
                             month: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
+                          {t.status === "OPEN" && t.messages[t.messages.length - 1]?.sender === "user" && (
+                            <span className="font-medium text-amber-400">
+                              Yanıt bekliyor: {fmtAgo(t.messages[t.messages.length - 1]?.createdAt || t.updatedAt)}
+                            </span>
+                          )}
                         </span>
 
                         <div className="flex items-center gap-2">
@@ -4851,6 +5017,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   "✅ Bakiyeniz hesabınıza eklenmiştir. Kontrol edebilirsiniz.",
                   "⏳ İşleminiz inceleniyor, lütfen biraz bekleyiniz.",
                   "❌ Belirtilen ödeme kaydı bulunamadı. Lütfen dekont veya TxID iletiniz.",
+                  "↩️ Siparişinizin ücreti bakiyenize iade edilmiştir. Farklı bir ülke/servis deneyebilirsiniz.",
+                  "📱 Kod gelmediyse 'İptal Et & İade Al' butonuna basın; ücret anında iade edilir. (Numara alındıktan sonraki ilk 2 dakika iptal edilemez.)",
+                  "💳 Kripto ödemeniz ağ onayı bekliyor; onaylandığında bakiyeniz otomatik yüklenir ve bildirim alırsınız.",
+                  "🙏 Yaşadığınız sorun için özür dileriz, hesabınızı kontrol edip düzelttik.",
                 ].map((tpl) => (
                   <button
                     key={tpl}
@@ -6146,6 +6316,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
               >
                 ⚡ Yönetici İşlemleri
               </button>
+              <button
+                onClick={() => setUserDetailTab("ledger")}
+                className={`py-1.5 px-3 rounded-lg shrink-0 transition-all ${
+                  userDetailTab === "ledger"
+                    ? "bg-foreground/10 text-foreground border border-foreground/15 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                🧾 Bakiye Hareketleri
+              </button>
             </div>
 
             {/* Sekme İçerikleri */}
@@ -6157,6 +6337,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                 </div>
               ) : (
                 <>
+                  {userDetailTab === "ledger" && selectedUserDetail && (
+                    <UserLedgerPanel telegramId={Number(selectedUserDetail.telegramId)} />
+                  )}
+
                   {/* 1. NUMARALAR & KODLAR SEKMESİ */}
                   {userDetailTab === "numbers" && (
                     <div className="space-y-2">

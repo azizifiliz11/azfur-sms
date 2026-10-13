@@ -352,6 +352,8 @@ function HomeContent() {
   }
 
   const isAdmin = Boolean(currentUser?.role === "admin" || isUserAdmin);
+  // Destek görevlisi: panelde yalnızca destek talepleri
+  const isSupportStaff = !isAdmin && currentUser?.role === "support";
 
   // SİSTEM BAKIM MODUNDA İKEN NORMAL KULLANICILARA SAMİMİ BAKIM EKRANI
   if (maintenanceMode && !isAdmin) {
@@ -495,7 +497,7 @@ function HomeContent() {
           onOpenSupport={() => setSupportModalOpen(true)}
           onOpenProfile={() => setProfileOpen(true)}
           onRefreshBalance={handleRefreshAll}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin || isSupportStaff}
           onToggleAdminView={() => setAdminViewActive(true)}
           adminViewActive={false}
         />
@@ -504,6 +506,7 @@ function HomeContent() {
       <main className="flex-1 w-full max-w-md mx-auto p-4 space-y-5">
         {adminViewActive ? (
           <AdminView
+            staffRole={isAdmin ? "admin" : "support"}
             onBackToApp={() => {
               setAdminViewActive(false);
               handleRefreshAll();

@@ -16,6 +16,8 @@ import { Country, ServiceItem, CalculatedCatalogItem, ActivationOrder } from "@/
 import { APP_BUILD_VERSION } from "@/lib/app-version";
 import { Shield, Zap, Headphones, Gift, Ticket, ShieldAlert, Wrench, RotateCcw, Send } from "lucide-react";
 
+const PENDING_ORDER_GRACE_MS = 30000;
+
 function HomeContent() {
   const { isReady, user: tgUser, initData } = useTelegram();
 
@@ -40,6 +42,11 @@ function HomeContent() {
   const activeCountryIdRef = React.useRef<number>(62);
   const catalogCacheRef = React.useRef<Record<number, CalculatedCatalogItem[]>>({});
   const hasInitialized = React.useRef<boolean>(false);
+  // Aktif sipariş yoklaması: geç dönen eski yanıt yenisini ezmesin
+  const activeOrdersSeqRef = React.useRef<number>(0);
+  const activeOrdersAppliedRef = React.useRef<number>(0);
+  // Yeni satın alınan siparişler: sunucu listesinde görünene kadar (en fazla 30 sn) ekranda tutulur
+  const pendingOrdersRef = React.useRef<Record<string, { order: ActivationOrder; addedAt: number }>>({});
 
   // Telegram ve mobil WebView önbelleğini zorunlu yenileme (Eski tasarımı anında ezer)
   useEffect(() => {
@@ -139,11 +146,23 @@ function HomeContent() {
   // 3. Aktif Siparişleri Getir
   const fetchActiveOrders = useCallback(async () => {
     if (!tgUser) return;
+    const seq = ++activeOrdersSeqRef.current;
     try {
       const res = await fetch(`/api/sms/active?telegramId=${tgUser.id}`, { cache: "no-store" });
       const data = await res.json();
-      if (data.success) {
-        setActiveOrders(data.orders || []);
+      if (data.success && seq > activeOrdersAppliedRef.current) {
+        activeOrdersAppliedRef.current = seq;
+        const serverOrders: ActivationOrder[] = data.orders || [];
+        const serverIds = new Set(serverOrders.map((o) => o.id));
+        const now = Date.now();
+        const pending: ActivationOrder[] = [];
+        for (const [id, p] of Object.entries(pendingOrdersRef.current)) {
+          if (serverIds.has(id) || now - p.addedAt > PENDING_ORDER_GRACE_MS) delete pendingOrdersRef.current[id];
+          else pending.push(p.order);
+        }
+        const next = [...pending, ...serverOrders];
+        // Aynı içerikte yeni dizi yazılmaz: aktif numaralar kartı ve yoklamaları her 3 sn'de sıfırlanmasın
+        setActiveOrders((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
       }
     } catch (e) {
       console.error("Fetch active orders error:", e);
@@ -245,7 +264,8 @@ function HomeContent() {
   };
 
   const handleOrderSuccess = (newOrder: ActivationOrder) => {
-    setActiveOrders((prev) => [newOrder, ...prev]);
+    pendingOrdersRef.current[newOrder.id] = { order: newOrder, addedAt: Date.now() };
+    setActiveOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
     initUser();
   };
 

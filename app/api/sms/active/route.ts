@@ -12,6 +12,11 @@ export async function GET(req: NextRequest) {
     const auth = requireTelegramUser(req, undefined, searchParams.get("telegramId"));
     if (!auth.ok) return auth.response;
 
+    // Sipariş başka bir sunucusuz örnekte oluşturulmuş olabilir: bellek eşitlenmeden okunursa
+    // yeni numara listede bir görünüp bir kaybolur.
+    if (!(await db.refreshUserActivationsFromSql(auth.id))) {
+      await db.syncFromCloud();
+    }
     const orders = db.getActiveOrders(auth.id);
 
     return NextResponse.json(

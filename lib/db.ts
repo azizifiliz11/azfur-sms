@@ -2076,6 +2076,45 @@ export const db = {
     return all.sort((a, b) => b.createdAt - a.createdAt);
   },
 
+  /**
+   * Kullanıcının aktif (ve bellekte aktif görünen) siparişlerini PostgreSQL'den belleğe tazeler.
+   * Sipariş başka bir sunucusuz örnekte oluşturulmuş/kapanmış olabilir; tam senkronizasyon yerine
+   * yalnızca bu kullanıcının satırları okunur. SQL yoksa veya okuma başarısızsa false döner.
+   */
+  async refreshUserActivationsFromSql(telegramId: number | string): Promise<boolean> {
+    const sql = getSql();
+    if (!sql) return false;
+    const cleanId = String(telegramId).trim();
+    if (!/^\d+$/.test(cleanId)) return false;
+    const data = loadDb();
+    const key = Number(cleanId);
+    const memActiveIds = Object.values(data.activations)
+      .filter((a) => a.telegramId === key && (a.status === "WAIT_CODE" || a.status === "RECEIVED"))
+      .map((a) => a.id);
+    try {
+      const rows = (await sql`
+        SELECT * FROM activations
+        WHERE telegram_id = ${BigInt(cleanId)}
+          AND (status IN ('WAIT_CODE', 'RECEIVED') OR id = ANY(${memActiveIds}))
+        ORDER BY created_at DESC
+        LIMIT 100
+      `) as any[];
+      // Aynı örnekte SQL yazımı sürerken okunan eski satır, bellekteki ilerlemiş durumu geri almasın
+      const rank = (s: ActivationOrder["status"]) => (s === "WAIT_CODE" ? 0 : s === "RECEIVED" ? 1 : 2);
+      for (const r of rows) {
+        const fresh = parseActivationRow(r);
+        const prev = data.activations[fresh.id];
+        if (prev && rank(prev.status) > rank(fresh.status)) continue;
+        // kind/rentHours SQL'de tutulmuyor; bellekte varsa korunur
+        data.activations[fresh.id] = { ...(prev || {}), ...fresh };
+      }
+      return true;
+    } catch (err) {
+      console.error("[PostgreSQL refreshUserActivations Error]:", err);
+      return false;
+    }
+  },
+
   getAllActivations(): ActivationOrder[] {
     const data = loadDb();
     return Object.values(data.activations).sort((a, b) => b.createdAt - a.createdAt);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Check, XCircle, CheckCircle2, Clock, Smartphone, BellRing } from "lucide-react";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ActivationOrder } from "@/lib/types";
@@ -44,23 +44,45 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
     return () => clearInterval(timer);
   }, []);
 
+  // Yoklamalar sipariş kimliklerine bağlıdır; liste her yenilendiğinde aralıklar sıfırlanmasın diye
+  // güncel siparişler ve geri çağırma ref üzerinden okunur.
+  const ordersRef = useRef(orders);
+  const onOrderUpdatedRef = useRef(onOrderUpdated);
+  useEffect(() => {
+    ordersRef.current = orders;
+    onOrderUpdatedRef.current = onOrderUpdated;
+  }, [orders, onOrderUpdated]);
+
+  const rentKey = orders
+    .filter((o) => isRent(o) && (o.status === "WAIT_CODE" || o.status === "RECEIVED"))
+    .map((o) => o.id)
+    .join(",");
+  const waitingKey = orders
+    .filter((o) => o.status === "WAIT_CODE" && !isRent(o))
+    .map((o) => o.id)
+    .join(",");
+
   // Kiralık numaralar: süre boyunca yeni SMS gelebilir; tüm SMS'ler 8 sn'de bir yenilenir
   useEffect(() => {
-    const rentOrders = orders.filter((o) => isRent(o) && (o.status === "WAIT_CODE" || o.status === "RECEIVED"));
-    if (rentOrders.length === 0) return;
+    if (!rentKey) return;
+    const ids = rentKey.split(",");
     let stopped = false;
+    let busy = false;
     const poll = async () => {
+      if (busy) return;
+      busy = true;
       let anyChanged = false;
-      for (const order of rentOrders) {
+      for (const id of ids) {
         try {
-          const res = await fetch(`/api/sms/status?id=${order.id}`);
+          const res = await fetch(`/api/sms/status?id=${id}`);
           const data = await res.json();
           if (stopped || !data.success) continue;
           if (Array.isArray(data.rentMessages)) {
-            setRentMessages((prev) => ({ ...prev, [order.id]: data.rentMessages }));
+            setRentMessages((prev) => ({ ...prev, [id]: data.rentMessages }));
           }
+          const order = ordersRef.current.find((o) => o.id === id);
           const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
-          if (!same(data.order?.status, order.status) || !same(data.order?.smsText, order.smsText) || !same(data.order?.smsCode, order.smsCode)) {
+          if (order && (!same(data.order?.status, order.status) || !same(data.order?.smsText, order.smsText) || !same(data.order?.smsCode, order.smsCode))) {
             if (data.order?.status === "RECEIVED") haptic.success();
             anyChanged = true;
           }
@@ -68,7 +90,8 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
           // ignore
         }
       }
-      if (anyChanged && !stopped) onOrderUpdated();
+      busy = false;
+      if (anyChanged && !stopped) onOrderUpdatedRef.current();
     };
     poll();
     const interval = setInterval(poll, 8000);
@@ -76,19 +99,23 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
       stopped = true;
       clearInterval(interval);
     };
-  }, [orders, onOrderUpdated]);
+  }, [rentKey]);
 
   // Poll status for active orders every 3.5 seconds
   useEffect(() => {
-    const waitingOrders = orders.filter((o) => o.status === "WAIT_CODE" && !isRent(o));
-    if (waitingOrders.length === 0) return;
+    if (!waitingKey) return;
+    const ids = waitingKey.split(",");
+    let stopped = false;
+    let busy = false;
 
     const interval = setInterval(async () => {
+      if (busy) return;
+      busy = true;
       let anyChanged = false;
 
-      for (const order of waitingOrders) {
+      for (const id of ids) {
         try {
-          const res = await fetch(`/api/sms/status?id=${order.id}`);
+          const res = await fetch(`/api/sms/status?id=${id}`);
           const data = await res.json();
           if (data.success && data.order?.status === "RECEIVED") {
             haptic.success();
@@ -102,13 +129,17 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
         }
       }
 
-      if (anyChanged) {
-        onOrderUpdated();
+      busy = false;
+      if (anyChanged && !stopped) {
+        onOrderUpdatedRef.current();
       }
     }, 3500);
 
-    return () => clearInterval(interval);
-  }, [orders, onOrderUpdated]);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [waitingKey]);
 
   const handleCancel = async (id: string, rent = false) => {
     const question = rent

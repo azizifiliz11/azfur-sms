@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Ticket, TicketCategory } from "@/lib/types";
 import { haptic } from "@/lib/haptic";
+import { appAlert, appConfirm } from "@/lib/app-dialog";
 
 interface SupportModalProps {
   isOpen: boolean;
@@ -97,7 +98,7 @@ export function SupportModal({
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim() || !message.trim()) {
-      alert("Lütfen konu ve mesaj alanlarını doldurunuz.");
+      appAlert("Lütfen konu ve mesaj alanlarını doldurunuz.");
       return;
     }
 
@@ -135,11 +136,11 @@ export function SupportModal({
         }
       } else {
         haptic.error();
-        alert(data.error || "Talep oluşturulamadı");
+        appAlert(data.error || "Talep oluşturulamadı");
       }
     } catch {
       haptic.error();
-      alert("Bağlantı hatası oluştu");
+      appAlert("Bağlantı hatası oluştu");
     } finally {
       setCreating(false);
     }
@@ -173,11 +174,11 @@ export function SupportModal({
         showToast("Yanıtınız iletildi!");
       } else {
         haptic.error();
-        alert(data.error || "Yanıt gönderilemedi");
+        appAlert(data.error || "Yanıt gönderilemedi");
       }
     } catch {
       haptic.error();
-      alert("Bağlantı hatası");
+      appAlert("Bağlantı hatası");
     } finally {
       setReplying(false);
     }
@@ -185,7 +186,7 @@ export function SupportModal({
 
   const handleCloseTicket = async () => {
     if (!selectedTicket) return;
-    if (!confirm("Bu destek talebini kapatmak istediğinize emin misiniz?")) return;
+    if (!await appConfirm("Bu destek talebini kapatmak istediğinize emin misiniz?")) return;
 
     haptic.impact("light");
     try {

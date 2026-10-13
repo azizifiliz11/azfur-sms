@@ -7,6 +7,7 @@ import { Badge } from "../tremor/Badge";
 import { HaloSwitch } from "@/components/ui/halo-switch";
 import { ServiceIcon } from "../ServiceIcon";
 import { haptic } from "@/lib/haptic";
+import { appConfirm } from "@/lib/app-dialog";
 import { adminApi, fmtDate, tryFmt } from "./api";
 
 interface Reconciliation {
@@ -149,7 +150,7 @@ export function AdminReportsTab() {
 
   const togglePair = async (row: ProfitRow) => {
     const hide = !row.hidden;
-    if (hide && !confirm(`${row.serviceName} · ${row.countryName} satışa kapatılsın mı? Kullanıcılar bu kombinasyonu göremez.`)) return;
+    if (hide && !await appConfirm(`${row.serviceName} · ${row.countryName} satışa kapatılsın mı? Kullanıcılar bu kombinasyonu göremez.`)) return;
     haptic.impact("light");
     const d = await adminApi("/api/admin/settings", { action: "toggle_pair", pair: row.key, hidden: hide });
     if (d.success) {

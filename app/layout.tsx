@@ -3,6 +3,7 @@ import { Inter, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { themeInitScript } from "@/lib/theme";
+import { AppDialogHost } from "@/components/AppDialogHost";
 
 // Axis şablonunun yazı tipi
 const inter = Inter({
@@ -96,6 +97,7 @@ export default function RootLayout({
         />
         <div aria-hidden="true" className="axis-orb" />
         <div className="relative z-[1] flex min-h-screen flex-col">{children}</div>
+        <AppDialogHost />
       </body>
     </html>
   );

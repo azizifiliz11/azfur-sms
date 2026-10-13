@@ -5,6 +5,7 @@ import { Check, XCircle, CheckCircle2, Clock, Smartphone, BellRing } from "lucid
 import { CopyButton } from "@/components/ui/copy-button";
 import { ActivationOrder } from "@/lib/types";
 import { haptic } from "@/lib/haptic";
+import { appAlert, appConfirm } from "@/lib/app-dialog";
 import { Card } from "./tremor/Card";
 import { Badge } from "./tremor/Badge";
 import { ServiceIcon } from "./ServiceIcon";
@@ -22,14 +23,18 @@ function isRent(order: ActivationOrder): boolean {
 }
 
 const RENT_FREE_CANCEL_MS = 20 * 60 * 1000;
+/** Hero-SMS: SMS aktivasyonu numara alındıktan sonraki ilk 2 dakika iptal edilemez */
+const EARLY_CANCEL_MS = 2 * 60 * 1000;
 
 interface ActiveNumbersProps {
   orders: ActivationOrder[];
   onOrderUpdated: () => void;
+  /** İptal sürerken sipariş listede tutulsun (sunucu kısa süre CANCELLED gösterebilir) */
+  onCancelPending?: (id: string, pending: boolean) => void;
   telegramId: number;
 }
 
-export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumbersProps) {
+export function ActiveNumbers({ orders, onOrderUpdated, onCancelPending, telegramId }: ActiveNumbersProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [now, setNow] = useState<number>(Date.now());
@@ -145,11 +150,12 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
     const question = rent
       ? "Kiralamayı iptal etmek ve ödediğiniz tutarın tamamını bakiyenize iade almak istiyor musunuz? Numara elinizden çıkar."
       : "Numarayı iptal etmek ve ödediğiniz tutarı bakiyenize iade almak istiyor musunuz?";
-    if (!confirm(question)) {
+    if (!(await appConfirm(question, { title: rent ? "Kiralamayı iptal et" : "Numarayı iptal et", confirmText: "İptal Et", cancelText: "Vazgeç", destructive: true }))) {
       return;
     }
 
     setCancellingId(id);
+    onCancelPending?.(id, true);
     haptic.impact("medium");
 
     try {
@@ -164,14 +170,17 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
         }),
       });
       const data = await res.json();
+      onCancelPending?.(id, false);
       if (data.success) {
         haptic.success();
         onOrderUpdated();
+        appAlert(data.message || "Numara iptal edildi ve ücret bakiyenize iade edildi.", { tone: "success", title: "İptal edildi" });
       } else {
-        alert(data.error || "İptal edilemedi");
+        appAlert(data.error || "İptal edilemedi", { tone: "warning", title: "İptal edilemedi" });
       }
     } catch (e) {
-      alert("Hata oluştu");
+      onCancelPending?.(id, false);
+      appAlert("Bağlantı hatası oluştu, lütfen tekrar deneyin.", { tone: "error" });
     } finally {
       setCancellingId(null);
     }
@@ -193,7 +202,7 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
         onOrderUpdated();
       }
     } catch (e) {
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setCompletingId(null);
     }
@@ -236,6 +245,7 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
           const msgs = rentMessages[order.id] || [];
           const rentCancelLeftMs = rent ? Math.max(0, order.createdAt + RENT_FREE_CANCEL_MS - now) : 0;
           const canCancel = !isReceived && !isCancelled && !isCompleted && (!rent || rentCancelLeftMs > 0);
+          const earlyCancelLeftMs = rent ? 0 : Math.max(0, order.createdAt + EARLY_CANCEL_MS - now);
 
           return (
             <Card
@@ -396,11 +406,14 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
                   {canCancel && (
                     <button
                       onClick={() => handleCancel(order.id, rent)}
-                      disabled={cancellingId === order.id}
-                      className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-medium text-xs active:scale-95 transition-all"
+                      disabled={cancellingId === order.id || earlyCancelLeftMs > 0}
+                      title={earlyCancelLeftMs > 0 ? "Numara alındıktan sonraki ilk 2 dakika iptal edilemez" : undefined}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-medium text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                     >
                       {cancellingId === order.id
                         ? "İptal Ediliyor..."
+                        : earlyCancelLeftMs > 0
+                        ? `İptal ${formatRemaining(order.createdAt + EARLY_CANCEL_MS)} sonra`
                         : rent
                         ? `İptal & İade (${formatRemaining(order.createdAt + RENT_FREE_CANCEL_MS)})`
                         : "İptal Et & İade Al"}

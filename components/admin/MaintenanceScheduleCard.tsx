@@ -5,6 +5,7 @@ import { CalendarClock, X } from "lucide-react";
 import { Card } from "../tremor/Card";
 import { HaloSwitch } from "@/components/ui/halo-switch";
 import { haptic } from "@/lib/haptic";
+import { appConfirm } from "@/lib/app-dialog";
 import { adminApi, fmtDate } from "./api";
 
 interface Plan {
@@ -62,7 +63,7 @@ export function MaintenanceScheduleCard() {
   };
 
   const cancel = async () => {
-    if (!confirm("Bakım planı iptal edilsin mi?")) return;
+    if (!await appConfirm("Bakım planı iptal edilsin mi?")) return;
     setBusy(true);
     const d = await adminApi("/api/admin/settings", { action: "cancel_maintenance_schedule" });
     setBusy(false);

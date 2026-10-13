@@ -11,6 +11,9 @@ export function isRentOrder(order: Pick<ActivationOrder, "kind" | "serviceCode" 
 /** Hero-SMS kuralı: kiralama yalnızca hiç SMS gelmediyse ve ilk 20 dakika içinde iptal (iade) edilebilir. */
 export const RENT_FREE_CANCEL_MS = 20 * 60 * 1000;
 
+/** Hero-SMS kuralı: SMS aktivasyonu numara alındıktan sonraki ilk 2 dakika iptal edilemez (EARLY_CANCEL_DENIED). */
+export const EARLY_CANCEL_MS = 2 * 60 * 1000;
+
 /** Siparişi sağlayıcıda kapatır: SMS aktivasyonu için status=6, kiralama için finishActivation. */
 export async function finishOrderAtProvider(order: ActivationOrder): Promise<void> {
   if (isRentOrder(order)) await heroSms.finishActivation(order.id).catch(() => null);
@@ -56,6 +59,18 @@ export async function cancelOrderWithRefund(orderId: string, requesterId: number
     return { ok: false, status: 409, error: CANCEL_BLOCKED_MESSAGES[order.status] || "Bu sipariş iptal edilemez." };
   }
   const rent = isRentOrder(order);
+  // Sağlayıcının reddedeceği erken iptal, sipariş kilitlenmeden reddedilir: aksi halde durum kısa süre
+  // CANCELLED görünür ve Mini App'te numara listeden kaybolup geri gelir.
+  const earlyLeftMs = order.createdAt + EARLY_CANCEL_MS - Date.now();
+  if (!rent && earlyLeftMs > 0) {
+    const sec = Math.ceil(earlyLeftMs / 1000);
+    const left = sec >= 60 ? `${Math.floor(sec / 60)} dk ${sec % 60} sn` : `${sec} sn`;
+    return {
+      ok: false,
+      status: 409,
+      error: `Numara alındıktan sonraki ilk 2 dakika içinde iptal edilemiyor. ${left} sonra tekrar deneyebilirsiniz.`,
+    };
+  }
   if (rent && Date.now() - order.createdAt >= RENT_FREE_CANCEL_MS) {
     return {
       ok: false,

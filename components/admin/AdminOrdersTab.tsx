@@ -7,6 +7,7 @@ import { Badge } from "../tremor/Badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ServiceIcon } from "../ServiceIcon";
 import { haptic } from "@/lib/haptic";
+import { appConfirm, appPrompt } from "@/lib/app-dialog";
 import { adminApi, fmtDate, tryFmt } from "./api";
 
 type Filter = "waiting" | "received" | "completed" | "refunded" | "all";
@@ -67,9 +68,9 @@ export function AdminOrdersTab() {
 
   const act = async (order: AdminOrder, action: "sync" | "cancel_refund" | "manual_refund") => {
     let reason = "";
-    if (action === "cancel_refund" && !confirm(`${order.phoneNumber} numaralı sipariş sağlayıcıda iptal edilip ₺${order.chargedPrice.toFixed(2)} iade edilsin mi?`)) return;
+    if (action === "cancel_refund" && !await appConfirm(`${order.phoneNumber} numaralı sipariş sağlayıcıda iptal edilip ₺${order.chargedPrice.toFixed(2)} iade edilsin mi?`)) return;
     if (action === "manual_refund") {
-      const r = prompt(`Kodu gelmiş siparişe ₺${order.chargedPrice.toFixed(2)} elle iade edilecek. Kullanıcıya gidecek açıklama (isteğe bağlı):`, "");
+      const r = await appPrompt(`Kodu gelmiş siparişe ₺${order.chargedPrice.toFixed(2)} elle iade edilecek. Kullanıcıya gidecek açıklama (isteğe bağlı):`, "");
       if (r === null) return;
       reason = r;
     }

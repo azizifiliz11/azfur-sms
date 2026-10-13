@@ -68,6 +68,7 @@ import { Badge } from "./tremor/Badge";
 import { Callout, ProgressBar } from "./tremor/Callout";
 import { AreaChart, DonutChart } from "./tremor/Charts";
 import { haptic } from "@/lib/haptic";
+import { appAlert, appConfirm } from "@/lib/app-dialog";
 import { ThemeToggle } from "./ThemeToggle";
 import { getTelegramInitData } from "@/lib/telegram-fetch";
 import { AdminOrdersTab } from "./admin/AdminOrdersTab";
@@ -469,12 +470,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Yeni Kupon Oluştur
   const handleCreateCoupon = async () => {
     if (!couponCode.trim()) {
-      alert("Lütfen kupon kodu giriniz.");
+      appAlert("Lütfen kupon kodu giriniz.");
       return;
     }
     const val = parseFloat(couponValue);
     if (isNaN(val) || val <= 0) {
-      alert("Lütfen geçerli bir tutar veya yüzde giriniz.");
+      appAlert("Lütfen geçerli bir tutar veya yüzde giriniz.");
       return;
     }
     setSavingCoupon(true);
@@ -504,10 +505,10 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kupon oluşturulamadı");
+        appAlert(data.error || "Kupon oluşturulamadı");
       }
     } catch {
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingCoupon(false);
     }
@@ -540,7 +541,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // Kupon Sil
   const handleDeleteCoupon = async (couponId: string, code: string) => {
-    if (!confirm(`'${code}' kuponunu kalıcı olarak silmek istediğinize emin misiniz?`)) return;
+    if (!await appConfirm(`'${code}' kuponunu kalıcı olarak silmek istediğinize emin misiniz?`)) return;
     haptic.impact("heavy");
     try {
       const res = await adminFetch("/api/admin/coupons", {
@@ -559,12 +560,12 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3000);
       } else {
         haptic.error();
-        alert(data.error || "Kupon silinemedi. Lütfen tekrar deneyin.");
+        appAlert(data.error || "Kupon silinemedi. Lütfen tekrar deneyin.");
       }
     } catch (e) {
       console.error(e);
       haptic.error();
-      alert("Kupon silinirken sunucuya ulaşılamadı. Lütfen tekrar deneyin.");
+      appAlert("Kupon silinirken sunucuya ulaşılamadı. Lütfen tekrar deneyin.");
     }
   };
 
@@ -598,11 +599,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 4000);
       } else {
         haptic.error();
-        alert(data.error || "Bakım modu güncellenemedi.");
+        appAlert(data.error || "Bakım modu güncellenemedi.");
       }
     } catch (e: any) {
       haptic.error();
-      alert("Hata: " + e.message);
+      appAlert("Hata: " + e.message);
     } finally {
       setTogglingMaintenance(false);
     }
@@ -627,11 +628,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3000);
       } else {
         haptic.error();
-        alert(data.error || "Kayıt hatası");
+        appAlert(data.error || "Kayıt hatası");
       }
     } catch (e: any) {
       haptic.error();
-      alert("Hata: " + e.message);
+      appAlert("Hata: " + e.message);
     } finally {
       setSavingMaintenance(false);
     }
@@ -677,11 +678,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Yedek oluşturulamadı");
+        appAlert(data.error || "Yedek oluşturulamadı");
       }
     } catch (e: any) {
       haptic.error();
-      alert("Yedek oluşturulurken hata oluştu: " + (e?.message || ""));
+      appAlert("Yedek oluşturulurken hata oluştu: " + (e?.message || ""));
     } finally {
       setCreatingBackup(false);
     }
@@ -742,7 +743,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         window.location.href = downloadUrl;
       } catch (e: any) {
         haptic.error();
-        alert("Canlı veritabanı indirilemedi: " + (e?.message || ""));
+        appAlert("Canlı veritabanı indirilemedi: " + (e?.message || ""));
       }
     }
   };
@@ -812,14 +813,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         window.location.href = downloadUrl;
       } catch (e: any) {
         haptic.error();
-        alert("Yedek dosyası indirilemedi: " + (e?.message || ""));
+        appAlert("Yedek dosyası indirilemedi: " + (e?.message || ""));
       }
     }
   };
 
   // Yedek Kaydını Sil
   const handleDeleteBackup = async (backupId: string) => {
-    if (!confirm("Bu sistem yedeğini silmek istediğinize emin misiniz?")) return;
+    if (!await appConfirm("Bu sistem yedeğini silmek istediğinize emin misiniz?")) return;
     haptic.impact("medium");
     try {
       const res = await adminFetch("/api/admin/backups", {
@@ -835,11 +836,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3000);
       } else {
         haptic.error();
-        alert(data.error || "Silinemedi");
+        appAlert(data.error || "Silinemedi");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     }
   };
 
@@ -868,11 +869,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3000);
       } else {
         haptic.error();
-        alert(data.error || "Ayarlar kaydedilemedi");
+        appAlert(data.error || "Ayarlar kaydedilemedi");
       }
     } catch {
       haptic.error();
-      alert("Ayarlar kaydedilirken hata oluştu");
+      appAlert("Ayarlar kaydedilirken hata oluştu");
     } finally {
       setSavingBackupSettings(false);
     }
@@ -888,7 +889,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
     const isJson = lowerName.endsWith(".json");
 
     if (!isSql && !isJson) {
-      alert("Lütfen yalnızca .sql veya .json uzantılı yedek dosyası seçiniz!");
+      appAlert("Lütfen yalnızca .sql veya .json uzantılı yedek dosyası seçiniz!");
       e.target.value = "";
       return;
     }
@@ -931,7 +932,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         haptic.selection();
       } catch (err: any) {
         haptic.error();
-        alert("Geçersiz yedek dosyası: " + (err?.message || "Dosya okunamadı"));
+        appAlert("Geçersiz yedek dosyası: " + (err?.message || "Dosya okunamadı"));
       } finally {
         e.target.value = "";
       }
@@ -942,7 +943,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Geri Yükleme Onayla ve Uygula (Güvenlik PIN'i ve Rate Limit korumalı)
   const handleConfirmRestore = async () => {
     if (!backupSecurityPin.trim()) {
-      alert("Lütfen Yönetici PIN kodunu giriniz!");
+      appAlert("Lütfen Yönetici PIN kodunu giriniz!");
       return;
     }
 
@@ -974,7 +975,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
           }),
         });
       } else {
-        alert("Geri yüklenecek geçerli bir yedek seçilmedi");
+        appAlert("Geri yüklenecek geçerli bir yedek seçilmedi");
         setRestoringBackup(false);
         return;
       }
@@ -982,7 +983,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
       const data = await res.json();
       if (res.status === 429) {
         haptic.error();
-        alert(
+        appAlert(
           data.error ||
             "⚠️ Çok fazla hatalı PIN denemesi yapıldı! Brute-force koruması nedeniyle sistem 15 dakika kilitlendi."
         );
@@ -1000,11 +1001,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Geri yükleme işlemi başarısız oldu");
+        appAlert(data.error || "Geri yükleme işlemi başarısız oldu");
       }
     } catch (e: any) {
       haptic.error();
-      alert("Geri yükleme sırasında hata oluştu: " + (e?.message || ""));
+      appAlert("Geri yükleme sırasında hata oluştu: " + (e?.message || ""));
     } finally {
       setRestoringBackup(false);
     }
@@ -1035,11 +1036,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3000);
       } else {
         haptic.error();
-        alert(data.error || "Ayarlar kaydedilemedi");
+        appAlert(data.error || "Ayarlar kaydedilemedi");
       }
     } catch (e: any) {
       haptic.error();
-      alert(e?.message || "Ayarlar kaydedilemedi");
+      appAlert(e?.message || "Ayarlar kaydedilemedi");
     } finally {
       setSavingSettings(false);
     }
@@ -1069,11 +1070,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3500);
       } else {
         haptic.error();
-        alert(data.error || "TCMB kuru güncellenemedi");
+        appAlert(data.error || "TCMB kuru güncellenemedi");
       }
     } catch (e) {
       haptic.error();
-      alert("TCMB servisine bağlanılamadı");
+      appAlert("TCMB servisine bağlanılamadı");
     } finally {
       setTcmbRefreshing(false);
     }
@@ -1198,7 +1199,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Bakiye güncellenemedi");
+        appAlert(data.error || "Bakiye güncellenemedi");
         fetchAllData();
       }
     } catch (e) {
@@ -1211,7 +1212,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
     if (!editingUser) return;
     const targetBal = parseFloat(exactBalanceInput);
     if (isNaN(targetBal) || targetBal < 0) {
-      alert("Lütfen geçerli bir bakiye tutarı giriniz (0 veya daha büyük)");
+      appAlert("Lütfen geçerli bir bakiye tutarı giriniz (0 veya daha büyük)");
       return;
     }
 
@@ -1259,7 +1260,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Bakiye güncellenemedi");
+        appAlert(data.error || "Bakiye güncellenemedi");
         fetchAllData();
       }
     } catch (e) {
@@ -1271,7 +1272,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // İstatistikleri Sıfırla
   const handleResetStats = async () => {
     if (
-      !confirm(
+      !await appConfirm(
         "⚠️ DİKKAT: Tüm sipariş geçmişi, toplam ciro ve harcama istatistikleri sıfırlanacaktır!\n\nBu işlem geri alınamaz. Sıfırlamak istediğinize emin misiniz?"
       )
     ) {
@@ -1294,11 +1295,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Sıfırlama başarısız oldu");
+        appAlert(data.error || "Sıfırlama başarısız oldu");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setResettingStats(false);
     }
@@ -1329,11 +1330,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingBank(false);
     }
@@ -1397,11 +1398,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         }
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingCrypto(false);
     }
@@ -1410,7 +1411,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Apirone Hesabını Test Et
   const handleTestApironeAccount = async () => {
     if (!apironeAccount.trim()) {
-      alert("Lütfen önce bir Apirone Account ID (örn: apr-...) giriniz.");
+      appAlert("Lütfen önce bir Apirone Account ID (örn: apr-...) giriniz.");
       return;
     }
     setTestingApirone(true);
@@ -1500,16 +1501,16 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Apirone Cüzdan Yönlendirmesini (Forwarding) Ayarla
   const handleSetApironeForwarding = async () => {
     if (!apironeAccount.trim() || !apironeTransferKey.trim()) {
-      alert("Yönlendirme için lütfen önce Apirone Account ID ve Transfer Key alanlarını doldurunuz.");
+      appAlert("Yönlendirme için lütfen önce Apirone Account ID ve Transfer Key alanlarını doldurunuz.");
       return;
     }
     const targetAddr = (usdtTrc20Address || trxAddress || "").trim();
     if (!targetAddr || targetAddr === "TR7NHqJEKQxGTCi8q8ZY4pL8otSzgjLj6t") {
-      alert("⚠️ Lütfen yukarıdaki 'USDT (TRC-20) Cüzdan Adresi' kutusuna kendi şahsi TRON cüzdan adresinizi (örn: TrustWallet, TronLink, Binance veya BtcTurk cüzdanınız) giriniz.\n\nVarsayılan 'TR7NHq...' adresi Tether akıllı kontrat adresidir ve bir kişisel cüzdan değildir.");
+      appAlert("⚠️ Lütfen yukarıdaki 'USDT (TRC-20) Cüzdan Adresi' kutusuna kendi şahsi TRON cüzdan adresinizi (örn: TrustWallet, TronLink, Binance veya BtcTurk cüzdanınız) giriniz.\n\nVarsayılan 'TR7NHq...' adresi Tether akıllı kontrat adresidir ve bir kişisel cüzdan değildir.");
       return;
     }
     if (!targetAddr.startsWith("T") || targetAddr.length !== 34) {
-      alert("⚠️ Girdiğiniz cüzdan adresi geçerli bir TRON cüzdan formatında değil! (Tron cüzdan adresleri 'T' harfi ile başlamalı ve tam 34 karakter olmalıdır).");
+      appAlert("⚠️ Girdiğiniz cüzdan adresi geçerli bir TRON cüzdan formatında değil! (Tron cüzdan adresleri 'T' harfi ile başlamalı ve tam 34 karakter olmalıdır).");
       return;
     }
     setSettingForwarding(true);
@@ -1533,14 +1534,14 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
           if (apironeAccount.trim()) localStorage.setItem("azfur_apirone_account", apironeAccount.trim());
           if (targetAddr) localStorage.setItem("azfur_usdt_trc20_address", targetAddr);
         } catch {}
-        alert("✅ Gelen tüm USDT (TRC-20) ödemelerinin kişisel cüzdanınıza otomatik aktarılması (Forwarding) başarıyla aktif edildi!");
+        appAlert("✅ Gelen tüm USDT (TRC-20) ödemelerinin kişisel cüzdanınıza otomatik aktarılması (Forwarding) başarıyla aktif edildi!");
       } else {
         haptic.error();
-        alert(data.error || "Yönlendirme ayarlanamadı.");
+        appAlert(data.error || "Yönlendirme ayarlanamadı.");
       }
     } catch {
       haptic.error();
-      alert("İşlem sırasında hata oluştu.");
+      appAlert("İşlem sırasında hata oluştu.");
     } finally {
       setSettingForwarding(false);
     }
@@ -1549,7 +1550,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // OxaPay API Anahtarını Test Et
   const handleTestOxapayKey = async () => {
     if (!oxapayApiKey.trim()) {
-      alert("Lütfen önce bir OxaPay Merchant API Key giriniz.");
+      appAlert("Lütfen önce bir OxaPay Merchant API Key giriniz.");
       return;
     }
     setTestingOxapay(true);
@@ -1632,11 +1633,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Duyuru / Mesaj Gönder
   const handleSendBroadcast = async () => {
     if (!broadcastMessage.trim()) {
-      alert("Lütfen gönderilecek mesajı yazınız.");
+      appAlert("Lütfen gönderilecek mesajı yazınız.");
       return;
     }
     if (broadcastTarget === "user" && !selectedUserId) {
-      alert("Lütfen mesaj gönderilecek kullanıcıyı seçiniz.");
+      appAlert("Lütfen mesaj gönderilecek kullanıcıyı seçiniz.");
       return;
     }
 
@@ -1645,7 +1646,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         ? `tüm ${users.length} kayıtlı kullanıcıya toplu duyuru olarak`
         : `${selectedUserId} ID'li kullanıcıya özel mesaj olarak`;
 
-    if (!confirm(`Mesaj ${targetDesc} gönderilecektir. Devam etmek istiyor musunuz?`)) {
+    if (!await appConfirm(`Mesaj ${targetDesc} gönderilecektir. Devam etmek istiyor musunuz?`)) {
       return;
     }
 
@@ -1669,11 +1670,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setBroadcastMessage("");
       } else {
         haptic.error();
-        alert(data.error || "Gönderim başarısız");
+        appAlert(data.error || "Gönderim başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSendingBroadcast(false);
     }
@@ -1700,11 +1701,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingSupportUser(false);
     }
@@ -1714,11 +1715,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   const handleAddSupportUser = async () => {
     const clean = newSupportUsername.trim().replace(/^@/, "");
     if (!clean) {
-      alert("Lütfen bir kullanıcı adı giriniz.");
+      appAlert("Lütfen bir kullanıcı adı giriniz.");
       return;
     }
     if (supportTelegramUsernames.includes(clean)) {
-      alert(`@${clean} zaten listede mevcut.`);
+      appAlert(`@${clean} zaten listede mevcut.`);
       return;
     }
     const updated = [...supportTelegramUsernames, clean];
@@ -1729,7 +1730,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // Kullanıcı Adı Sil
   const handleDeleteSupportUser = async (targetUser: string) => {
-    if (!confirm(`@${targetUser} kullanıcısını destek listesinden silmek istediğinize emin misiniz?`)) {
+    if (!await appConfirm(`@${targetUser} kullanıcısını destek listesinden silmek istediğinize emin misiniz?`)) {
       return;
     }
     const updated = supportTelegramUsernames.filter((u) => u !== targetUser);
@@ -1756,11 +1757,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingSticker(false);
     }
@@ -1786,11 +1787,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingApiKey(false);
     }
@@ -1839,7 +1840,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Ülke ve Servise Özel Manuel Fiyat Kuralı Kaydet
   const handleSaveCustomPriceRule = async () => {
     if (!ruleCountryId || !ruleServiceCode) {
-      alert("Lütfen ülke ve servis seçiniz.");
+      appAlert("Lütfen ülke ve servis seçiniz.");
       return;
     }
     setSavingRule(true);
@@ -1862,7 +1863,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
     if (ruleType === "fixed") {
       const p = parseFloat(ruleFixedPrice);
       if (isNaN(p) || p <= 0) {
-        alert("Lütfen geçerli bir sabit fiyat giriniz.");
+        appAlert("Lütfen geçerli bir sabit fiyat giriniz.");
         setSavingRule(false);
         return;
       }
@@ -1897,7 +1898,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // Özel Fiyat Kuralını Sil
   const handleDeleteCustomPriceRule = async (ruleKey: string) => {
-    if (!confirm("Bu özel fiyatlandırma kuralını silmek istediğinize emin misiniz?")) return;
+    if (!await appConfirm("Bu özel fiyatlandırma kuralını silmek istediğinize emin misiniz?")) return;
     haptic.impact("medium");
 
     const updatedRules = { ...customPriceRules };
@@ -1943,11 +1944,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         setTimeout(() => setToastMsg(null), 3500);
       } else {
         haptic.error();
-        alert(data.error || "Yanıt gönderilemedi");
+        appAlert(data.error || "Yanıt gönderilemedi");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSendingTicketReply(false);
     }
@@ -1982,7 +1983,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // Destek Talebini Kalıcı Olarak Sil
   const handleDeleteTicket = async (ticketId: string) => {
-    if (!confirm("Bu destek talebini ve tüm mesaj geçmişini kalıcı olarak silmek istediğinize emin misiniz?")) {
+    if (!await appConfirm("Bu destek talebini ve tüm mesaj geçmişini kalıcı olarak silmek istediğinize emin misiniz?")) {
       return;
     }
     haptic.impact("heavy");
@@ -2012,7 +2013,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   const handleToggleBan = async (user: any) => {
     const nextBanStatus = !user.isBanned;
     if (
-      !confirm(
+      !await appConfirm(
         nextBanStatus
           ? `${user.firstName || user.telegramId} adlı kullanıcıyı engellemek (banlamak) istiyor musunuz? Kullanıcı yeni numara kiralayamaz.`
           : `${user.firstName || user.telegramId} adlı kullanıcının engelini kaldırmak istiyor musunuz?`
@@ -2045,11 +2046,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "İşlem başarısız");
+        appAlert(data.error || "İşlem başarısız");
       }
     } catch (e) {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setUserActionLoadingId(null);
     }
@@ -2060,7 +2061,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
     const nextRole = targetRole ?? (user.role === "admin" ? "user" : "admin");
     const name = user.firstName || user.telegramId;
     if (
-      !confirm(
+      !await appConfirm(
         nextRole === "admin"
           ? `${name} kullanıcısına YÖNETİCİ (Admin) yetkisi vermek istediğinize emin misiniz?`
           : nextRole === "support"
@@ -2095,11 +2096,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "İşlem başarısız");
+        appAlert(data.error || "İşlem başarısız");
       }
     } catch (e) {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setUserActionLoadingId(null);
     }
@@ -2108,7 +2109,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
   // Kullanıcıyı Kalıcı Olarak Sil
   const handleDeleteUser = async (user: any) => {
     if (
-      !confirm(
+      !await appConfirm(
         `DİKKAT: ${user.firstName || user.telegramId} kullanıcısını sistemden ve veritabanından KALICI OLARAK silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`
       )
     ) {
@@ -2135,11 +2136,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Silinemedi");
+        appAlert(data.error || "Silinemedi");
       }
     } catch (e) {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setUserActionLoadingId(null);
     }
@@ -2273,11 +2274,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "İşlem başarısız");
+        appAlert(data.error || "İşlem başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setUserActionLoadingId(null);
     }
@@ -2307,11 +2308,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchAllData();
       } else {
         haptic.error();
-        alert(data.error || "Kayıt başarısız");
+        appAlert(data.error || "Kayıt başarısız");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setSavingVipSettings(false);
     }
@@ -2347,7 +2348,7 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // Sistem Loglarını Temizle
   const handleClearLogs = async () => {
-    if (!confirm("Tüm sistem loglarını kalıcı olarak temizlemek istediğinize emin misiniz?")) {
+    if (!await appConfirm("Tüm sistem loglarını kalıcı olarak temizlemek istediğinize emin misiniz?")) {
       return;
     }
     setClearingLogs(true);
@@ -2362,11 +2363,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
         fetchLogs();
       } else {
         haptic.error();
-        alert(data.error || "Loglar silinemedi");
+        appAlert(data.error || "Loglar silinemedi");
       }
     } catch {
       haptic.error();
-      alert("Hata oluştu");
+      appAlert("Hata oluştu");
     } finally {
       setClearingLogs(false);
     }
@@ -4029,8 +4030,8 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
                 {heroSmsApiKey.trim() && (
                   <button
-                    onClick={() => {
-                      if (confirm("Hero-SMS API anahtarını kaldırmak istediğinize emin misiniz?")) {
+                    onClick={async () => {
+                      if (await appConfirm("Hero-SMS API anahtarını kaldırmak istediğinize emin misiniz?")) {
                         setHeroSmsApiKey("");
                         handleSaveHeroApiKey("");
                       }

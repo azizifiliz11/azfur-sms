@@ -47,6 +47,8 @@ function HomeContent() {
   const activeOrdersAppliedRef = React.useRef<number>(0);
   // Yeni satın alınan siparişler: sunucu listesinde görünene kadar (en fazla 30 sn) ekranda tutulur
   const pendingOrdersRef = React.useRef<Record<string, { order: ActivationOrder; addedAt: number }>>({});
+  // İptali süren siparişler: sunucu kilit sırasında kısa süre CANCELLED gösterse de listede kalır
+  const cancellingIdsRef = React.useRef<Set<string>>(new Set());
 
   // Telegram ve mobil WebView önbelleğini zorunlu yenileme (Eski tasarımı anında ezer)
   useEffect(() => {
@@ -160,9 +162,15 @@ function HomeContent() {
           if (serverIds.has(id) || now - p.addedAt > PENDING_ORDER_GRACE_MS) delete pendingOrdersRef.current[id];
           else pending.push(p.order);
         }
-        const next = [...pending, ...serverOrders];
+        const pendingIds = new Set(pending.map((o) => o.id));
         // Aynı içerikte yeni dizi yazılmaz: aktif numaralar kartı ve yoklamaları her 3 sn'de sıfırlanmasın
-        setActiveOrders((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+        setActiveOrders((prev) => {
+          const held = prev.filter(
+            (o) => cancellingIdsRef.current.has(o.id) && !serverIds.has(o.id) && !pendingIds.has(o.id)
+          );
+          const next = [...pending, ...serverOrders, ...held].sort((a, b) => b.createdAt - a.createdAt);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       }
     } catch (e) {
       console.error("Fetch active orders error:", e);
@@ -262,6 +270,11 @@ function HomeContent() {
     setSelectedCountry(country);
     fetchCatalog(country.id);
   };
+
+  const handleCancelPending = useCallback((id: string, pending: boolean) => {
+    if (pending) cancellingIdsRef.current.add(id);
+    else cancellingIdsRef.current.delete(id);
+  }, []);
 
   const handleOrderSuccess = (newOrder: ActivationOrder) => {
     pendingOrdersRef.current[newOrder.id] = { order: newOrder, addedAt: Date.now() };
@@ -549,6 +562,7 @@ function HomeContent() {
               <ActiveNumbers
                 orders={activeOrders}
                 onOrderUpdated={handleRefreshAll}
+                onCancelPending={handleCancelPending}
                 telegramId={tgUser?.id || currentUser?.telegramId || 0}
               />
             )}

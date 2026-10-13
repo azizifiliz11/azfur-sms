@@ -4331,10 +4331,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-semibold text-xs text-foreground">
-                        {dep.username && !dep.username.startsWith("user_")
-                          ? `@${dep.username.replace(/^@/, "")}`
-                          : `Kullanıcı #${dep.telegramId}`}
+                        {(dep as any).userFullName || (dep.username ? `@${dep.username}` : `Kullanıcı #${dep.telegramId}`)}
                       </span>
+                      <p className="text-[11px] text-muted-foreground">
+                        {dep.username ? `@${dep.username} · ` : ""}ID <span className="font-mono">{dep.telegramId}</span>
+                      </p>
                       <p className="text-[11px] font-mono text-muted-foreground">
                         {dep.method} • {dep.referenceCode}
                       </p>

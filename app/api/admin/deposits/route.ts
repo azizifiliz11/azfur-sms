@@ -11,7 +11,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
-    const deposits = db.getDeposits();
+    // deposits tablosunda kullanıcı adı tutulmuyor (SQL'den yeniden okununca boş kalıyordu):
+    // her talebi güncel kullanıcı kaydıyla zenginleştir
+    const deposits = db.getDeposits().map((d) => {
+      const u = db.getUser(d.telegramId);
+      const username = (u?.username || d.username || "").replace(/^@/, "");
+      return {
+        ...d,
+        username: username.startsWith("user_") ? "" : username,
+        userFullName: [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim(),
+      };
+    });
     return NextResponse.json(
       { success: true, deposits },
       {

@@ -105,6 +105,9 @@ export function RentPanel({
 }: RentPanelProps) {
   const [selectedServiceCode, setSelectedServiceCode] = useState<string>("wa");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  // Tüm servisler listelenir; çok sayıda kart tek seferde çizilmesin diye kademeli gösterim
+  const SERVICE_PAGE = 60;
+  const [visibleServiceCount, setVisibleServiceCount] = useState<number>(SERVICE_PAGE);
   const [countrySearch, setCountrySearch] = useState<string>("");
   const [countryModalOpen, setCountryModalOpen] = useState<boolean>(false);
   const [countryModalTab, setCountryModalTab] = useState<"all" | "favorites">("all");
@@ -285,6 +288,11 @@ export function RentPanel({
     sortMode,
     favoriteServices,
   ]);
+
+  // Arama / filtre / sıralama / ülke değişince kademeli liste baştan başlasın
+  useEffect(() => {
+    setVisibleServiceCount(SERVICE_PAGE);
+  }, [searchQuery, filterFavoritesOnly, filterInStockOnly, sortMode, selectedCountry?.id]);
 
   // Seçili servis kalemi: Sadece seçili servise odaklan
   const selectedItem = useMemo(() => {
@@ -644,7 +652,7 @@ export function RentPanel({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-            {filteredCatalog.slice(0, 30).map((item) => {
+            {filteredCatalog.slice(0, visibleServiceCount).map((item) => {
               const isSelected = selectedServiceCode === item.serviceCode;
               const isFav = favoriteServices.includes(item.serviceCode);
               const quality = getItemQuality(item);
@@ -653,10 +661,17 @@ export function RentPanel({
                 <div
                   key={item.serviceCode}
                   onClick={() => {
+                    // Bu ülkede stoğu olmayan servis: satın alma başlatılmaz (sağlayıcı numara veremez)
+                    if (item.stock <= 0) {
+                      haptic.error();
+                      return;
+                    }
                     handleServicePick(item.serviceCode);
                     handleStartPurchase(item.serviceCode);
                   }}
-                  className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative group ${
+                  className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between relative group ${
+                    item.stock <= 0 ? "opacity-55 cursor-not-allowed" : "cursor-pointer"
+                  } ${
                     isSelected
                       ? "bg-brand/15 border-brand/60 shadow-sm ring-1 ring-brand/30"
                       : "bg-card/70 border-border hover:border-foreground/15"
@@ -700,14 +715,36 @@ export function RentPanel({
 
                   {/* Fiyat ve Seçili İkonu */}
                   <div className="flex items-center justify-between mt-2 pt-1 border-t border-border">
-                    <span className="text-xs font-mono font-semibold text-brand">
-                      ₺{item.calculatedPriceTry.toFixed(2)}
-                    </span>
+                    {item.stock > 0 ? (
+                      <span className="text-xs font-mono font-semibold text-brand">
+                        ₺{item.calculatedPriceTry.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">Bu ülkede stok yok</span>
+                    )}
                     {isSelected && <Check className="w-3.5 h-3.5 text-brand shrink-0" />}
                   </div>
                 </div>
               );
             })}
+            {filteredCatalog.length > visibleServiceCount && (
+              <div className="col-span-2 flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setVisibleServiceCount((n) => n + SERVICE_PAGE)}
+                  className="h-9 flex-1 rounded-full border border-border text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  Daha fazla göster
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibleServiceCount(filteredCatalog.length)}
+                  className="h-9 flex-1 rounded-full bg-foreground text-xs font-medium text-background"
+                >
+                  Tümünü göster ({filteredCatalog.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Card>

@@ -159,6 +159,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
 
   // User management states
   const [userSearchQuery, setUserSearchQuery] = useState<string>("");
+  // Servis görünürlük kontrolü: tüm servisler + arama / filtre
+  const [serviceVisSearch, setServiceVisSearch] = useState<string>("");
+  const [serviceVisFilter, setServiceVisFilter] = useState<"all" | "hidden" | "visible">("all");
   // Sunucu araması (telefon numarası / TXID ile): eşleşen Telegram ID'leri; null = yerel filtre
   const [serverSearchIds, setServerSearchIds] = useState<Set<number> | null>(null);
   const [serverSearching, setServerSearching] = useState<boolean>(false);
@@ -3296,11 +3299,51 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
               <span>Servis Görünürlük Kontrolü</span>
             </h4>
             <p className="text-[11px] text-muted-foreground">
-              Kullanıcıların görmesini istemediğiniz servisleri tek tıkla gizleyin.
+              Kullanıcıların görmesini istemediğiniz servisleri tek tıkla gizleyin. Sağlayıcının sunduğu tüm servisler listelenir
+              ({(settingsData?.allServices || []).length} servis, {(settingsData?.settings?.hiddenServices || []).length} gizli).
             </p>
 
-            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-              {(settingsData?.allServices || []).slice(0, 24).map((s: any) => {
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-muted-foreground/80 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={serviceVisSearch}
+                  onChange={(e) => setServiceVisSearch(e.target.value)}
+                  placeholder="Servis adı veya kodu ara..."
+                  className="w-full bg-card/90 border border-border rounded-full pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand/50"
+                />
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              {[
+                { id: "all", label: "Hepsi" },
+                { id: "visible", label: "Görünen" },
+                { id: "hidden", label: "Gizli" },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setServiceVisFilter(f.id as any)}
+                  className={`h-7 rounded-full px-3 text-[11px] font-medium ${
+                    serviceVisFilter === f.id ? "bg-foreground text-background" : "border border-border text-muted-foreground"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+              {(settingsData?.allServices || [])
+                .filter((s: any) => {
+                  const hidden = settingsData?.settings?.hiddenServices?.includes(s.code);
+                  if (serviceVisFilter === "hidden" && !hidden) return false;
+                  if (serviceVisFilter === "visible" && hidden) return false;
+                  const q = serviceVisSearch.trim().toLowerCase();
+                  return !q || String(s.name).toLowerCase().includes(q) || String(s.code).toLowerCase().includes(q);
+                })
+                .map((s: any) => {
                 const isHidden = settingsData?.settings?.hiddenServices?.includes(s.code);
                 return (
                   <div

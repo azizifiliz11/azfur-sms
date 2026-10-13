@@ -1314,7 +1314,16 @@ export function getTelegramBot(): Bot | null {
         }
 
         const prices = await heroSms.getPrices(countryId);
-        const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
+        const providerPrice = prices[String(countryId)]?.[serviceCode];
+        if (!providerPrice || !(Number(providerPrice.cost) > 0)) {
+          await editOrReply(
+            ctx,
+            `⚠️ Bu servis bu ülkede sağlayıcı tarafından satılmıyor. Lütfen başka bir ülke seçin.`,
+            new InlineKeyboard().text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`).row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+        const originalCost = Number(providerPrice.cost);
         const calcRes = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId, user);
         const finalPriceTry = calcRes.finalPriceTry;
 
@@ -1390,7 +1399,16 @@ export function getTelegramBot(): Bot | null {
           };
 
         const prices = await heroSms.getPrices(countryId);
-        const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
+        const providerPrice = prices[String(countryId)]?.[serviceCode];
+        if (!providerPrice || !(Number(providerPrice.cost) > 0)) {
+          await editOrReply(
+            ctx,
+            `⚠️ Bu servis bu ülkede sağlayıcı tarafından satılmıyor. Lütfen başka bir ülke seçin.`,
+            new InlineKeyboard().text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`).row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+        const originalCost = Number(providerPrice.cost);
         const calcRes = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId, user);
         const finalPriceTry = calcRes.finalPriceTry;
 

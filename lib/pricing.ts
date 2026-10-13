@@ -155,6 +155,10 @@ export const pricingEngine = {
     for (const service of visibleServices) {
       if (hiddenPairs.has(`${service.code}:${catalogCountryId}`)) continue;
       const priceInfo = countryPrices[service.code];
+      // Sağlayıcı bu servisi bu ülkede hiç satmıyorsa (fiyat kaydı yok) listeleme. Örn. "Full rent"
+      // bir SMS aktivasyonu değil, ayrı kiralama API'siyle satılan numara kiralamasıdır; hiçbir ülkede
+      // aktivasyon fiyatı yoktur. Önceden bunlar varsayılan 0.15$ maliyetle sahte fiyatla görünüyordu.
+      if (!priceInfo) continue;
       const cost = priceInfo?.cost || 0.15;
       const stock = priceInfo?.count || (priceInfo?.physicalCount ? priceInfo.physicalCount * 10 : 0);
 

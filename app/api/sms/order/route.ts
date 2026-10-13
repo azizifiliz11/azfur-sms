@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
     const serviceObj = services.find((s) => s.code === serviceCode);
 
     const priceStock = prices[String(countryId)]?.[serviceCode];
-    const originalCost = priceStock?.cost || 0.15;
+    if (!priceStock || !(Number(priceStock.cost) > 0)) {
+      return NextResponse.json(
+        { success: false, error: "Bu servis bu ülkede sağlayıcı tarafından satılmıyor. Lütfen başka bir ülke seçin." },
+        { status: 400 }
+      );
+    }
+    const originalCost = Number(priceStock.cost);
 
     // 3. Kâr marjlı satış fiyatını hesapla
     const baseCalc = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, Number(countryId));

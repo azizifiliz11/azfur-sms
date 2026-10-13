@@ -30,11 +30,45 @@ export function rentDurationLabel(hours: number): string {
   return `${hours} saat`;
 }
 
+/** Maliyet (USD) → satış fiyatı (TL). Genel motorla aynı yuvarlama: 0.10 ₺ yukarı, en az 3 ₺. */
+export function computeRentPrice(costUsd: number, marginPercent: number, fixedFee: number, rate: number): number {
+  const price = costUsd * rate * (1 + marginPercent / 100) + fixedFee;
+  return Number(Math.max(3.0, Math.ceil(price * 10) / 10).toFixed(2));
+}
+
+export function getRentRate(): number {
+  const s = db.getSettings();
+  return s.exchangeRateToTry || s.lastTcmbRate || 49.2;
+}
+
+/** Kiralamada geçerli marj ve kaynağı: kiralamaya özel ayar → "full" servis marjı → genel marj */
+export function getEffectiveRentMargin(): { marginPercent: number; fixedFee: number; source: "rent" | "service" | "global" } {
+  const s = db.getSettings();
+  const rp = s.rentPricing;
+  if (rp && Number.isFinite(Number(rp.marginPercent))) {
+    return { marginPercent: Number(rp.marginPercent), fixedFee: Number(rp.fixedFee) || 0, source: "rent" };
+  }
+  const svc = s.serviceCustomMargins?.[RENT_SERVICE_CODE];
+  if (svc && (svc.marginPercent !== undefined || svc.fixedFee !== undefined)) {
+    return {
+      marginPercent: svc.marginPercent !== undefined ? Number(svc.marginPercent) : s.globalMarginPercent,
+      fixedFee: svc.fixedFee !== undefined ? Number(svc.fixedFee) : s.globalFixedFee,
+      source: "service",
+    };
+  }
+  return { marginPercent: s.globalMarginPercent, fixedFee: s.globalFixedFee, source: "global" };
+}
+
 /**
- * Kiralama satış fiyatı. Ülke+servis manuel kuralları (sabit TL fiyat) süreden bağımsız olduğu için
- * kullanılmaz; "full" servisine özel kâr marjı (Fiyat & Kâr → servis marjı) veya genel marj uygulanır.
+ * Kiralama satış fiyatı. Admin panelindeki "Full rent kâr marjı" ayarı varsa o, yoksa genel marj uygulanır.
+ * Ülke+servis manuel kuralları (sabit TL fiyat) süreden bağımsız olduğu için kullanılmaz.
  */
 export function rentPriceTry(costUsd: number): number {
+  const s = db.getSettings();
+  if (s.rentPricing && Number.isFinite(Number(s.rentPricing.marginPercent))) {
+    const m = getEffectiveRentMargin();
+    return computeRentPrice(costUsd, m.marginPercent, m.fixedFee, getRentRate());
+  }
   return pricingEngine.calculatePrice(costUsd, RENT_SERVICE_CODE).finalPriceTry;
 }
 

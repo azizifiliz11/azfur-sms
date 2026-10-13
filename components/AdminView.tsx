@@ -75,6 +75,7 @@ import { AdminReportsTab } from "./admin/AdminReportsTab";
 import { AdminAuditTab } from "./admin/AdminAuditTab";
 import { UserLedgerPanel } from "./admin/UserLedgerPanel";
 import { MaintenanceScheduleCard } from "./admin/MaintenanceScheduleCard";
+import { RentPricingCard } from "./admin/RentPricingCard";
 import { fmtAgo } from "./admin/api";
 import { HaloSwitch } from "./ui/halo-switch";
 import { RollingNumber } from "./ui/rolling-number";
@@ -3080,6 +3081,9 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated, staffRole = "admi
               {savingSettings ? "Kaydediliyor..." : "Ayarları Kaydet & Fiyatları Güncelle"}
             </button>
           </Card>
+
+          {/* Full rent (süreli numara kiralama) için ayrı kâr marjı */}
+          <RentPricingCard />
 
           {/* 🎯 Ülke ve Servise Özel Manuel Fiyatlandırma Kartı */}
           <Card className="p-4 space-y-4 border-amber-500/40 bg-gradient-to-br from-card to-card shadow-lg">

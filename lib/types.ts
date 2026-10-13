@@ -168,6 +168,8 @@ export interface SystemSettings {
   maintenanceMessage?: string; // Samimi özel bakım mesajı
   webhookSecretActive?: boolean; // Telegram webhook gizli anahtarla kayıtlı (anahtarsız güncellemeler reddedilir)
   alertSettings?: Partial<import("./admin-alerts").AlertSettings>; // Yönetici uyarı eşikleri ve günlük rapor
+  /** Full rent (süreli numara kiralama) için ayrı kâr marjı. Yoksa/null ise genel marj uygulanır. */
+  rentPricing?: { marginPercent: number; fixedFee: number; updatedAt?: string } | null;
   hiddenServiceCountryPairs?: string[]; // "servis:ülke" — satışa kapatılan kombinasyonlar
   maintenanceSchedule?: import("./maintenance-schedule").MaintenanceSchedule | null; // Planlı bakım
 }

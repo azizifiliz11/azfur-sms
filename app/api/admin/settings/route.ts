@@ -297,6 +297,46 @@ async function handlePOST(req: NextRequest) {
     }
 
     // --- Uyarı eşikleri ve günlük rapor ---
+    if (body.action === "rent_pricing_preview" || body.action === "save_rent_pricing") {
+      const rent = await import("@/lib/rent");
+      if (body.action === "save_rent_pricing") {
+        if (body.reset) {
+          await db.updateSettings({ rentPricing: null });
+        } else {
+          const m = Number(body.marginPercent);
+          const f = Number(body.fixedFee ?? 0);
+          if (!Number.isFinite(m) || m < 0 || m > 2000 || !Number.isFinite(f) || f < 0 || f > 100000) {
+            return NextResponse.json(
+              { success: false, error: "Geçersiz değer: marj %0–2000, sabit ücret ₺0–100000 olmalı." },
+              { status: 400 }
+            );
+          }
+          await db.updateSettings({
+            rentPricing: { marginPercent: m, fixedFee: Number(f.toFixed(2)), updatedAt: new Date().toISOString() },
+          });
+        }
+        await db.addLog({
+          category: "PRICING",
+          level: "INFO",
+          action: "RENT_PRICING_UPDATED",
+          details: body.reset
+            ? "Full rent kâr marjı kaldırıldı; kiralamada genel marj uygulanacak."
+            : `Full rent kâr marjı: %${Number(body.marginPercent)} + ₺${Number(body.fixedFee ?? 0).toFixed(2)}`,
+          metadata: { marginPercent: body.marginPercent, fixedFee: body.fixedFee, reset: Boolean(body.reset) },
+        }).catch(() => {});
+      }
+      const [countries, prices] = await Promise.all([heroSms.getCountries(), heroSms.getRentPrices(rent.RENT_SERVICE_CODE)]);
+      return NextResponse.json({
+        success: true,
+        message: body.action === "save_rent_pricing" ? "Full rent kâr marjı kaydedildi." : undefined,
+        rentPricing: db.getSettings().rentPricing || null,
+        effective: rent.getEffectiveRentMargin(),
+        global: { marginPercent: db.getSettings().globalMarginPercent, fixedFee: db.getSettings().globalFixedFee },
+        rate: rent.getRentRate(),
+        offers: rent.getRentOffers(prices, countries),
+      });
+    }
+
     if (body.action === "save_alert_settings") {
       const { DEFAULT_ALERT_SETTINGS } = await import("@/lib/admin-alerts");
       const a = body.alertSettings || {};

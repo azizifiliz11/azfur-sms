@@ -13,7 +13,11 @@ export async function GET() {
   try {
     await db.syncFromCloud();
     const [countries, prices] = await Promise.all([heroSms.getCountries(), heroSms.getRentPrices("full")]);
-    const offers = getRentOffers(prices, countries);
+    // Sağlayıcı alış maliyeti (costUsd) kullanıcılara gönderilmez
+    const offers = getRentOffers(prices, countries).map((o) => ({
+      ...o,
+      durations: o.durations.map(({ costUsd: _cost, ...d }) => d),
+    }));
     const totalStock = offers.reduce((sum, o) => sum + o.durations.reduce((s, d) => s + d.stock, 0), 0);
     return NextResponse.json({ success: true, offers, totalStock });
   } catch (err: any) {

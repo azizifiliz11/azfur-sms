@@ -43,6 +43,37 @@ function getHeroApiKey(): string {
   return (CONFIG.HERO_SMS_API_KEY || "").trim();
 }
 
+/**
+ * Hero-SMS hataları düz metin (NO_NUMBERS) veya JSON ({"title":"NO_BALANCE","details":...}) olarak döner.
+ * Her iki biçimi de tek bir hata koduna çevirir.
+ */
+function parseHeroError(text: string): string {
+  const trimmed = (text || "").trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const j = JSON.parse(trimmed);
+      if (j?.title) return String(j.title);
+    } catch {}
+  }
+  return trimmed || "UNKNOWN";
+}
+
+const HERO_ERROR_MESSAGES: Record<string, string> = {
+  NO_NUMBERS: "Bu ülke ve servis için şu anda uygun numara stoku tükenmiş. Lütfen başka bir ülke deneyin.",
+  NO_BALANCE: "Sağlayıcı havuzunda geçici bakiye yetersizliği var. Lütfen yöneticiye bildirin veya biraz sonra tekrar deneyin.",
+  CHANNELS_LIMIT: "Sağlayıcıda aynı anda açılabilecek numara sınırına ulaşıldı. Lütfen birkaç dakika sonra tekrar deneyin.",
+  SERVICE_NOT_AVAILABLE: "Bu servis şu anda bu ülkede satışta değil. Lütfen başka bir ülke veya servis seçin.",
+  BANNED: "Sağlayıcı bu ülke/servis için geçici olarak satışı durdurdu. Lütfen başka bir seçenek deneyin.",
+  WRONG_MAX_PRICE: "Numara fiyatı değişti. Lütfen listeyi yenileyip tekrar deneyin.",
+  BAD_KEY: "Numara sağlayıcısına bağlanılamadı (API anahtarı). Lütfen yöneticiye bildirin.",
+};
+
+/** Kullanıcıya gösterilecek Türkçe hata metni. */
+export function heroErrorMessage(code: string | undefined): string {
+  const key = parseHeroError(code || "");
+  return HERO_ERROR_MESSAGES[key] || `Numara kiralanamadı (${key}). Lütfen tekrar deneyin.`;
+}
+
 export const heroSms = {
   getApiKey(): string {
     return getHeroApiKey();
@@ -251,18 +282,10 @@ export const heroSms = {
         };
       }
 
-      // If user has NO_BALANCE in Hero-SMS and wants smooth demo, let's check
-      if (text.includes("NO_BALANCE") || text.includes("NO_NUMBERS")) {
-        // Return clear error or fallback if mock mode requested
-        return {
-          success: false,
-          error: text,
-        };
-      }
-
+      // Hata: düz metin (NO_NUMBERS) veya JSON ({"title":"NO_BALANCE"}) → tek koda çevir
       return {
         success: false,
-        error: text || "Bilinmeyen API cevabı",
+        error: parseHeroError(text),
       };
     } catch (err: any) {
       console.error("Hero-SMS getNumber error:", err);
@@ -273,7 +296,13 @@ export const heroSms = {
   /**
    * SMS Durumunu Sorgula (action=getStatus)
    */
-  async getStatus(activationId: string): Promise<{ status: "WAIT_CODE" | "RECEIVED" | "CANCELLED" | "COMPLETED"; code?: string; raw: string }> {
+  async getStatus(activationId: string): Promise<{
+    status: "WAIT_CODE" | "RECEIVED" | "CANCELLED" | "COMPLETED";
+    code?: string;
+    raw: string;
+    /** Yanıt tanınmadı (hata/ağ sorunu): durum bilinmiyor, karar verilmemeli */
+    unknown?: boolean;
+  }> {
     // If this is a mock activation
     if (activationId.startsWith("mock_")) {
       return this.simulateGetStatus(activationId);
@@ -285,33 +314,42 @@ export const heroSms = {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
 
-      // STATUS_WAIT_CODE, STATUS_WAIT_RETRY
-      if (text.startsWith("STATUS_WAIT_")) {
-        return { status: "WAIT_CODE", raw: text };
-      }
-
-      // STATUS_OK:123456
+      // STATUS_OK:123456 — kod geldi
       if (text.startsWith("STATUS_OK:")) {
         const code = text.replace("STATUS_OK:", "").trim();
         return { status: "RECEIVED", code, raw: text };
       }
 
-      // STATUS_CANCEL
+      // STATUS_WAIT_RETRY:123456 — bir kod geldi, yeni kod bekleniyor (gelen kod geçerli)
+      if (text.startsWith("STATUS_WAIT_RETRY:")) {
+        const code = text.replace("STATUS_WAIT_RETRY:", "").trim();
+        if (code) return { status: "RECEIVED", code, raw: text };
+        return { status: "WAIT_CODE", raw: text };
+      }
+
+      // STATUS_WAIT_CODE, STATUS_WAIT_RESEND — henüz kod yok
+      if (text.startsWith("STATUS_WAIT")) {
+        return { status: "WAIT_CODE", raw: text };
+      }
+
+      // STATUS_CANCEL — sağlayıcıda iptal edildi (ücret bize iade edildi)
       if (text.includes("STATUS_CANCEL")) {
         return { status: "CANCELLED", raw: text };
       }
 
-      return { status: "WAIT_CODE", raw: text };
+      // Hata veya tanınmayan yanıt (BAD_KEY, NO_ACTIVATION, JSON hata...): durum bilinmiyor
+      return { status: "WAIT_CODE", raw: text, unknown: true };
     } catch (err: any) {
       console.error("Hero-SMS getStatus error:", err);
-      return { status: "WAIT_CODE", raw: err.message || "Error" };
+      return { status: "WAIT_CODE", raw: err.message || "Error", unknown: true };
     }
   },
 
   /**
    * Aktivasyon İptal Et (status=8) veya Tamamla (status=6)
    */
-  async setStatus(activationId: string, status: 6 | 8): Promise<{ success: boolean; raw: string }> {
+  /** status: 3 = SMS'i tekrar iste, 6 = tamamla, 8 = iptal et (ücret iadesi) */
+  async setStatus(activationId: string, status: 3 | 6 | 8): Promise<{ success: boolean; raw: string }> {
     if (activationId.startsWith("mock_")) {
       return { success: true, raw: status === 8 ? "ACCESS_CANCEL" : "ACCESS_ACTIVATION" };
     }
@@ -321,8 +359,10 @@ export const heroSms = {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const text = await res.text();
+      // Belgeye göre başarı yanıtları: 8 → ACCESS_CANCEL, 6 → ACCESS_ACTIVATION, 3 → ACCESS_RETRY_GET
+      const expected = status === 8 ? "ACCESS_CANCEL" : status === 6 ? "ACCESS_ACTIVATION" : "ACCESS_RETRY_GET";
       return {
-        success: text.includes("ACCESS_") || text.includes("STATUS_"),
+        success: text.trim().startsWith(expected),
         raw: text,
       };
     } catch (err: any) {

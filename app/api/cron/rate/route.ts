@@ -20,6 +20,10 @@ export async function GET(req: NextRequest) {
     // Zamanı gelmişse otomatik veritabanı yedeğini de al
     await db.checkAndRunAutoBackup().catch((e) => console.error("Cron rate auto backup error:", e));
 
+    // Kod bekleyen siparişleri sağlayıcıdan eşitle (kod bildirimi / süre dolumu iadesi)
+    const { reconcileActiveOrders } = await import("@/lib/orders");
+    await reconcileActiveOrders().catch((e) => console.error("Cron order reconcile error:", e));
+
     // Bekleyen kripto ödemelerini sağlayıcıdan kontrol et (webhook kaçırıldıysa)
     const { reconcilePendingCryptoDeposits } = await import("@/lib/deposit-confirm");
     await reconcilePendingCryptoDeposits().catch((e) => console.error("Cron deposit reconcile error:", e));

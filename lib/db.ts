@@ -899,6 +899,58 @@ let lastAutoBackupCheckTime = 0;
 
 export const db = {
   /** Bu süreçte buluttan en az bir kez tam veri yüklendiyse true döner (sıcak önbellek). */
+  /**
+   * /start hızlı yolu (soğuk örnek): tam senkronizasyon yerine paralel üç küçük sorgu.
+   * Belleğe YAZMAZ (kısmi veri tam anlık görüntü sanılıp buluta kaydedilmesin).
+   */
+  async getWelcomeSnapshot(
+    telegramId: number
+  ): Promise<{ settings: SystemSettings; user: User | null; activeCount: number; isAdmin: boolean } | null> {
+    const sql = getSql();
+    if (!sql) return null;
+    try {
+      const tgId = BigInt(telegramId);
+      const [settingsRows, userRows, countRows] = (await Promise.all([
+        sql`SELECT data FROM system_settings WHERE id = 1`,
+        sql`SELECT * FROM users WHERE telegram_id = ${tgId} LIMIT 1`,
+        sql`SELECT COUNT(*) AS count FROM activations WHERE telegram_id = ${tgId} AND status IN ('WAIT_CODE', 'RECEIVED')`,
+      ])) as any[];
+      const raw = settingsRows[0]?.data;
+      const settings: SystemSettings = {
+        ...DEFAULT_SETTINGS,
+        ...(raw ? (typeof raw === "string" ? JSON.parse(raw) : raw) : {}),
+      };
+      const r = userRows[0];
+      const user: User | null = r
+        ? {
+            telegramId: Number(r.telegram_id),
+            username: r.username || "",
+            firstName: r.first_name || "",
+            lastName: r.last_name || "",
+            balance: parseFloat(r.balance) || 0,
+            spent: parseFloat(r.spent) || 0,
+            role: r.role || "user",
+            isBanned: Boolean(r.is_banned),
+            isVip: Boolean(r.is_vip),
+            vipDiscountPercent: r.vip_discount_percent ? Number(r.vip_discount_percent) : undefined,
+            createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+          }
+        : null;
+      const id = String(telegramId);
+      const deleted = Array.isArray(settings.deletedTelegramIds) && settings.deletedTelegramIds.includes(id);
+      const isAdmin =
+        !deleted &&
+        ((Array.isArray(settings.adminTelegramIds) && settings.adminTelegramIds.map(String).includes(id)) ||
+          String(settings.adminTelegramId || "").trim() === id ||
+          user?.role === "admin");
+      return { settings, user, activeCount: Number(countRows[0]?.count) || 0, isAdmin };
+    } catch (err) {
+      console.error("[PostgreSQL getWelcomeSnapshot Error]:", err);
+      return null;
+    }
+  },
+
   isCacheWarm(): boolean {
     return Boolean(memoryDb) && hasCloudSnapshot;
   },
@@ -3307,6 +3359,9 @@ export const db = {
         const { tcmb } = await import("./tcmb");
         await tcmb.getLiveRate().catch((err) => console.error("[AutoRate Trigger Error]:", err));
       }
+      // Kod bekleyen siparişler: kod bildirimi ve süre dolumu iadesi (kullanıcı uygulamayı kapatsa bile)
+      const { reconcileActiveOrders } = await import("./orders");
+      await reconcileActiveOrders().catch((err) => console.error("[OrderReconcile Error]:", err));
       // Webhook gelmese / kullanıcı yükleme penceresini kapatsa bile ödenmiş kripto yüklemelerini onayla
       const { reconcilePendingCryptoDeposits } = await import("./deposit-confirm");
       await reconcilePendingCryptoDeposits().catch((err) => console.error("[DepositReconcile Error]:", err));

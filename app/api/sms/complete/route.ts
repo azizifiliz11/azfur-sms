@@ -23,12 +23,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Bu sipariş tamamlanamaz." }, { status: 409 });
     }
 
+    // Atomik geçiş: eşzamanlı iade/iptal ile çakışmasın
+    const updatedOrder = await db.claimActivationStatus(activationId, ["RECEIVED", "WAIT_CODE"], "COMPLETED");
+    if (!updatedOrder) {
+      return NextResponse.json({ success: false, error: "Bu sipariş tamamlanamaz." }, { status: 409 });
+    }
     // Hero-SMS status=6 (tamamla)
     await heroSms.setStatus(activationId, 6);
-
-    const updatedOrder = await db.updateActivation(activationId, {
-      status: "COMPLETED",
-    });
 
     return NextResponse.json({
       success: true,

@@ -5,10 +5,10 @@ import path from "path";
 import { CONFIG } from "./config";
 import { APP_BUILD_VERSION } from "./app-version";
 import { db } from "./db";
-import { heroSms } from "./hero-sms";
-import { cancelOrderWithRefund } from "./orders";
+import { heroSms, heroErrorMessage } from "./hero-sms";
+import { cancelOrderWithRefund, syncOrderWithProvider } from "./orders";
 import { pricingEngine } from "./pricing";
-import { ActivationOrder, User } from "./types";
+import { ActivationOrder, SystemSettings, User } from "./types";
 import { rateLimiter } from "./rate-limit";
 
 let botInstance: Bot | null = null;
@@ -38,8 +38,8 @@ export function runAfterResponse(task: () => Promise<unknown> | unknown): void {
 // file_id ile gönderimde görsel Telegram'ın kendi CDN'inden anında iletilir.
 // Format: "<APP_BUILD_VERSION>::<file_id>" — sürüm değişince (yeni banner) otomatik yenilenir.
 let bannerFileIdMemo: string | null = null;
-function getCachedBannerFileId(): string | null {
-  const raw = bannerFileIdMemo || db.getSettings().bannerFileId || "";
+function getCachedBannerFileId(settings: SystemSettings = db.getSettings()): string | null {
+  const raw = bannerFileIdMemo || settings.bannerFileId || "";
   const [version, fileId] = raw.split("::");
   return version === APP_BUILD_VERSION && fileId ? fileId : null;
 }
@@ -58,6 +58,72 @@ function forgetBannerFileId(): void {
 
 // Sohbet menü butonu sıfırlaması her /start'ta değil, süreç başına sohbet başına bir kez yapılır
 const menuButtonResetChats = new Set<number>();
+
+/**
+ * /start ve /menu karşılamasını webhook HTTP yanıtının İÇİNDE gönderilecek Bot API çağrısı olarak hazırlar.
+ * Telegram bu çağrıyı doğrudan yürütür: ayrı bir sendPhoto/sendMessage API turu beklenmez.
+ * Ban, bakım modu, hız sınırı veya banner file_id'si henüz yoksa null döner (normal grammY yolu).
+ */
+export function buildWelcomeWebhookReply(params: {
+  message: any;
+  user: User | null;
+  activeCount: number;
+  settings: SystemSettings;
+  isAdmin: boolean;
+}): Record<string, unknown> | null {
+  const { message, settings, isAdmin } = params;
+  const from = message?.from;
+  const chatId = message?.chat?.id;
+  if (!from?.id || !chatId) return null;
+
+  if (!isAdmin) {
+    if (params.user?.isBanned || settings.maintenanceMode) return null;
+    if (!rateLimiter.check(`tg_msg_${from.id}`, 5, 4).allowed) return null;
+  }
+
+  const user: User = params.user || {
+    telegramId: Number(from.id),
+    username: (from.username || "").replace(/^@/, "").trim(),
+    firstName: (from.first_name || "").trim() || "Telegram Kullanıcısı",
+    balance: 0,
+    spent: 0,
+    role: isAdmin ? "admin" : "user",
+    isBanned: false,
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+  };
+
+  const { appUrl, adminUrl } = getAppUrls();
+  const text = buildMainMenuText(user, from.first_name, params.activeCount);
+  const reply_markup = buildMainMenuKeyboard(isAdmin || user.role === "admin", appUrl, adminUrl);
+
+  if (settings.useBannerPhoto !== false) {
+    const fileId = getCachedBannerFileId(settings);
+    if (!fileId) return null; // İlk gönderimde file_id öğrenilmeli: normal yol
+    return { method: "sendPhoto", chat_id: chatId, photo: fileId, caption: text, parse_mode: "HTML", reply_markup };
+  }
+  return { method: "sendMessage", chat_id: chatId, text, parse_mode: "HTML", reply_markup };
+}
+
+/** Hızlı karşılamanın kalıcı yan etkileri (kullanıcı kaydı, menü butonu); yanıttan SONRA çalışır. */
+export async function runWelcomeSideEffects(message: any): Promise<void> {
+  const from = message?.from;
+  if (!from?.id) return;
+  const profile = { username: from.username, firstName: from.first_name, lastName: from.last_name };
+  if (db.getUser(from.id)) {
+    await db.touchUserActive(from.id, profile);
+  } else {
+    await db.getOrCreateUser(from.id, profile);
+  }
+  if (message.chat?.type === "private" && !menuButtonResetChats.has(from.id) && CONFIG.TELEGRAM_BOT_TOKEN) {
+    menuButtonResetChats.add(from.id);
+    await fetch(`https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/setChatMenuButton`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: from.id, menu_button: { type: "default" } }),
+    }).catch(() => {});
+  }
+}
 
 // Popüler Servis Tanımları
 const POPULAR_SERVICES = [
@@ -1341,10 +1407,7 @@ export function getTelegramBot(): Bot | null {
         if (!numberResult.success || !numberResult.id || !numberResult.number) {
           // Numara alınamadı: düşülen ücreti geri ver
           await db.revertDebit(from.id, finalPriceTry);
-          const errMsg =
-            numberResult.error === "NO_NUMBERS"
-              ? "Bu ülke ve servis için anlık stok tükenmiş. Lütfen başka bir ülke deneyiniz."
-              : `Numara kiralanamadı: ${numberResult.error || "Hata oluştu"}`;
+          const errMsg = heroErrorMessage(numberResult.error);
 
           await editOrReply(
             ctx,
@@ -1434,15 +1497,17 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
-        const statusResult = await heroSms.getStatus(orderId);
+        if (Number(order.telegramId) !== Number(from.id)) {
+          try { await ctx.answerCallbackQuery({ text: "Bu sipariş size ait değil.", show_alert: true }); } catch (e) {}
+          return;
+        }
+
+        // Sağlayıcıyla eşitle: kod teslimi / süre dolumu ve sağlayıcı iptali iadesi tek seferlik (lib/orders.ts)
+        const { order: synced, event } = await syncOrderWithProvider(orderId, { notify: false });
+        const statusResult = { status: synced?.status, code: synced?.smsCode || undefined };
 
         if (statusResult.status === "RECEIVED" && statusResult.code) {
-          await db.updateActivation(orderId, {
-            status: "RECEIVED",
-            smsCode: statusResult.code,
-          });
-
-          await sendAnimatedVisual(ctx, "🎰");
+          if (event === "code_received") await sendAnimatedVisual(ctx, "🎰");
 
           const text =
             `🔔 <b>SMS KODUNUZ GELDİ!</b>\n` +
@@ -1462,12 +1527,23 @@ export function getTelegramBot(): Bot | null {
 
           await editOrReply(ctx, text, kb);
           return;
-        } else if (statusResult.status === "CANCELLED") {
-          await db.updateActivation(orderId, { status: "CANCELLED" });
+        } else if (statusResult.status === "CANCELLED" || statusResult.status === "TIMEOUT") {
+          // Önceden burada iade YAPILMADAN kapatılıyordu; artık eşitleme ücreti bir kez iade ediyor
+          const refundNote =
+            event === "refunded_timeout" || event === "refunded_cancelled"
+              ? `💰 <b>${order.chargedPrice.toFixed(2)} ₺</b> bakiyenize iade edildi.`
+              : `💰 Bu siparişin ücreti bakiyenize iade edilmiştir.`;
           await editOrReply(
             ctx,
-            `⚠️ Bu sipariş sağlayıcı tarafından süre aşımı veya iptal sebebiyle kapatıldı.`,
-            new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu")
+            `↩️ <b>Kod gelmedi, sipariş kapatıldı.</b>\n\n${refundNote}\n\n<i>Farklı bir ülke veya servisle tekrar deneyebilirsiniz.</i>`,
+            new InlineKeyboard().text("🛒 Yeni Numara Al", "btn_buy_menu").row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        } else if (statusResult.status === "COMPLETED") {
+          await editOrReply(
+            ctx,
+            `✅ Bu sipariş tamamlanmış.`,
+            new InlineKeyboard().text("🛒 Yeni Numara Al", "btn_buy_menu").row().text("🔙 Ana Menü", "btn_main_menu")
           );
           return;
         } else {
@@ -1526,8 +1602,14 @@ export function getTelegramBot(): Bot | null {
       // --- SİPARİŞİ TAMAMLA ---
       if (data.startsWith("order_fin:")) {
         const orderId = data.split(":")[1];
-        await heroSms.setStatus(orderId, 6);
-        await db.updateActivation(orderId, { status: "COMPLETED" });
+        const finOrder = db.getActivation(orderId);
+        if (!finOrder || Number(finOrder.telegramId) !== Number(from.id)) {
+          try { await ctx.answerCallbackQuery({ text: "Sipariş bulunamadı.", show_alert: true }); } catch (e) {}
+          return;
+        }
+        // Yalnızca kodu gelmiş/bekleyen sipariş tamamlanır (iade edilmiş sipariş tamamlanamaz)
+        const finished = await db.claimActivationStatus(orderId, ["RECEIVED", "WAIT_CODE"], "COMPLETED");
+        if (finished) await heroSms.setStatus(orderId, 6);
 
         const text =
           `🎉 <b>SİPARİŞİNİZ TAMAMLANDI!</b>\n` +

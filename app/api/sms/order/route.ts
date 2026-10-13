@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTelegramUser } from "@/lib/request-auth";
-import { heroSms } from "@/lib/hero-sms";
+import { heroSms, heroErrorMessage } from "@/lib/hero-sms";
 import { pricingEngine } from "@/lib/pricing";
 import { db } from "@/lib/db";
 import { ActivationOrder } from "@/lib/types";
@@ -114,12 +114,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            numberResult.error === "NO_BALANCE"
-              ? "Sağlayıcı ana havuzunda geçici bakiye yetersizliği! Lütfen yöneticiye bildiriniz veya farklı bir ülke/servis deneyiniz."
-              : numberResult.error === "NO_NUMBERS"
-              ? "Bu ülke ve servis için şu anda uygun numara stoku tükenmiş. Lütfen başka bir ülke deneyin."
-              : `Numara kiralanamadı: ${numberResult.error || "Bilinmeyen hata"}`,
+          error: heroErrorMessage(numberResult.error),
           rawError: numberResult.error,
         },
         { status: 400 }

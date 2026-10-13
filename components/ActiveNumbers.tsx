@@ -42,6 +42,9 @@ export function ActiveNumbers({ orders, onOrderUpdated, telegramId }: ActiveNumb
           if (data.success && data.order?.status === "RECEIVED") {
             haptic.success();
             anyChanged = true;
+          } else if (data.success && data.order?.status && data.order.status !== "WAIT_CODE") {
+            // Süre doldu / sağlayıcı iptal etti → ücret iade edildi: listeyi ve bakiyeyi yenile
+            anyChanged = true;
           }
         } catch (e) {
           // ignore

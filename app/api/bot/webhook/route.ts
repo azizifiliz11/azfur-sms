@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTelegramBot, runAfterResponse } from "@/lib/telegram-bot";
+import { buildWelcomeWebhookReply, getTelegramBot, runAfterResponse, runWelcomeSideEffects } from "@/lib/telegram-bot";
 import { db } from "@/lib/db";
 import { CONFIG } from "@/lib/config";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
@@ -54,10 +54,39 @@ export async function POST(req: NextRequest) {
     const initPromise = bot.isInited() ? Promise.resolve() : bot.init();
     const body = await req.json();
 
-    // HIZLI YOL: /start ve /menu, sıcak önbellekte tüm veritabanı senkronizasyonunu beklemez.
-    // Yalnızca gönderenin tek satırı SQL'den tazelenir (bakiye/ban doğru kalır);
-    // tam senkronizasyon cevap Telegram'a döndükten sonra arka planda yapılır.
+    // EN HIZLI YOL: /start ve /menu cevabı webhook HTTP yanıtının içinde döner (ayrı Bot API turu yok).
+    // Sıcak örnekte bellek + gönderenin tek satırı; soğuk örnekte paralel üç küçük sorgu. Tam
+    // senkronizasyon ve kalıcı kayıt yanıttan SONRA yapılır.
     const welcomeSenderId = getWelcomeSenderId(body);
+    if (welcomeSenderId) {
+      let reply: Record<string, unknown> | null = null;
+      const warm = db.isCacheWarm();
+      if (warm) {
+        await db.refreshUserFromSql(welcomeSenderId).catch(() => null);
+        reply = buildWelcomeWebhookReply({
+          message: body.message,
+          user: db.getUser(welcomeSenderId),
+          activeCount: db.getActiveOrders(welcomeSenderId).length,
+          settings: db.getSettings(),
+          isAdmin: db.isAdmin(welcomeSenderId),
+        });
+      } else {
+        const snap = await db.getWelcomeSnapshot(welcomeSenderId);
+        if (snap) {
+          reply = buildWelcomeWebhookReply({ message: body.message, ...snap });
+        }
+      }
+      if (reply) {
+        runAfterResponse(async () => {
+          if (!warm) await db.syncFromCloud();
+          await runWelcomeSideEffects(body.message);
+          if (warm) await db.syncFromCloud();
+          await db.triggerAutoBackupIfNeeded();
+        });
+        return NextResponse.json(reply);
+      }
+    }
+
     let usedFastPath = false;
     if (welcomeSenderId && db.isCacheWarm()) {
       try {

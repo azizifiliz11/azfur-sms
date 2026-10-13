@@ -2263,6 +2263,42 @@ export const db = {
     return this.updateUserBalance(cleanId, delta);
   },
 
+  /**
+   * Kiralık numaraya gelen yeni SMS'i atomik olarak kaydeder: kayıtlı son SMS'ten farklıysa günceller ve
+   * siparişi döner, aynıysa (başka bir yoklama zaten işlediyse) null döner. Böylece her yeni SMS için
+   * kullanıcıya yalnızca bir bildirim gider.
+   */
+  async claimActivationSms(id: string, code: string, text: string | null): Promise<ActivationOrder | null> {
+    const sql = getSql();
+    const data = loadDb();
+    if (sql) {
+      try {
+        const rows = (await sql`
+          UPDATE activations SET sms_code = ${code}, sms_text = ${text}, status = 'RECEIVED', notified_bot = true
+          WHERE id = ${id} AND status = ANY(${["WAIT_CODE", "RECEIVED"]})
+            AND (sms_code IS DISTINCT FROM ${code} OR sms_text IS DISTINCT FROM ${text})
+          RETURNING *
+        `) as any[];
+        const existing = (await sql`SELECT id FROM activations WHERE id = ${id}`) as any[];
+        if (existing.length > 0) {
+          if (rows.length === 0) return null;
+          data.activations[id] = { ...(data.activations[id] || {}), ...parseActivationRow(rows[0]) } as ActivationOrder;
+          await saveDb(data);
+          return data.activations[id];
+        }
+      } catch (err) {
+        console.error("[PostgreSQL claimActivationSms Error]:", err);
+      }
+    }
+    const current = data.activations[id];
+    if (!current || (current.status !== "WAIT_CODE" && current.status !== "RECEIVED")) return null;
+    if (current.smsCode === code && (current.smsText || null) === text) return null;
+    data.activations[id] = { ...current, status: "RECEIVED", smsCode: code, smsText: text, notifiedBot: true };
+    await saveDb(data);
+    await saveActivationToSql(data.activations[id]);
+    return data.activations[id];
+  },
+
   async updateActivation(id: string, updates: Partial<ActivationOrder>): Promise<ActivationOrder | null> {
     const data = loadDb();
     if (!data.activations[id]) return null;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getClientIp } from "@/lib/auth-check";
-import { deliverCode, syncOrderWithProvider } from "@/lib/orders";
+import { deliverCode, isRentOrder, syncOrderWithProvider } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const code = payload.code ? String(payload.code).trim() : "";
     const text = payload.text ? String(payload.text) : null;
-    if (code && (order.status === "WAIT_CODE" || order.status === "RECEIVED")) {
+    if (code && !isRentOrder(order) && (order.status === "WAIT_CODE" || order.status === "RECEIVED")) {
       await deliverCode(activationId, code, text);
     } else {
       // Kod alanı boşsa (yalnızca metin) sağlayıcıdan durumu sorup eşitle

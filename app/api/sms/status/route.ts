@@ -27,14 +27,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Sipariş bulunamadı" }, { status: 404 });
     }
 
-    const { order: synced, event } = await syncOrderWithProvider(id);
+    const { order: synced, event, messages: rentMessages } = await syncOrderWithProvider(id);
     const messages: Record<string, string> = {
       code_received: "SMS kodu başarıyla yakalandı",
       refunded_timeout: "Süre doldu, ücret iade edildi",
       refunded_cancelled: "Aktivasyon iptal edildi, ücret iade edildi",
     };
 
-    return NextResponse.json({ success: true, order: synced || order, message: messages[event] });
+    return NextResponse.json({ success: true, order: synced || order, message: messages[event], rentMessages });
   } catch (err: any) {
     console.error("Status polling error:", err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

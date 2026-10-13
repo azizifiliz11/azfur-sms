@@ -1,6 +1,21 @@
 import { db } from "./db";
-import { heroSms } from "./hero-sms";
+import { heroSms, heroErrorMessage, type RentSms } from "./hero-sms";
 import type { ActivationOrder, User } from "./types";
+
+/** Süreli numara kiralama (Full rent) siparişi mi? SQL'de tür sütunu olmadığından servis koduna da bakılır. */
+export function isRentOrder(order: Pick<ActivationOrder, "kind" | "serviceCode" | "id"> | null | undefined): boolean {
+  if (!order) return false;
+  return order.kind === "rent" || order.serviceCode === "full" || String(order.id).startsWith("mock_rent_");
+}
+
+/** Hero-SMS kuralı: kiralama yalnızca hiç SMS gelmediyse ve ilk 20 dakika içinde iptal (iade) edilebilir. */
+export const RENT_FREE_CANCEL_MS = 20 * 60 * 1000;
+
+/** Siparişi sağlayıcıda kapatır: SMS aktivasyonu için status=6, kiralama için finishActivation. */
+export async function finishOrderAtProvider(order: ActivationOrder): Promise<void> {
+  if (isRentOrder(order)) await heroSms.finishActivation(order.id).catch(() => null);
+  else await heroSms.setStatus(order.id, 6).catch(() => null);
+}
 
 export type CancelResult =
   | { ok: true; order: ActivationOrder; user: User }
@@ -40,6 +55,14 @@ export async function cancelOrderWithRefund(orderId: string, requesterId: number
   if (order.status !== "WAIT_CODE") {
     return { ok: false, status: 409, error: CANCEL_BLOCKED_MESSAGES[order.status] || "Bu sipariş iptal edilemez." };
   }
+  const rent = isRentOrder(order);
+  if (rent && Date.now() - order.createdAt >= RENT_FREE_CANCEL_MS) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Kiralık numaralar yalnızca ilk 20 dakika içinde ve hiç SMS gelmediyse iptal edilebilir. Kiralama süreniz devam ediyor.",
+    };
+  }
 
   // Kilit: WAIT_CODE -> CANCELLED (yalnızca bir istek kazanır)
   const claimed = await db.claimActivationStatus(orderId, ["WAIT_CODE"], "CANCELLED");
@@ -52,7 +75,22 @@ export async function cancelOrderWithRefund(orderId: string, requesterId: number
     };
   }
 
-  const provider = await heroSms.setStatus(orderId, 8);
+  if (rent) {
+    const pc = await heroSms.cancelActivation(orderId);
+    if (!pc.success) {
+      // Sağlayıcı zaten iptal ettiyse (ücret bize döndü) iade yapılır; aksi halde kiralama devam eder
+      const st = pc.error === "ACTIVATION_NOT_ACTIVE" ? await heroSms.getStatus(orderId) : null;
+      if (st?.status !== "CANCELLED") {
+        await db.claimActivationStatus(orderId, ["CANCELLED"], "WAIT_CODE");
+        console.warn(`[Cancel] Sağlayıcı kiralama iptalini reddetti (${orderId}): ${pc.raw}`);
+        await syncOrderWithProvider(orderId).catch(() => null);
+        const msg = /EARLY_CANCEL/i.test(pc.raw) ? providerCancelError(pc.raw) : heroErrorMessage(pc.error);
+        return { ok: false, status: 409, error: msg };
+      }
+    }
+  }
+
+  const provider = rent ? { success: true, raw: "" } : await heroSms.setStatus(orderId, 8);
   if (!provider.success) {
     // Sağlayıcı iptali reddetti: gerçek durumu sor. Sağlayıcı zaten iptal ettiyse (ücret bize döndü)
     // iade yapılır; kod geldiyse kod kullanıcıya teslim edilir; aksi halde sipariş beklemeye döner.
@@ -167,6 +205,87 @@ export async function deliverCode(
 
 export type OrderSyncEvent = "code_received" | "refunded_timeout" | "refunded_cancelled" | "none";
 
+export interface RentMessage {
+  from: string;
+  code: string | null;
+  text: string | null;
+  date: string;
+}
+
+/** Telegram Markdown'ı bozmasın diye SMS metnini sadeleştirir */
+function plainSmsPreview(text: string): string {
+  return text.replace(/[`*_\[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+/**
+ * Kiralık numara eşitlemesi: süre boyunca gelen tüm SMS'leri (getAllSms) okur, her yeni SMS'i bir kez
+ * bildirir. Süre bitince sipariş iadesiz tamamlanır (kiralama süresi kullanılmıştır). Sağlayıcı kiralamayı
+ * iptal ettiyse ve hiç SMS gelmediyse ücret bir kez iade edilir.
+ */
+async function syncRentOrder(
+  order: ActivationOrder,
+  opts: { notify?: boolean }
+): Promise<{ order: ActivationOrder | null; event: OrderSyncEvent; messages: RentMessage[] }> {
+  const orderId = order.id;
+  const res = await heroSms.getAllSms(orderId);
+  const messages: RentMessage[] = res.items
+    .filter((m: RentSms) => m.code || m.text)
+    .map((m: RentSms) => ({ from: m.from, code: m.code, text: m.text, date: m.date }));
+
+  let event: OrderSyncEvent = "none";
+  const latest = messages[0];
+  if (latest) {
+    const wasWaiting = order.status === "WAIT_CODE";
+    const code = latest.code || "SMS";
+    const claimed = await db.claimActivationSms(orderId, code, latest.text || null);
+    if (claimed) {
+      event = "code_received";
+      const prefs = await db.getUserPreferences(order.telegramId);
+      if (opts.notify !== false && prefs.notifySms) {
+        const { sendTelegramSmsNotification } = await import("./telegram-bot");
+        const shown = latest.code || plainSmsPreview(latest.text || "");
+        await sendTelegramSmsNotification(order.telegramId, order.serviceName, order.phoneNumber, shown).catch(() => false);
+      }
+      if (wasWaiting) {
+        db.addLog({
+          category: "ORDER",
+          level: "INFO",
+          action: "RENT_SMS_RECEIVED",
+          details: `${order.countryFlag} Kiralık numaraya (${order.phoneNumber}) ilk SMS geldi.`,
+          telegramId: Number(order.telegramId),
+          metadata: { orderId },
+        }).catch(() => {});
+      }
+    }
+  }
+
+  if (res.notActive) {
+    const current = db.getActivation(orderId) || order;
+    if (current.status === "WAIT_CODE") {
+      // Kiralama sağlayıcıda kapandı ve hiç SMS gelmedi: sağlayıcı iptal ettiyse ücret iade edilir
+      const st = await heroSms.getStatus(orderId);
+      if (st.status === "CANCELLED") {
+        const refunded = await refundUnfulfilledOrder(current, "CANCELLED");
+        return { order: refunded || db.getActivation(orderId), event: refunded ? "refunded_cancelled" : event, messages };
+      }
+    }
+    if (Date.now() > current.expiresAt || current.status === "RECEIVED") {
+      const done = await db.claimActivationStatus(orderId, ["WAIT_CODE", "RECEIVED"], "COMPLETED");
+      return { order: done || db.getActivation(orderId), event, messages };
+    }
+  }
+
+  // Süre doldu: kiralama tamamlanır (iade yok; numara süre boyunca kullanıcıya ayrılmıştı)
+  const current = db.getActivation(orderId) || order;
+  if (Date.now() > current.expiresAt && (current.status === "WAIT_CODE" || current.status === "RECEIVED")) {
+    const done = await db.claimActivationStatus(orderId, ["WAIT_CODE", "RECEIVED"], "COMPLETED");
+    if (done) await heroSms.finishActivation(orderId).catch(() => null);
+    return { order: done || db.getActivation(orderId), event, messages };
+  }
+
+  return { order: db.getActivation(orderId), event, messages };
+}
+
 /**
  * Siparişi sağlayıcıdaki gerçek durumla eşitler: kod geldiyse teslim eder, sağlayıcı iptal ettiyse
  * veya süre dolduysa ücreti bir kez iade eder. Tüm yollar (Mini App, bot, webhook, arka plan) bunu kullanır.
@@ -174,9 +293,21 @@ export type OrderSyncEvent = "code_received" | "refunded_timeout" | "refunded_ca
 export async function syncOrderWithProvider(
   orderId: string,
   opts: { notify?: boolean } = {}
-): Promise<{ order: ActivationOrder | null; event: OrderSyncEvent }> {
+): Promise<{ order: ActivationOrder | null; event: OrderSyncEvent; messages?: RentMessage[] }> {
   const order = db.getActivation(orderId);
   if (!order) return { order: null, event: "none" };
+  if (isRentOrder(order)) {
+    if (order.status !== "WAIT_CODE" && order.status !== "RECEIVED") {
+      // Kapanmış kiralama: geçmiş SMS'ler yine de gösterilebilsin
+      const res = await heroSms.getAllSms(orderId).catch(() => ({ items: [] as RentSms[] }));
+      return {
+        order,
+        event: "none",
+        messages: res.items.filter((m) => m.code || m.text).map((m) => ({ from: m.from, code: m.code, text: m.text, date: m.date })),
+      };
+    }
+    return syncRentOrder(order, opts);
+  }
   if (order.status !== "WAIT_CODE" && order.status !== "RECEIVED") return { order, event: "none" };
 
   const st = await heroSms.getStatus(orderId);
@@ -216,7 +347,8 @@ export async function reconcileActiveOrders(limit = 30): Promise<number> {
   await db.syncFromCloud();
   const waiting = db
     .getActiveOrders()
-    .filter((o) => o.status === "WAIT_CODE" || Date.now() > o.expiresAt)
+    // Kiralık numaralar süre boyunca yeni SMS alabildiğinden kod gelmiş olsalar da taranır
+    .filter((o) => o.status === "WAIT_CODE" || Date.now() > o.expiresAt || isRentOrder(o))
     .sort((a, b) => a.expiresAt - b.expiresAt)
     .slice(0, limit);
   let changed = 0;

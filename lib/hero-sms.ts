@@ -13,6 +13,31 @@ let servicesCacheTime = 0;
 let cachedPrices: Record<string, Record<string, PriceStockItem>> | null = null;
 let pricesCacheTime = 0;
 let cachedCountryPrices: Record<number, { data: Record<string, Record<string, PriceStockItem>>; time: number }> = {};
+let cachedRentPrices: Record<string, { data: RentPriceMap; time: number }> = {};
+
+/** serviceCountRent yanıtı: { ülkeId: { saat: { count, price, retail_price } } } (fiyat USD) */
+export type RentPriceMap = Record<string, Record<string, { count: number; price: number; retail_price?: number }>>;
+
+export interface RentSms {
+  id: string;
+  from: string;
+  code: string | null;
+  text: string | null;
+  date: string;
+  type: string;
+}
+
+/** Kiralama (rent) API'si JSON döner; hatalar {"title":"NO_NUMBERS","details":...} biçimindedir. */
+async function heroJson(url: string): Promise<{ ok: boolean; status: number; json: any; text: string }> {
+  const res = await fetch(url, { cache: "no-store" });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {}
+  const isError = !res.ok || (json && typeof json === "object" && !Array.isArray(json) && "title" in json && !("data" in json));
+  return { ok: !isError, status: res.status, json, text };
+}
 
 // Country metadata is loaded comprehensively from ./country-flags.ts
 
@@ -60,6 +85,11 @@ function parseHeroError(text: string): string {
 
 const HERO_ERROR_MESSAGES: Record<string, string> = {
   NO_NUMBERS: "Bu ülke ve servis için şu anda uygun numara stoku tükenmiş. Lütfen başka bir ülke deneyin.",
+  BAD_DURATION: "Seçilen kiralama süresi bu ülkede sunulmuyor. Lütfen listeyi yenileyip başka bir süre seçin.",
+  FREE_CANCELLATION_EXPIRED: "Ücretsiz iptal süresi (ilk 20 dakika) doldu; kiralama iptal edilemez.",
+  OTP_RECEIVED: "Bu numaraya SMS geldiği için kiralama iptal edilemez.",
+  NEW_OTP_RECEIVED: "Bu numaraya yeni SMS geldi; kiralama iptal edilemez.",
+  ACTIVATION_NOT_ACTIVE: "Bu kiralama sağlayıcıda artık aktif değil.",
   NO_BALANCE: "Sağlayıcı havuzunda geçici bakiye yetersizliği var. Lütfen yöneticiye bildirin veya biraz sonra tekrar deneyin.",
   CHANNELS_LIMIT: "Sağlayıcıda aynı anda açılabilecek numara sınırına ulaşıldı. Lütfen birkaç dakika sonra tekrar deneyin.",
   SERVICE_NOT_AVAILABLE: "Bu servis şu anda bu ülkede satışta değil. Lütfen başka bir ülke veya servis seçin.",
@@ -87,6 +117,133 @@ export const heroSms = {
     cachedPrices = null;
     pricesCacheTime = 0;
     cachedCountryPrices = {};
+    cachedRentPrices = {};
+  },
+
+  /**
+   * Numara kiralama (Full rent vb.) fiyat ve stokları (action=serviceCountRent, USD).
+   * Tek istekte tüm ülkeler döner; 60 sn önbelleklenir.
+   */
+  async getRentPrices(service = "full"): Promise<RentPriceMap> {
+    const now = Date.now();
+    const cached = cachedRentPrices[service];
+    if (cached && now - cached.time < 60000) return cached.data;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=serviceCountRent&service=${encodeURIComponent(service)}&currency=840&api_key=${apiKey}`;
+    try {
+      const r = await heroJson(url);
+      const data: RentPriceMap = r.ok && r.json && typeof r.json === "object" && !Array.isArray(r.json) ? r.json : {};
+      cachedRentPrices[service] = { data, time: now };
+      return data;
+    } catch (err) {
+      console.error("Hero-SMS serviceCountRent error:", err);
+      return cached?.data || {};
+    }
+  },
+
+  /**
+   * Numara kirala (action=getRentNumber). duration saat cinsindendir (24, 72, 168, 4320...).
+   * Yanıt: { activationId, phoneNumber, activationCost, activationEndTime, ... }
+   */
+  async getRentNumber(
+    service: string,
+    country: number,
+    hours: number
+  ): Promise<{ success: boolean; id?: string; number?: string; cost?: number; endsAt?: number; error?: string }> {
+    const settings = db.getSettings();
+    if (settings.mockMode) {
+      const sim = this.simulateGetNumber(service, country);
+      return { success: true, id: sim.id.replace("mock_", "mock_rent_"), number: sim.number, endsAt: Date.now() + hours * 3600000 };
+    }
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getRentNumber&service=${encodeURIComponent(service)}&country=${country}&duration=${hours}&currency=840&api_key=${apiKey}`;
+    try {
+      const r = await heroJson(url);
+      const j = r.json;
+      if (r.ok && j && j.activationId && j.phoneNumber) {
+        const end = j.activationEndTime ? Date.parse(j.activationEndTime) : NaN;
+        return {
+          success: true,
+          id: String(j.activationId),
+          number: String(j.phoneNumber),
+          cost: Number(j.activationCost) || undefined,
+          endsAt: Number.isFinite(end) ? end : undefined,
+        };
+      }
+      return { success: false, error: parseHeroError(r.text) };
+    } catch (err: any) {
+      console.error("Hero-SMS getRentNumber error:", err);
+      return { success: false, error: err.message || "Bağlantı hatası" };
+    }
+  },
+
+  /**
+   * Kiralanan numaraya gelen tüm SMS'ler (action=getAllSms).
+   * notActive: sağlayıcıda kiralama bitti/iptal edildi (ACTIVATION_NOT_ACTIVE).
+   * unknown: yanıt alınamadı; karar verilmemeli.
+   */
+  async getAllSms(activationId: string): Promise<{ items: RentSms[]; notActive?: boolean; unknown?: boolean; raw?: string }> {
+    if (activationId.startsWith("mock_")) {
+      const existing = db.getActivation(activationId);
+      const elapsed = existing ? (Date.now() - existing.createdAt) / 1000 : 0;
+      if (elapsed < 12) return { items: [] };
+      const code = existing?.smsCode && existing.smsCode !== "SMS" ? existing.smsCode : `${Math.floor(100000 + Math.random() * 900000)}`;
+      return {
+        items: [{ id: "mock1", from: "Test", code, text: `Your code is ${code}`, date: new Date().toISOString(), type: "sms" }],
+      };
+    }
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getAllSms&id=${encodeURIComponent(activationId)}&size=50&page=1&api_key=${apiKey}`;
+    try {
+      const r = await heroJson(url);
+      if (r.ok && Array.isArray(r.json?.data)) {
+        const items: RentSms[] = r.json.data.map((m: any) => ({
+          id: String(m.id ?? ""),
+          from: String(m.phoneFrom ?? ""),
+          code: m.code != null && String(m.code).trim() ? String(m.code).trim() : null,
+          text: m.text != null && String(m.text).trim() ? String(m.text) : null,
+          date: String(m.date ?? ""),
+          type: String(m.type ?? "sms"),
+        }));
+        // En yeni SMS başta
+        items.sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+        return { items, raw: r.text };
+      }
+      const code = parseHeroError(r.text);
+      if (code === "ACTIVATION_NOT_ACTIVE") return { items: [], notActive: true, raw: r.text };
+      return { items: [], unknown: true, raw: r.text };
+    } catch (err: any) {
+      console.error("Hero-SMS getAllSms error:", err);
+      return { items: [], unknown: true, raw: err.message };
+    }
+  },
+
+  /** Kiralamayı iptal et (action=cancelActivation, başarı: HTTP 204). Kural: SMS gelmediyse ve ilk 20 dk içinde. */
+  async cancelActivation(activationId: string): Promise<{ success: boolean; error?: string; raw: string }> {
+    if (activationId.startsWith("mock_")) return { success: true, raw: "" };
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=cancelActivation&id=${encodeURIComponent(activationId)}&api_key=${apiKey}`;
+    try {
+      const r = await heroJson(url);
+      if (r.ok && (r.status === 204 || r.status === 200)) return { success: true, raw: r.text };
+      return { success: false, error: parseHeroError(r.text), raw: r.text };
+    } catch (err: any) {
+      console.error("Hero-SMS cancelActivation error:", err);
+      return { success: false, error: "NETWORK", raw: err.message };
+    }
+  },
+
+  /** Kiralamayı sağlayıcıda sonlandır (action=finishActivation, başarı: HTTP 204). */
+  async finishActivation(activationId: string): Promise<{ success: boolean; raw: string }> {
+    if (activationId.startsWith("mock_")) return { success: true, raw: "" };
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=finishActivation&id=${encodeURIComponent(activationId)}&api_key=${apiKey}`;
+    try {
+      const r = await heroJson(url);
+      return { success: r.ok, raw: r.text };
+    } catch (err: any) {
+      return { success: false, raw: err.message };
+    }
   },
 
   /**

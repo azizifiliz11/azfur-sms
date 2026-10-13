@@ -95,6 +95,10 @@ export interface ActivationOrder {
   createdAt: number;
   expiresAt: number;
   notifiedBot: boolean;
+  /** "rent": süreli numara kiralama (Full rent). Süre boyunca tüm SMS'ler gelir; süre bitince iade yoktur. */
+  kind?: 'rent';
+  /** Kiralama süresi (saat) */
+  rentHours?: number;
 }
 
 export interface BankInfo {

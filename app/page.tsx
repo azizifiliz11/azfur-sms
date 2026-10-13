@@ -5,6 +5,7 @@ import { ClientOnly } from "@/components/ClientOnly";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Header } from "@/components/Header";
 import { RentPanel } from "@/components/RentPanel";
+import { FullRentCard } from "@/components/FullRentCard";
 import { ActiveNumbers } from "@/components/ActiveNumbers";
 import { DepositModal } from "@/components/DepositModal";
 import { SupportModal } from "@/components/SupportModal";
@@ -531,6 +532,14 @@ function HomeContent() {
                 telegramId={tgUser?.id || currentUser?.telegramId || 0}
               />
             )}
+
+            {/* Süreli numara kiralama (Full rent) — kiralanabilir ülke yoksa görünmez */}
+            <FullRentCard
+              userBalance={currentUser?.balance || 0}
+              telegramId={tgUser?.id || currentUser?.telegramId || 0}
+              onOrderSuccess={handleOrderSuccess}
+              onOpenDeposit={() => setDepositModalOpen(true)}
+            />
 
             {/* Numara Kiralama Paneli */}
             <RentPanel

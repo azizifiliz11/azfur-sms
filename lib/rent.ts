@@ -1,0 +1,76 @@
+import { db } from "./db";
+import { pricingEngine } from "./pricing";
+import type { RentPriceMap } from "./hero-sms";
+import type { Country } from "./types";
+
+export const RENT_SERVICE_CODE = "full";
+export const RENT_SERVICE_NAME = "Full rent (Tam kiralama)";
+
+export interface RentDurationOffer {
+  hours: number;
+  label: string;
+  stock: number;
+  priceTry: number;
+  costUsd: number;
+}
+
+export interface RentCountryOffer {
+  countryId: number;
+  countryName: string;
+  countryEng: string;
+  flag: string;
+  durations: RentDurationOffer[];
+}
+
+export function rentDurationLabel(hours: number): string {
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return days === 1 ? "1 gün" : `${days} gün`;
+  }
+  return `${hours} saat`;
+}
+
+/**
+ * Kiralama satış fiyatı. Ülke+servis manuel kuralları (sabit TL fiyat) süreden bağımsız olduğu için
+ * kullanılmaz; "full" servisine özel kâr marjı (Fiyat & Kâr → servis marjı) veya genel marj uygulanır.
+ */
+export function rentPriceTry(costUsd: number): number {
+  return pricingEngine.calculatePrice(costUsd, RENT_SERVICE_CODE).finalPriceTry;
+}
+
+/** Sağlayıcı fiyat haritasını, admin gizleme ayarlarına uyarak ülke/süre tekliflerine çevirir. */
+export function getRentOffers(prices: RentPriceMap, countries: Country[]): RentCountryOffer[] {
+  const settings = db.getSettings();
+  if (settings.hiddenServices?.includes(RENT_SERVICE_CODE)) return [];
+  const hiddenCountries = new Set((settings.hiddenCountries || []).map(Number));
+  const hiddenPairs = new Set(settings.hiddenServiceCountryPairs || []);
+  const byId = new Map(countries.map((c) => [Number(c.id), c]));
+
+  const offers: RentCountryOffer[] = [];
+  for (const [cid, durs] of Object.entries(prices || {})) {
+    const countryId = Number(cid);
+    if (!Number.isFinite(countryId) || hiddenCountries.has(countryId)) continue;
+    if (hiddenPairs.has(`${RENT_SERVICE_CODE}:${countryId}`)) continue;
+    const durations: RentDurationOffer[] = [];
+    for (const [h, v] of Object.entries(durs || {})) {
+      const hours = Number(h);
+      const cost = Number(v?.price);
+      const stock = Number(v?.count) || 0;
+      if (!Number.isFinite(hours) || hours <= 0 || !(cost > 0) || stock <= 0) continue;
+      durations.push({ hours, label: rentDurationLabel(hours), stock, priceTry: rentPriceTry(cost), costUsd: cost });
+    }
+    if (durations.length === 0) continue;
+    durations.sort((a, b) => a.hours - b.hours);
+    const c = byId.get(countryId);
+    offers.push({
+      countryId,
+      countryName: c?.nameTr || c?.eng || `Ülke ${countryId}`,
+      countryEng: c?.eng || "",
+      flag: c?.flag || "🌐",
+      durations,
+    });
+  }
+  // Stoğu bol ve ucuz olan önde
+  offers.sort((a, b) => b.durations[0].stock - a.durations[0].stock);
+  return offers;
+}

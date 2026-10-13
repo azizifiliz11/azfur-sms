@@ -6,7 +6,7 @@ import { CONFIG } from "./config";
 import { APP_BUILD_VERSION } from "./app-version";
 import { db } from "./db";
 import { heroSms, heroErrorMessage } from "./hero-sms";
-import { cancelOrderWithRefund, syncOrderWithProvider } from "./orders";
+import { cancelOrderWithRefund, finishOrderAtProvider, syncOrderWithProvider } from "./orders";
 import { pricingEngine } from "./pricing";
 import { ActivationOrder, SystemSettings, User } from "./types";
 import { rateLimiter } from "./rate-limit";
@@ -1641,7 +1641,7 @@ export function getTelegramBot(): Bot | null {
         }
         // Yalnızca kodu gelmiş/bekleyen sipariş tamamlanır (iade edilmiş sipariş tamamlanamaz)
         const finished = await db.claimActivationStatus(orderId, ["RECEIVED", "WAIT_CODE"], "COMPLETED");
-        if (finished) await heroSms.setStatus(orderId, 6);
+        if (finished) await finishOrderAtProvider(finished);
 
         const text =
           `🎉 <b>SİPARİŞİNİZ TAMAMLANDI!</b>\n` +

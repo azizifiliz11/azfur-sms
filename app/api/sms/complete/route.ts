@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTelegramUser } from "@/lib/request-auth";
-import { heroSms } from "@/lib/hero-sms";
+import { finishOrderAtProvider } from "@/lib/orders";
 import { db } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     if (!updatedOrder) {
       return NextResponse.json({ success: false, error: "Bu sipariş tamamlanamaz." }, { status: 409 });
     }
-    // Hero-SMS status=6 (tamamla)
-    await heroSms.setStatus(activationId, 6);
+    // Hero-SMS: aktivasyon için status=6, kiralama için finishActivation
+    await finishOrderAtProvider(updatedOrder);
 
     return NextResponse.json({
       success: true,

@@ -175,6 +175,8 @@ export async function POST(req: NextRequest) {
 
     // 8. Kullanıcı bakiyesine ANINDA ekle (SQL'de atomik)
     const updatedUser = await db.incrementUserBalance(telegramId, creditedAmount);
+    const { checkLargeDeposit } = await import("@/lib/admin-alerts");
+    await checkLargeDeposit(deposit).catch(() => {});
 
     // 9. Telegram botundan kullanıcıya bildirim gönder
     try {

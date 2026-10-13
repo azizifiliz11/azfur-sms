@@ -148,7 +148,12 @@ export const pricingEngine = {
 
     const catalog: CalculatedCatalogItem[] = [];
 
+    // Admin raporundan satışa kapatılan servis × ülke kombinasyonları
+    const hiddenPairs = new Set(settings.hiddenServiceCountryPairs || []);
+    const catalogCountryId = countryObj ? countryObj.id : countryIdToUse;
+
     for (const service of visibleServices) {
+      if (hiddenPairs.has(`${service.code}:${catalogCountryId}`)) continue;
       const priceInfo = countryPrices[service.code];
       const cost = priceInfo?.cost || 0.15;
       const stock = priceInfo?.count || (priceInfo?.physicalCount ? priceInfo.physicalCount * 10 : 0);

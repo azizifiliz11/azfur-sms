@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { fetchTelegramUserInfo, sendTelegramDirectMessage, getAdminUsernamesList } from "@/lib/telegram-bot";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
@@ -50,7 +51,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const users = db.getAllUsers();
+    // Gelişmiş arama: ?q= Telegram ID, kullanıcı adı/isim, telefon numarası veya TXID
+    const q = (searchParams.get("q") || "").trim();
+    let users = db.getAllUsers();
+    if (q) {
+      const { searchUserIds } = await import("@/lib/admin-reports");
+      const ids = new Set(await searchUserIds(q));
+      users = users.filter((u) => ids.has(Number(u.telegramId)));
+    }
     const allActivations = db.getAllActivations();
 
     // Kullanıcıları özet sipariş ve aktivasyon istatistikleriyle zenginleştir
@@ -79,7 +87,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
@@ -162,7 +170,8 @@ export async function POST(req: NextRequest) {
     // 3. Admin Rolü Verme / Kaldırma
     if (action === "toggle_role") {
       const { role } = body;
-      const updated = await db.updateUserRole(telegramId, role === "admin" ? "admin" : "user", userData);
+      const nextRole = role === "admin" ? "admin" : role === "support" ? "support" : "user";
+      const updated = await db.updateUserRole(telegramId, nextRole, userData);
       await db.addLog({
         category: "ADMIN",
         level: "WARN",
@@ -173,7 +182,12 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({
         success: true,
-        message: role === "admin" ? "Kullanıcıya admin yetkisi verildi" : "Admin yetkisi kaldırıldı",
+        message:
+          nextRole === "admin"
+            ? "Kullanıcıya admin yetkisi verildi"
+            : nextRole === "support"
+            ? "Kullanıcı destek görevlisi yapıldı (yalnızca destek talepleri)"
+            : "Yönetici/destek yetkisi kaldırıldı",
         user: updated,
       });
     }
@@ -293,3 +307,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("users", handlePOST);

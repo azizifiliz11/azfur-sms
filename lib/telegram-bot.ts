@@ -1299,6 +1299,20 @@ export function getTelegramBot(): Bot | null {
             flag: "🌐",
           };
 
+        const saleSettings = db.getSettings();
+        if (
+          saleSettings.hiddenServices?.includes(serviceCode) ||
+          saleSettings.hiddenCountries?.includes(countryId) ||
+          (saleSettings.hiddenServiceCountryPairs || []).includes(`${serviceCode}:${countryId}`)
+        ) {
+          await editOrReply(
+            ctx,
+            `⚠️ Bu servis bu ülke için şu anda satışta değil. Lütfen başka bir ülke seçin.`,
+            new InlineKeyboard().text("🔙 Başka Ülke Seç", `svc_sel:${serviceCode}`).row().text("🔙 Ana Menü", "btn_main_menu")
+          );
+          return;
+        }
+
         const prices = await heroSms.getPrices(countryId);
         const originalCost = prices[String(countryId)]?.[serviceCode]?.cost || 0.15;
         const calcRes = pricingEngine.calculatePrice(originalCost, serviceCode, undefined, countryId, user);

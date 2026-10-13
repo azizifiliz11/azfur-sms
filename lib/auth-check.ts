@@ -160,3 +160,20 @@ export async function isAuthorizedAdmin(req: Request): Promise<boolean> {
   await db.syncFromCloud();
   return checkAdminAuthWithRateLimit(req).authorized;
 }
+
+export type StaffRole = "admin" | "support";
+
+/**
+ * Yönetici veya destek görevlisi (role: "support"). Destek görevlisi yalnızca destek taleplerine erişir;
+ * kimlik Telegram'ın imzaladığı initData ile belirlenir.
+ */
+export async function getStaffRole(req: Request): Promise<StaffRole | null> {
+  await db.syncFromCloud();
+  // Önce imzalı kimlik: destek görevlisinin istekleri PIN kaba kuvvet sayacına yazılmasın
+  const verified = getVerifiedTelegramUser(req);
+  if (verified) {
+    if (db.isAdmin(verified.id)) return "admin";
+    if (db.getUser(verified.id)?.role === "support") return "support";
+  }
+  return checkAdminAuthWithRateLimit(req).authorized ? "admin" : null;
+}

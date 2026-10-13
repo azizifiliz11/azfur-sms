@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { heroSms } from "@/lib/hero-sms";
 import { tcmb } from "@/lib/tcmb";
 import { CONFIG } from "@/lib/config";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
+import { maskSettings, unmaskSettingsBody } from "@/lib/secret-mask";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,7 +18,8 @@ export async function GET(req: NextRequest) {
       heroSms.getServicesList(),
       tcmb.getLiveRate(false),
     ]);
-    const settings = db.getSettings();
+    // Gizli anahtarlar panele maskeli gönderilir (yalnızca son 4 karakter)
+    const settings = maskSettings(db.getSettings());
 
     return NextResponse.json({
       success: true,
@@ -30,13 +33,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
     const body = await req.json();
+    // Panel değiştirmediği gizli alanları maskeli geri gönderir: kayıtlı gerçek değerlerle değiştir
+    unmaskSettingsBody(body, db.getSettings());
 
     // Özel işlem: TCMB canlı kurunu anında yeniden çek
     if (body.action === "refresh_tcmb") {
@@ -46,7 +51,7 @@ export async function POST(req: NextRequest) {
           success: false,
           error: "Canlı kur servislerine ulaşılamadı; kayıtlı son kur korunuyor.",
           tcmbRateInfo: live,
-          settings: db.getSettings(),
+          settings: maskSettings(db.getSettings()),
         }, { status: 502 });
       }
       await db.addLog({
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
         success: true,
         message: `TCMB Kuru başarıyla güncellendi: ₺${live.rate.toFixed(4)}`,
         tcmbRateInfo: live,
-        settings: db.getSettings(),
+        settings: maskSettings(db.getSettings()),
       });
     }
 
@@ -166,7 +171,7 @@ export async function POST(req: NextRequest) {
           message: result.message || "Apirone hesabı başarıyla oluşturuldu!",
           account: result.account,
           transferKey: result.transferKey,
-          settings: db.getSettings(),
+          settings: maskSettings(db.getSettings()),
         });
       }
       return NextResponse.json({
@@ -236,7 +241,83 @@ export async function POST(req: NextRequest) {
       body.tcmbUpdateIntervalMinutes = interval;
     }
 
-    const updated = await db.updateSettings(body);
+    // --- Planlı bakım ---
+    if (body.action === "schedule_maintenance") {
+      const startAt = new Date(body.startAt);
+      const endAt = new Date(body.endAt);
+      if (isNaN(startAt.getTime()) || isNaN(endAt.getTime()) || endAt <= startAt) {
+        return NextResponse.json({ success: false, error: "Geçerli bir başlangıç ve bitiş zamanı girin (bitiş başlangıçtan sonra olmalı)." }, { status: 400 });
+      }
+      if (endAt.getTime() < Date.now()) {
+        return NextResponse.json({ success: false, error: "Bitiş zamanı geçmişte olamaz." }, { status: 400 });
+      }
+      const plan = {
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        message: String(body.message || "").slice(0, 600),
+      };
+      await db.updateSettings({ maintenanceSchedule: plan });
+      let announced = "";
+      if (body.announce) {
+        const { announceMaintenance } = await import("@/lib/maintenance-schedule");
+        const { runInBackground } = await import("@/lib/background");
+        runInBackground(() => announceMaintenance(plan), "maintenance-announce");
+        announced = " Kullanıcılara duyuru gönderiliyor.";
+      }
+      return NextResponse.json({
+        success: true,
+        message: `Bakım planlandı.${announced}`,
+        settings: maskSettings(db.getSettings()),
+      });
+    }
+    if (body.action === "cancel_maintenance_schedule") {
+      const plan = db.getSettings().maintenanceSchedule;
+      const patch: any = { maintenanceSchedule: null };
+      // Plan bakımı açtıysa iptalde sistemi de aç
+      if (plan?.enabledBySchedule) patch.maintenanceMode = false;
+      await db.updateSettings(patch);
+      return NextResponse.json({ success: true, message: "Bakım planı iptal edildi.", settings: maskSettings(db.getSettings()) });
+    }
+
+    // --- Servis × ülke kombinasyonunu satışa kapat / aç ---
+    if (body.action === "toggle_pair") {
+      const pair = String(body.pair || "");
+      if (!/^[a-z0-9_]+:\d+$/i.test(pair)) {
+        return NextResponse.json({ success: false, error: "Geçersiz kombinasyon" }, { status: 400 });
+      }
+      const current = new Set(db.getSettings().hiddenServiceCountryPairs || []);
+      if (body.hidden) current.add(pair);
+      else current.delete(pair);
+      await db.updateSettings({ hiddenServiceCountryPairs: [...current] });
+      return NextResponse.json({
+        success: true,
+        message: body.hidden ? "Kombinasyon satışa kapatıldı." : "Kombinasyon yeniden satışa açıldı.",
+        hiddenServiceCountryPairs: [...current],
+      });
+    }
+
+    // --- Uyarı eşikleri ve günlük rapor ---
+    if (body.action === "save_alert_settings") {
+      const { DEFAULT_ALERT_SETTINGS } = await import("@/lib/admin-alerts");
+      const a = body.alertSettings || {};
+      const num = (v: any, def: number, min: number, max: number) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : def;
+      };
+      const alertSettings = {
+        enabled: a.enabled !== false,
+        providerBalanceMin: num(a.providerBalanceMin, DEFAULT_ALERT_SETTINGS.providerBalanceMin, 0, 100000),
+        refundsPerHour: num(a.refundsPerHour, DEFAULT_ALERT_SETTINGS.refundsPerHour, 0, 1000),
+        largeDepositTry: num(a.largeDepositTry, DEFAULT_ALERT_SETTINGS.largeDepositTry, 0, 10000000),
+        couponFailsPer10Min: num(a.couponFailsPer10Min, DEFAULT_ALERT_SETTINGS.couponFailsPer10Min, 0, 1000),
+        dailyReportEnabled: a.dailyReportEnabled !== false,
+        dailyReportHour: Math.round(num(a.dailyReportHour, DEFAULT_ALERT_SETTINGS.dailyReportHour, 0, 23)),
+      };
+      await db.updateSettings({ alertSettings });
+      return NextResponse.json({ success: true, message: "Uyarı ayarları kaydedildi.", alertSettings });
+    }
+
+        const updated = await db.updateSettings(body);
     if (body.heroSmsApiKey !== undefined) {
       heroSms.clearCache();
     }
@@ -298,9 +379,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Kâr marjı ve sistem ayarları başarıyla güncellendi",
-      settings: updated,
+      settings: maskSettings(updated),
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("settings", handlePOST);

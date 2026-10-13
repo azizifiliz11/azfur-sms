@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { TicketMessage } from "@/lib/types";
 import { sendTelegramDirectMessage } from "@/lib/telegram-bot";
-import { isAuthorizedAdmin } from "@/lib/auth-check";
+import { getStaffRole } from "@/lib/auth-check";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export async function GET(req: NextRequest) {
   try {
-    if (!(await isAuthorizedAdmin(req))) {
+    if (!(await getStaffRole(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
@@ -34,9 +35,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
-    if (!(await isAuthorizedAdmin(req))) {
+    if (!(await getStaffRole(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
@@ -169,3 +170,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("tickets", handlePOST);

@@ -124,6 +124,10 @@ if (process.env.VERCEL && !POSTGRES_URL) {
 }
 
 let sqlClient: ReturnType<typeof neon> | null = null;
+export function getSqlClient() {
+  return getSql();
+}
+
 function getSql() {
   if (!sqlClient && POSTGRES_URL) {
     try {
@@ -417,7 +421,7 @@ async function saveLogToSql(log: SystemLog): Promise<void> {
         ${log.level},
         ${log.action},
         ${log.details || null},
-        ${log.metadata ? JSON.stringify(log.metadata) : null}
+        ${log.metadata || log.telegramId ? JSON.stringify({ ...(log.metadata || {}), ...(log.telegramId ? { telegramId: Number(log.telegramId) } : {}) }) : null}
       )
       ON CONFLICT (id) DO NOTHING;
     `;
@@ -1734,7 +1738,7 @@ export const db = {
 
   async updateUserRole(
     telegramId: number | string,
-    role: "admin" | "user",
+    role: "admin" | "user" | "support",
     userData?: Partial<User>
   ): Promise<User> {
     const data = loadDb();
@@ -3359,6 +3363,12 @@ export const db = {
         const { tcmb } = await import("./tcmb");
         await tcmb.getLiveRate().catch((err) => console.error("[AutoRate Trigger Error]:", err));
       }
+      // Yönetici uyarıları: sağlayıcı kasası düşük, günlük özet
+      const { runAdminAlertChecks } = await import("./admin-alerts");
+      await runAdminAlertChecks().catch((err) => console.error("[AdminAlerts Error]:", err));
+      // Zamanlanmış bakım modu (başlangıç/bitiş)
+      const { applyMaintenanceSchedule } = await import("./maintenance-schedule");
+      await applyMaintenanceSchedule().catch((err) => console.error("[MaintenanceSchedule Error]:", err));
       // Kod bekleyen siparişler: kod bildirimi ve süre dolumu iadesi (kullanıcı uygulamayı kapatsa bile)
       const { reconcileActiveOrders } = await import("./orders");
       await reconcileActiveOrders().catch((err) => console.error("[OrderReconcile Error]:", err));

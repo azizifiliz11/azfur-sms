@@ -61,7 +61,7 @@ export interface User {
   lastName?: string;
   balance: number;
   spent: number;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'support'; // support: yalnızca destek taleplerini yönetir
   isBanned?: boolean;
   // VIP Üyelik Sistemi
   isVip?: boolean;
@@ -163,6 +163,9 @@ export interface SystemSettings {
   maintenanceMode?: boolean; // Sistem bakım modu (Kullanıcılara kapalı, adminlere açık)
   maintenanceMessage?: string; // Samimi özel bakım mesajı
   webhookSecretActive?: boolean; // Telegram webhook gizli anahtarla kayıtlı (anahtarsız güncellemeler reddedilir)
+  alertSettings?: Partial<import("./admin-alerts").AlertSettings>; // Yönetici uyarı eşikleri ve günlük rapor
+  hiddenServiceCountryPairs?: string[]; // "servis:ülke" — satışa kapatılan kombinasyonlar
+  maintenanceSchedule?: import("./maintenance-schedule").MaintenanceSchedule | null; // Planlı bakım
 }
 
 export interface BackupStats {

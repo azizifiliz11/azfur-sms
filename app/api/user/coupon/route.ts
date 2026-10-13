@@ -59,6 +59,8 @@ export async function POST(req: NextRequest) {
     const result = await db.redeemCoupon(code, Number(telegramId));
 
     if (!result.success) {
+      const { recordCouponFailure } = await import("@/lib/admin-alerts");
+      await recordCouponFailure(Number(telegramId), String(code)).catch(() => {});
       return NextResponse.json(
         { success: false, error: result.message },
         { status: 400 }

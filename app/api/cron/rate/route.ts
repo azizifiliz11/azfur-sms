@@ -20,6 +20,12 @@ export async function GET(req: NextRequest) {
     // Zamanı gelmişse otomatik veritabanı yedeğini de al
     await db.checkAndRunAutoBackup().catch((e) => console.error("Cron rate auto backup error:", e));
 
+    // Yönetici uyarıları (kasa düşük, günlük özet) ve zamanlanmış bakım modu
+    const { runAdminAlertChecks } = await import("@/lib/admin-alerts");
+    await runAdminAlertChecks().catch((e) => console.error("Cron admin alerts error:", e));
+    const { applyMaintenanceSchedule } = await import("@/lib/maintenance-schedule");
+    await applyMaintenanceSchedule().catch((e) => console.error("Cron maintenance schedule error:", e));
+
     // Kod bekleyen siparişleri sağlayıcıdan eşitle (kod bildirimi / süre dolumu iadesi)
     const { reconcileActiveOrders } = await import("@/lib/orders");
     await reconcileActiveOrders().catch((e) => console.error("Cron order reconcile error:", e));

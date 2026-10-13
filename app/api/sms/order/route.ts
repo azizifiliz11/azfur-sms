@@ -47,6 +47,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Satışa kapatılmış servis/ülke (admin) — katalogda görünmese de doğrudan istekle alınamasın
+    if (
+      settings.hiddenServices?.includes(serviceCode) ||
+      settings.hiddenCountries?.includes(Number(countryId)) ||
+      (settings.hiddenServiceCountryPairs || []).includes(`${serviceCode}:${Number(countryId)}`)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Bu servis bu ülke için şu anda satışta değil. Lütfen başka bir seçenek deneyin." },
+        { status: 400 }
+      );
+    }
+
     // 2. Servis ve Ülke bilgilerini al
     const [countries, services, prices] = await Promise.all([
       heroSms.getCountries(),

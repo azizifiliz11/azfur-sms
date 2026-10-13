@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
 
@@ -37,13 +38,37 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
     }
     await db.syncFromCloud();
-    const { depositId, status } = await req.json();
+    const body = await req.json();
+    const { depositId, status } = body;
+
+    // Bekleyen otomatik kripto ödemesini sağlayıcıdan (Apirone/OxaPay) şimdi kontrol et
+    if (body.action === "check_provider") {
+      const dep = db.getDeposits().find((d) => d.id === depositId);
+      if (!dep) return NextResponse.json({ success: false, error: "Talep bulunamadı" }, { status: 404 });
+      body.telegramId = dep.telegramId;
+      if (dep.status !== "PENDING") {
+        return NextResponse.json({ success: false, error: "Bu talep artık beklemede değil." }, { status: 409 });
+      }
+      const { confirmCryptoDeposit, isAutoCryptoDeposit } = await import("@/lib/deposit-confirm");
+      if (!isAutoCryptoDeposit(dep)) {
+        return NextResponse.json({ success: false, error: "Bu talep otomatik kripto ödemesi değil; elle onaylayın." }, { status: 400 });
+      }
+      const { approved, payInfo } = await confirmCryptoDeposit(dep);
+      return NextResponse.json({
+        success: true,
+        approved: Boolean(approved),
+        providerStatus: payInfo?.status || "unknown",
+        message: approved
+          ? `Ödeme sağlayıcıda doğrulandı, ₺${dep.amount.toFixed(2)} yüklendi.`
+          : `Sağlayıcı durumu: ${payInfo?.status || "bilinmiyor"} — henüz ödenmemiş.`,
+      });
+    }
 
     if (!depositId || !status || (status !== "APPROVED" && status !== "REJECTED")) {
       return NextResponse.json({ success: false, error: "Geçersiz parametreler" }, { status: 400 });
@@ -77,3 +102,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("deposits", handlePOST);

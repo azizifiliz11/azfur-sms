@@ -78,6 +78,7 @@ export async function cancelOrderWithRefund(orderId: string, requesterId: number
     metadata: { orderId: order.id, phoneNumber: order.phoneNumber, refundAmount: order.chargedPrice },
   }).catch(() => {});
 
+  import("./admin-alerts").then((m) => m.checkRefundBurst(Number(order.telegramId))).catch(() => {});
   return { ok: true, order: claimed, user };
 }
 
@@ -113,6 +114,7 @@ export async function refundUnfulfilledOrder(
     metadata: { orderId: order.id, refundAmount: order.chargedPrice, reason: to },
   }).catch(() => {});
   notifyRefund(order, user?.balance).catch(() => {});
+  import("./admin-alerts").then((m) => m.checkRefundBurst(Number(order.telegramId))).catch(() => {});
   return claimed;
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { heroSms } from "@/lib/hero-sms";
 import { db } from "@/lib/db";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
@@ -118,7 +119,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json({ success: false, error: "Yetkisiz Erişim! Yönetici PIN kodu gereklidir." }, { status: 403 });
@@ -138,3 +139,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("overview", handlePOST);

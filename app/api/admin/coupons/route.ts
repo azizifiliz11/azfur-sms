@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { isAuthorizedAdmin } from "@/lib/auth-check";
 import { Coupon, CouponType } from "@/lib/types";
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     if (!(await isAuthorizedAdmin(req))) {
       return NextResponse.json(
@@ -168,3 +169,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("coupons", handlePOST);

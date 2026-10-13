@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAdminAudit } from "@/lib/admin-audit";
 import { db } from "@/lib/db";
 import { checkAdminAuthWithRateLimit } from "@/lib/auth-check";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   try {
     await db.syncFromCloud();
     const auth = checkAdminAuthWithRateLimit(req);
@@ -111,7 +112,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     await db.syncFromCloud();
     const auth = checkAdminAuthWithRateLimit(req);
@@ -229,3 +230,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// Başarılı yönetici işlemleri silinemez işlem kaydına (admin_audit) yazılır
+export const POST = withAdminAudit("backups", handlePOST);
+export const GET = withAdminAudit("backups", handleGET, { onlyActions: ["download_current", "download"] });

@@ -43,6 +43,8 @@ export async function confirmCryptoDeposit(dep: DepositRequest, trackIdOverride?
         `🆔 <b>İşlem No:</b> <code>#${trackId}</code>\n` +
         `⚡ Bakiyeniz hesabınıza otomatik olarak yüklenmiştir. Keyifli kullanımlar dileriz!`
     ).catch((err) => console.error("[DepositConfirm] Bildirim gönderilemedi:", err));
+    const { checkLargeDeposit } = await import("./admin-alerts");
+    await checkLargeDeposit(approved).catch(() => {});
   }
   return { approved, payInfo, tolerance };
 }

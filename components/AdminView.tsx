@@ -363,7 +363,6 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           }
           if (cs.apironeTransferKey) {
             setApironeTransferKey(cs.apironeTransferKey);
-            try { localStorage.setItem("azfur_apirone_transfer_key", cs.apironeTransferKey); } catch {}
           }
           setOxapayApiKey(cs.oxapayApiKey || "");
           setAutoVerifyEnabled(cs.autoVerifyEnabled ?? true);
@@ -422,11 +421,11 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
   useEffect(() => {
     try {
       const localAcc = localStorage.getItem("azfur_apirone_account");
-      const localKey = localStorage.getItem("azfur_apirone_transfer_key");
+      // Gizli transfer anahtarı artık cihazda saklanmaz; eski sürümlerden kalan kaydı temizle
+      localStorage.removeItem("azfur_apirone_transfer_key");
       const localUsdt = localStorage.getItem("azfur_usdt_trc20_address");
       const localTrx = localStorage.getItem("azfur_trx_address");
       if (localAcc) setApironeAccount(localAcc);
-      if (localKey) setApironeTransferKey(localKey);
       if (localUsdt) setUsdtTrc20Address(localUsdt);
       if (localTrx) setTrxAddress(localTrx);
     } catch {}
@@ -1328,7 +1327,6 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         try { localStorage.setItem("azfur_apirone_account", acc); } catch {}
       }
       if (key) {
-        try { localStorage.setItem("azfur_apirone_transfer_key", key); } catch {}
       }
       if (trc) {
         try { localStorage.setItem("azfur_usdt_trc20_address", trc); } catch {}
@@ -1364,7 +1362,6 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
           }
           if (cs.apironeTransferKey) {
             setApironeTransferKey(cs.apironeTransferKey);
-            try { localStorage.setItem("azfur_apirone_transfer_key", cs.apironeTransferKey); } catch {}
           }
           if (cs.usdtTrc20Address) {
             setUsdtTrc20Address(cs.usdtTrc20Address);
@@ -1409,7 +1406,6 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         haptic.success();
         try {
           if (acc) localStorage.setItem("azfur_apirone_account", acc);
-          if (key) localStorage.setItem("azfur_apirone_transfer_key", key);
         } catch {}
         setApironeTestResult({
           success: true,
@@ -1508,7 +1504,6 @@ export function AdminView({ onBackToApp, onCurrentUserUpdated }: AdminViewProps)
         haptic.success();
         try {
           if (apironeAccount.trim()) localStorage.setItem("azfur_apirone_account", apironeAccount.trim());
-          if (apironeTransferKey.trim()) localStorage.setItem("azfur_apirone_transfer_key", apironeTransferKey.trim());
           if (targetAddr) localStorage.setItem("azfur_usdt_trc20_address", targetAddr);
         } catch {}
         alert("✅ Gelen tüm USDT (TRC-20) ödemelerinin kişisel cüzdanınıza otomatik aktarılması (Forwarding) başarıyla aktif edildi!");

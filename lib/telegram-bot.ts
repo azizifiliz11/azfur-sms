@@ -6,7 +6,14 @@ import { CONFIG } from "./config";
 import { APP_BUILD_VERSION } from "./app-version";
 import { db } from "./db";
 import { heroSms, heroErrorMessage } from "./hero-sms";
-import { cancelOrderWithRefund, finishOrderAtProvider, syncOrderWithProvider } from "./orders";
+import {
+  cancelOrderWithRefund,
+  EARLY_CANCEL_MS,
+  finishOrderAtProvider,
+  isRentOrder,
+  RENT_FREE_CANCEL_MS,
+  syncOrderWithProvider,
+} from "./orders";
 import { pricingEngine } from "./pricing";
 import { ActivationOrder, SystemSettings, User } from "./types";
 import { rateLimiter } from "./rate-limit";
@@ -257,6 +264,16 @@ function buildMainMenuKeyboard(isAdmin: boolean, appUrl: string, adminUrl: strin
   return kb;
 }
 
+// Bot mesajlarında servis adının önündeki emoji. ServiceItem.icon bir simge anahtarıdır ("whatsapp", "other"),
+// doğrudan yazılınca mesajda "other Instagram" gibi görünüyordu.
+const SERVICE_EMOJI: Record<string, string> = {
+  wa: "💬", tg: "✈️", dr: "🤖", go: "🔍", ig: "📸", ds: "🎮", fb: "📘", lf: "🎵", tw: "🐦",
+  wb: "💚", vi: "💜", mm: "🪟", mb: "📧", am: "📦", full: "📅",
+};
+function serviceEmoji(code: string | undefined): string {
+  return SERVICE_EMOJI[String(code || "")] || "📱";
+}
+
 async function editOrReply(ctx: any, text: string, keyboard: InlineKeyboard) {
   try {
     if (ctx.callbackQuery?.message?.photo) {
@@ -278,7 +295,8 @@ async function editOrReply(ctx: any, text: string, keyboard: InlineKeyboard) {
       return;
     }
   } catch (err: any) {
-    // Mesaj düzenlenemezse veya içerik aynıysa yeni mesaj olarak at
+    // İçerik aynıysa (aynı butona tekrar basıldı) yeni mesaj atma; aksi halde yeni mesaj olarak gönder
+    if (String(err?.description || err?.message || "").includes("message is not modified")) return;
   }
 
   try {
@@ -324,6 +342,29 @@ export function getTelegramBot(): Bot | null {
     const botInfo = cachedBotInfo || settings.botInfo;
     botInstance = new Bot(CONFIG.TELEGRAM_BOT_TOKEN, {
       ...(botInfo ? { botInfo } : {}),
+    });
+
+    // ==========================================
+    // 0.0. BUTON CEVABI (answerCallbackQuery) TEK SEFERLİK
+    // ==========================================
+    // Telegram bir buton tıklamasına yalnızca BİR KEZ cevap verilmesine izin verir. Önceden her tıklama
+    // hemen boş cevaplanıyordu; sonradan gösterilmek istenen uyarılar ("ilk 2 dakika iptal edilemez",
+    // "henüz kod gelmedi" ...) sessizce düşüyor ve buton tepki vermiyor gibi görünüyordu. Artık ilk
+    // cevap kazanır; işleyici cevap vermediyse işlem bitince boş cevapla yükleniyor çemberi kapatılır.
+    botInstance.use(async (ctx, next) => {
+      if (!ctx.callbackQuery) return next();
+      let answered = false;
+      const answer = ctx.answerCallbackQuery.bind(ctx);
+      ctx.answerCallbackQuery = ((...args: Parameters<typeof answer>) => {
+        if (answered) return Promise.resolve(true);
+        answered = true;
+        return answer(...args);
+      }) as typeof ctx.answerCallbackQuery;
+      try {
+        await next();
+      } finally {
+        if (!answered) await ctx.answerCallbackQuery().catch(() => {});
+      }
     });
 
     // ==========================================
@@ -1100,8 +1141,7 @@ export function getTelegramBot(): Bot | null {
       const from = ctx.from;
       if (!from) return;
 
-      // 1. Buton tıklamasını ANINDA Telegram'a bildir ve yükleniyor çemberini kes (Non-blocking, 0ms)
-      ctx.answerCallbackQuery().catch(() => {});
+      // Buton cevabı (uyarı/bildirim) işleyicilerde verilir; verilmezse 0.0 middleware'i boş cevaplar.
 
       // 2. Kullanıcıyı bellekten hemen getir (0ms)
       const user =
@@ -1180,12 +1220,12 @@ export function getTelegramBot(): Bot | null {
           const s1 = POPULAR_SERVICES[i];
           const s2 = POPULAR_SERVICES[i + 1];
           if (s2) {
-            kb.text(`${s1.icon} ${s1.name}`, `svc_sel:${s1.code}`).text(
-              `${s2.icon} ${s2.name}`,
+            kb.text(`${serviceEmoji(s1.code)} ${s1.name}`, `svc_sel:${s1.code}`).text(
+              `${serviceEmoji(s2.code)} ${s2.name}`,
               `svc_sel:${s2.code}`
             ).row();
           } else {
-            kb.text(`${s1.icon} ${s1.name}`, `svc_sel:${s1.code}`).row();
+            kb.text(`${serviceEmoji(s1.code)} ${s1.name}`, `svc_sel:${s1.code}`).row();
           }
         }
 
@@ -1224,7 +1264,7 @@ export function getTelegramBot(): Bot | null {
           };
 
         const text =
-          `🌍 <b>${serviceObj.icon} ${serviceObj.name} İÇİN ÜLKE SEÇİN</b>\n` +
+          `🌍 <b>${serviceEmoji(serviceObj.code)} ${serviceObj.name} İÇİN ÜLKE SEÇİN</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `💰 <b>Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n\n` +
           `Numara almak istediğiniz ülkeyi seçin 👇`;
@@ -1334,7 +1374,7 @@ export function getTelegramBot(): Bot | null {
         const text =
           `🛒 <b>NUMARA SATIN ALMA ONAYI</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `📱 <b>Servis:</b> ${serviceObj.icon} ${serviceObj.name}\n` +
+          `📱 <b>Servis:</b> ${serviceEmoji(serviceObj.code)} ${serviceObj.name}\n` +
           `🌍 <b>Ülke:</b> ${countryObj.flag} ${countryObj.name}\n` +
           `💵 <b>Numara Tutarı:</b> ${priceDisplay}\n` +
           `💳 <b>Mevcut Bakiyeniz:</b> <code>${user.balance.toFixed(2)} ₺</code>\n` +
@@ -1494,21 +1534,21 @@ export function getTelegramBot(): Bot | null {
         const text =
           `🎉 <b>NUMARANIZ BAŞARIYLA ALINDI!</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `📱 <b>Servis:</b> ${serviceObj.icon} ${serviceObj.name}\n` +
+          `📱 <b>Servis:</b> ${serviceEmoji(serviceObj.code)} ${serviceObj.name}\n` +
           `🌍 <b>Ülke:</b> ${countryObj.flag} ${countryObj.name}\n` +
           `📞 <b>Telefon Numarası:</b>\n<code>${formattedPhone}</code>\n` +
           `<i>(Kopyalamak için numaranın üzerine dokunun)</i>\n\n` +
           `⏳ <b>Durum:</b> SMS Kodu Bekleniyor...\n` +
           `⏱️ <b>Bekleme Süresi:</b> 15 Dakika\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `💡 <i>İlgili uygulamaya gidip bu numarayı girin. SMS kodu geldiğinde bot otomatik olarak bildirim gönderecektir. Kod gelmezse iptal edip ücretinizi anında geri alabilirsiniz.</i>`;
+          `💡 <i>İlgili uygulamaya gidip bu numarayı girin. SMS kodu geldiğinde bot otomatik olarak bildirim gönderecektir. Kod gelmezse (numara alındıktan 2 dakika sonra) iptal edip ücretinizi anında geri alabilirsiniz.</i>`;
 
         const kb = new InlineKeyboard()
           .text("🔄 Kodu Kontrol Et", `order_chk:${order.id}`)
           .row()
           .text("❌ İptal Et & İade Al", `order_cnc:${order.id}`)
-          .text("✅ Tamamla", `order_fin:${order.id}`)
           .row()
+          .text("📜 Numaralarım", "btn_my_orders")
           .text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
@@ -1593,18 +1633,9 @@ export function getTelegramBot(): Bot | null {
       // --- SİPARİŞİ İPTAL ET VE İADE AL ---
       if (data.startsWith("order_cnc:")) {
         const orderId = data.split(":")[1];
-        const order = db.getActivation(orderId);
-
-        if (!order) {
-          await editOrReply(
-            ctx,
-            `❌ Sipariş bulunamadı.`,
-            new InlineKeyboard().text("🔙 Ana Menü", "btn_main_menu")
-          );
-          return;
-        }
 
         // Sahiplik, durum kontrolü, atomik kilit ve tek seferlik iade lib/orders.ts içinde
+        // (sipariş başka bir sunucu örneğinde oluşmuş olabilir; orada SQL'den eşitlenir)
         const cancelResult = await cancelOrderWithRefund(orderId, Number(from.id));
         if (!cancelResult.ok) {
           try {
@@ -1612,6 +1643,7 @@ export function getTelegramBot(): Bot | null {
           } catch (e) {}
           return;
         }
+        const order = cancelResult.order;
         const updatedUser = cancelResult.user;
 
         const text =
@@ -1639,9 +1671,23 @@ export function getTelegramBot(): Bot | null {
           try { await ctx.answerCallbackQuery({ text: "Sipariş bulunamadı.", show_alert: true }); } catch (e) {}
           return;
         }
-        // Yalnızca kodu gelmiş/bekleyen sipariş tamamlanır (iade edilmiş sipariş tamamlanamaz)
+        // Kodu gelmemiş SMS siparişi tamamlanırsa ücret iade edilmeden kapanır: önce iptal/iade önerilir
+        if (finOrder.status === "WAIT_CODE" && !isRentOrder(finOrder)) {
+          try {
+            await ctx.answerCallbackQuery({
+              text: "Bu numaraya henüz SMS kodu gelmedi. Kod gelmeden tamamlarsanız ücret iade edilmez; kod gelmeyecekse 'İptal Et & İade Al' butonunu kullanın.",
+              show_alert: true,
+            });
+          } catch (e) {}
+          return;
+        }
+        // Yalnızca kodu gelmiş (veya süren kiralık) sipariş tamamlanır; iade edilmiş sipariş tamamlanamaz
         const finished = await db.claimActivationStatus(orderId, ["RECEIVED", "WAIT_CODE"], "COMPLETED");
-        if (finished) await finishOrderAtProvider(finished);
+        if (!finished) {
+          try { await ctx.answerCallbackQuery({ text: "Bu sipariş tamamlanamaz (iptal edilmiş veya zaten tamamlanmış).", show_alert: true }); } catch (e) {}
+          return;
+        }
+        await finishOrderAtProvider(finished);
 
         const text =
           `🎉 <b>SİPARİŞİNİZ TAMAMLANDI!</b>\n` +
@@ -1723,6 +1769,31 @@ export function getTelegramBot(): Bot | null {
           return;
         }
 
+        if (Number(order.telegramId) !== Number(from.id)) {
+          try { await ctx.answerCallbackQuery({ text: "Bu sipariş size ait değil.", show_alert: true }); } catch (e) {}
+          return;
+        }
+
+        const rent = isRentOrder(order);
+        const waiting = order.status === "WAIT_CODE";
+        const now = Date.now();
+        const earlyLeftMs = !rent && waiting ? order.createdAt + EARLY_CANCEL_MS - now : 0;
+        const canCancel = waiting && (!rent || now - order.createdAt < RENT_FREE_CANCEL_MS);
+        const canFinish = order.status === "RECEIVED" || (rent && waiting);
+        const statusLabel: Record<string, string> = {
+          WAIT_CODE: "⏳ Kod Bekleniyor",
+          RECEIVED: "🔔 Kod Geldi",
+          COMPLETED: "✅ Tamamlandı",
+          CANCELLED: "↩️ İptal Edildi (iade yapıldı)",
+          TIMEOUT: "⌛ Süre Doldu (iade yapıldı)",
+        };
+        let cancelHint = "";
+        if (earlyLeftMs > 0) {
+          const sec = Math.ceil(earlyLeftMs / 1000);
+          const left = sec >= 60 ? `${Math.floor(sec / 60)} dk ${sec % 60} sn` : `${sec} sn`;
+          cancelHint = `\nℹ️ <i>Numara alındıktan sonraki ilk 2 dakika iptal edilemez. İptal ${left} sonra açılır.</i>`;
+        }
+
         const text =
           `📱 <b>SİPARİŞ DETAYI</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1730,17 +1801,16 @@ export function getTelegramBot(): Bot | null {
           `🌐 <b>Servis:</b> ${order.countryFlag} ${order.serviceName} (${order.countryName})\n` +
           `💰 <b>Tutar:</b> <code>${order.chargedPrice.toFixed(2)} ₺</code>\n` +
           `🔑 <b>SMS Kodu:</b> ${order.smsCode ? `<code>${order.smsCode}</code>` : "<i>(Henüz gelmedi)</i>"}\n` +
-          `⏳ <b>Durum:</b> ${order.status === "WAIT_CODE" ? "Kod Bekleniyor" : order.status}\n` +
-          `━━━━━━━━━━━━━━━━━━━━`;
+          `📌 <b>Durum:</b> ${statusLabel[order.status] || order.status}\n` +
+          `━━━━━━━━━━━━━━━━━━━━` +
+          cancelHint;
 
-        const kb = new InlineKeyboard()
-          .text("🔄 Kodu Kontrol Et", `order_chk:${order.id}`)
-          .row()
-          .text("❌ İptal Et & İade Al", `order_cnc:${order.id}`)
-          .text("✅ Tamamla", `order_fin:${order.id}`)
-          .row()
-          .text("📜 Numaralarım", "btn_my_orders")
-          .text("🔙 Ana Menü", "btn_main_menu");
+        const kb = new InlineKeyboard();
+        if (waiting || order.status === "RECEIVED") kb.text("🔄 Kodu Kontrol Et", `order_chk:${order.id}`).row();
+        if (canCancel) kb.text("❌ İptal Et & İade Al", `order_cnc:${order.id}`);
+        if (canFinish) kb.text("✅ Tamamla", `order_fin:${order.id}`);
+        if (canCancel || canFinish) kb.row();
+        kb.text("📜 Numaralarım", "btn_my_orders").text("🔙 Ana Menü", "btn_main_menu");
 
         await editOrReply(ctx, text, kb);
         return;

@@ -23,6 +23,15 @@ export interface PriceStockItem {
   physicalCount?: number;
 }
 
+/** Bir servisin tek bir ülkedeki satış fiyatı ve stoğu (ülke seçiminde sıralama için) */
+export interface CountryOffer {
+  countryId: number;
+  priceTry: number;
+  stock: number;
+  physicalStock: number;
+  qualityScore: number;
+}
+
 export interface CalculatedCatalogItem {
   serviceCode: string;
   serviceName: string;

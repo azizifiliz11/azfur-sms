@@ -1,7 +1,38 @@
 import { db } from "./db";
-import { CalculatedCatalogItem, Country, ServiceItem, User } from "./types";
+import { CalculatedCatalogItem, Country, CountryOffer, ServiceItem, User } from "./types";
 import { heroSms } from "./hero-sms";
 import { tcmb } from "./tcmb";
+
+/** Kalite skoru: stok derinliği ve fiziksel SIM mevcudiyetine göre gerçekçi başarı oranı (%50 - %99) */
+function qualityScoreFor(stock: number, physicalStock: number): number {
+  let qualityScore = 85;
+  if (stock > 10000) qualityScore = 98;
+  else if (stock > 2500) qualityScore = 96;
+  else if (stock > 500) qualityScore = 93;
+  else if (stock > 50) qualityScore = 89;
+  else if (stock > 0) qualityScore = 85;
+  else qualityScore = 50;
+
+  if (physicalStock > 0 && stock > 0) {
+    qualityScore = Math.min(99, qualityScore + 2);
+  }
+  return qualityScore;
+}
+
+/** Otomatik TCMB kuru açıksa canlı kur, değilse ayarlardaki kur */
+async function getEffectiveRate(): Promise<number> {
+  const settings = db.getSettings();
+  let effectiveRate = settings.exchangeRateToTry || 49.20;
+  if (settings.useTcmbAutoRate) {
+    try {
+      const live = await tcmb.getLiveRate();
+      effectiveRate = live.rate;
+    } catch (e) {
+      effectiveRate = settings.lastTcmbRate || settings.exchangeRateToTry || 49.20;
+    }
+  }
+  return effectiveRate;
+}
 
 export const pricingEngine = {
   /**
@@ -118,15 +149,7 @@ export const pricingEngine = {
     const settings = db.getSettings();
 
     // Otomatik TCMB kuru açıksa canlı kuru güncelle
-    let effectiveRate = settings.exchangeRateToTry || 49.20;
-    if (settings.useTcmbAutoRate) {
-      try {
-        const live = await tcmb.getLiveRate();
-        effectiveRate = live.rate;
-      } catch (e) {
-        effectiveRate = settings.lastTcmbRate || settings.exchangeRateToTry || 49.20;
-      }
-    }
+    const effectiveRate = await getEffectiveRate();
 
     const [allCountries, allServices, allPrices] = await Promise.all([
       heroSms.getCountries(),
@@ -170,18 +193,7 @@ export const pricingEngine = {
       );
 
       const physicalStock = priceInfo?.physicalCount || 0;
-      // Kalite skoru: Stok derinliği ve fiziksel SIM mevcudiyetine göre gerçekçi başarı oranı (%65 - %99)
-      let qualityScore = 85;
-      if (stock > 10000) qualityScore = 98;
-      else if (stock > 2500) qualityScore = 96;
-      else if (stock > 500) qualityScore = 93;
-      else if (stock > 50) qualityScore = 89;
-      else if (stock > 0) qualityScore = 85;
-      else qualityScore = 50;
-
-      if (physicalStock > 0 && stock > 0) {
-        qualityScore = Math.min(99, qualityScore + 2);
-      }
+      const qualityScore = qualityScoreFor(stock, physicalStock);
 
       catalog.push({
         serviceCode: service.code,
@@ -218,5 +230,44 @@ export const pricingEngine = {
         lastTcmbFetchTime: settings.lastTcmbFetchTime,
       },
     };
+  },
+
+  /**
+   * Bir servisin tüm görünür ülkelerdeki satış fiyatı, stok ve kalite skoru (ülke seçiminde anlık sıralama için).
+   * Fiyat getCatalog ile aynı kurallarla (kâr marjı, özel fiyat kuralı, kur) hesaplanır; sağlayıcının o ülkede
+   * satmadığı veya admin'in satışa kapattığı kombinasyonlar listelenmez.
+   */
+  async getCountryOffers(serviceCode: string): Promise<{ serviceCode: string; serviceName: string; offers: CountryOffer[] }> {
+    const settings = db.getSettings();
+    const [effectiveRate, allServices, servicePrices] = await Promise.all([
+      getEffectiveRate(),
+      heroSms.getServicesList(),
+      heroSms.getServicePrices(serviceCode),
+    ]);
+    const service = allServices.find((s) => s.code === serviceCode);
+    if (!service || settings.hiddenServices.includes(serviceCode)) {
+      return { serviceCode, serviceName: service?.name || serviceCode, offers: [] };
+    }
+
+    const hiddenCountries = new Set(settings.hiddenCountries);
+    const hiddenPairs = new Set(settings.hiddenServiceCountryPairs || []);
+    const offers: CountryOffer[] = [];
+    for (const [countryKey, services] of Object.entries(servicePrices)) {
+      const countryId = Number(countryKey);
+      const priceInfo = services?.[serviceCode];
+      if (!Number.isFinite(countryId) || !priceInfo) continue;
+      if (hiddenCountries.has(countryId) || hiddenPairs.has(`${serviceCode}:${countryId}`)) continue;
+      const stock = priceInfo.count || (priceInfo.physicalCount ? priceInfo.physicalCount * 10 : 0);
+      const physicalStock = priceInfo.physicalCount || 0;
+      const { finalPriceTry } = this.calculatePrice(priceInfo.cost || 0.15, serviceCode, effectiveRate, countryId);
+      offers.push({
+        countryId,
+        priceTry: finalPriceTry,
+        stock,
+        physicalStock,
+        qualityScore: qualityScoreFor(stock, physicalStock),
+      });
+    }
+    return { serviceCode, serviceName: service.name, offers };
   },
 };

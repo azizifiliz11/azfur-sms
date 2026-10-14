@@ -14,6 +14,7 @@ let cachedPrices: Record<string, Record<string, PriceStockItem>> | null = null;
 let pricesCacheTime = 0;
 let cachedCountryPrices: Record<number, { data: Record<string, Record<string, PriceStockItem>>; time: number }> = {};
 let cachedRentPrices: Record<string, { data: RentPriceMap; time: number }> = {};
+let cachedServicePrices: Record<string, { data: Record<string, Record<string, PriceStockItem>>; time: number }> = {};
 
 /** serviceCountRent yanıtı: { ülkeId: { saat: { count, price, retail_price } } } (fiyat USD) */
 export type RentPriceMap = Record<string, Record<string, { count: number; price: number; retail_price?: number }>>;
@@ -118,6 +119,7 @@ export const heroSms = {
     pricesCacheTime = 0;
     cachedCountryPrices = {};
     cachedRentPrices = {};
+    cachedServicePrices = {};
   },
 
   /**
@@ -409,6 +411,28 @@ export const heroSms = {
         return cachedCountryPrices[countryId].data;
       }
       return cachedPrices || {};
+    }
+  },
+
+  /**
+   * Tek servisin tüm ülkelerdeki fiyat ve stokları (action=getPrices&service=..., USD).
+   * Yanıt getPrices ile aynı biçimdedir: { ülkeId: { servis: { cost, count, physicalCount } } }. 30 sn önbellek.
+   */
+  async getServicePrices(service: string): Promise<Record<string, Record<string, PriceStockItem>>> {
+    const now = Date.now();
+    const cached = cachedServicePrices[service];
+    if (cached && now - cached.time < 30000) return cached.data;
+    const apiKey = getHeroApiKey();
+    const url = `${CONFIG.HERO_SMS_BASE_URL}?action=getPrices&service=${encodeURIComponent(service)}&api_key=${apiKey}`;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      const map = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+      cachedServicePrices[service] = { data: map, time: now };
+      return map;
+    } catch (err) {
+      console.error("Hero-SMS getPrices(service) error:", err);
+      return cached?.data || {};
     }
   },
 

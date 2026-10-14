@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   HelpCircle,
 } from "lucide-react";
-import { Country, ServiceItem, CalculatedCatalogItem } from "@/lib/types";
+import { Country, ServiceItem, CalculatedCatalogItem, CountryOffer } from "@/lib/types";
 import { getCountryMeta } from "@/lib/country-flags";
 import { FAVORITES_CHANGE_EVENT, getFavoriteCountries, getFavoriteServices } from "@/lib/favorites";
 import { haptic } from "@/lib/haptic";
@@ -42,6 +42,48 @@ interface RentPanelProps {
 }
 
 type SortMode = "popular" | "price_asc" | "price_desc" | "stock" | "quality";
+
+const SORT_OPTIONS: { mode: SortMode; label: string; Icon: React.ElementType; iconClass: string; activeClass: string }[] = [
+  { mode: "popular", label: "Popüler", Icon: Flame, iconClass: "text-amber-400", activeClass: "bg-amber-500/20 text-amber-300 border border-amber-500/50" },
+  { mode: "price_asc", label: "En Ucuz", Icon: TrendingDown, iconClass: "text-brand", activeClass: "bg-brand/20 text-brand border border-brand/50" },
+  { mode: "price_desc", label: "En Pahalı", Icon: TrendingUp, iconClass: "text-foreground/90", activeClass: "bg-foreground/10 text-foreground border border-foreground/25" },
+  { mode: "stock", label: "Çok Stok", Icon: Package, iconClass: "text-foreground/90", activeClass: "bg-foreground/10 text-foreground border border-foreground/25" },
+  { mode: "quality", label: "Yüksek Kalite", Icon: Sparkles, iconClass: "text-yellow-400", activeClass: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/50" },
+];
+
+/** Anlık sıralama butonları (servis listesi ve ülke seçimi ortak) */
+function SortPills({ value, onChange }: { value: SortMode; onChange: (mode: SortMode) => void }) {
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+      {SORT_OPTIONS.map(({ mode, label, Icon, iconClass, activeClass }) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => {
+            haptic.selection();
+            onChange(mode);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
+            value === mode ? `${activeClass} shadow-sm` : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
+          }`}
+        >
+          <Icon className={`w-3 h-3 ${iconClass}`} />
+          <span>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Stok adedini kısa yazar: 961846 → "962K", 1254867 → "1,3M" */
+function formatStockShort(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}K`;
+  return n.toLocaleString("tr-TR");
+}
+
+/** Ülke seçimindeki fiyatlar 30 sn boyunca tekrar çekilmez (servis başına) */
+const COUNTRY_OFFERS_TTL_MS = 30000;
 
 function CountryFlag({
   country,
@@ -112,6 +154,12 @@ export function RentPanel({
   const [countrySearch, setCountrySearch] = useState<string>("");
   const [countryModalOpen, setCountryModalOpen] = useState<boolean>(false);
   const [countryModalTab, setCountryModalTab] = useState<"all" | "favorites">("all");
+  // Ülke seçiminde anlık sıralama: seçili servisin her ülkedeki fiyatı / stoğu / kalitesi
+  const [countrySortMode, setCountrySortMode] = useState<SortMode>("popular");
+  const [countryInStockOnly, setCountryInStockOnly] = useState<boolean>(false);
+  const [countryOffers, setCountryOffers] = useState<{ serviceCode: string; serviceName: string; byId: Record<number, CountryOffer> } | null>(null);
+  const [countryOffersLoading, setCountryOffersLoading] = useState<boolean>(false);
+  const countryOffersCacheRef = React.useRef<Record<string, { serviceName: string; byId: Record<number, CountryOffer>; time: number }>>({});
   const [ordering, setOrdering] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState<boolean>(false);
@@ -193,21 +241,82 @@ export function RentPanel({
     return list;
   }, [countries, favoriteCountries]);
 
-  // Filtrelenmiş ülke listesi (Modal için)
+  // Ülke seçimi açıkken seçili servisin tüm ülkelerdeki fiyat/stoklarını getir (servis başına 30 sn önbellek)
+  useEffect(() => {
+    if (!countryModalOpen || !selectedServiceCode) return;
+    const code = selectedServiceCode;
+    const cached = countryOffersCacheRef.current[code];
+    if (cached) setCountryOffers({ serviceCode: code, serviceName: cached.serviceName, byId: cached.byId });
+    if (cached && Date.now() - cached.time < COUNTRY_OFFERS_TTL_MS) return;
+
+    let cancelled = false;
+    setCountryOffersLoading(true);
+    fetch(`/api/sms/countries?service=${encodeURIComponent(code)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) return;
+        const byId: Record<number, CountryOffer> = {};
+        for (const o of data.offers as CountryOffer[]) byId[o.countryId] = o;
+        countryOffersCacheRef.current[code] = { serviceName: data.serviceName, byId, time: Date.now() };
+        if (!cancelled) setCountryOffers({ serviceCode: code, serviceName: data.serviceName, byId });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCountryOffersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryModalOpen, selectedServiceCode]);
+
+  // Seçili servise ait teklifler (başka servisin eski verisi gösterilmez)
+  const offersById = countryOffers?.serviceCode === selectedServiceCode ? countryOffers.byId : null;
+
+  // Filtrelenmiş & anlık sıralanmış ülke listesi (Modal için)
   const filteredCountries = useMemo(() => {
     let list = countries;
     if (countryModalTab === "favorites") {
       list = list.filter((c) => favoriteCountries.includes(c.id));
     }
-    if (!countrySearch.trim()) return list;
-    const q = countrySearch.toLowerCase();
-    return list.filter(
-      (c) =>
-        c.eng.toLowerCase().includes(q) ||
-        (c.nameTr && c.nameTr.toLowerCase().includes(q)) ||
-        (c.rus && c.rus.toLowerCase().includes(q))
-    );
-  }, [countries, countrySearch, countryModalTab, favoriteCountries]);
+    if (countrySearch.trim()) {
+      const q = countrySearch.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.eng.toLowerCase().includes(q) ||
+          (c.nameTr && c.nameTr.toLowerCase().includes(q)) ||
+          (c.rus && c.rus.toLowerCase().includes(q))
+      );
+    }
+    if (!offersById) return list;
+
+    const stockOf = (id: number) => offersById[id]?.stock || 0;
+    if (countryInStockOnly) list = list.filter((c) => stockOf(c.id) > 0);
+
+    const popularRank = (id: number) => {
+      const fav = favoriteCountries.indexOf(id);
+      if (fav >= 0) return fav;
+      const pop = defaultPopularIds.indexOf(id);
+      return pop >= 0 ? 100 + pop : 1000;
+    };
+
+    return [...list].sort((a, b) => {
+      const oa = offersById[a.id];
+      const ob = offersById[b.id];
+      // Satışta olmayan / stoğu biten ülkeler her sıralamada sonda
+      const inA = stockOf(a.id) > 0;
+      const inB = stockOf(b.id) > 0;
+      if (inA !== inB) return inA ? -1 : 1;
+      if (!oa || !ob) return oa ? -1 : ob ? 1 : 0;
+
+      if (countrySortMode === "price_asc") return oa.priceTry - ob.priceTry || ob.stock - oa.stock;
+      if (countrySortMode === "price_desc") return ob.priceTry - oa.priceTry || ob.stock - oa.stock;
+      if (countrySortMode === "stock") return ob.stock - oa.stock;
+      if (countrySortMode === "quality") return ob.qualityScore - oa.qualityScore || ob.stock - oa.stock;
+      // Popüler: favoriler, sonra çok tercih edilen ülkeler, sonra stok hacmi
+      return popularRank(a.id) - popularRank(b.id) || ob.stock - oa.stock;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countries, countrySearch, countryModalTab, favoriteCountries, offersById, countrySortMode, countryInStockOnly]);
 
   // Kalite Skoru Hesaplayıcı (%65 - %99)
   const getItemQuality = (item: CalculatedCatalogItem): number => {
@@ -495,87 +604,7 @@ export function RentPanel({
             <span className="text-[10px] text-brand/80 font-mono">0ms Real-Time</span>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {/* Popüler */}
-            <button
-              onClick={() => {
-                haptic.selection();
-                setSortMode("popular");
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-                sortMode === "popular"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm "
-                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
-              }`}
-            >
-              <Flame className="w-3 h-3 text-amber-400" />
-              <span>Popüler</span>
-            </button>
-
-            {/* Daha Ucuz (Fiyat Artan) */}
-            <button
-              onClick={() => {
-                haptic.selection();
-                setSortMode("price_asc");
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-                sortMode === "price_asc"
-                  ? "bg-brand/20 text-brand border border-brand/50 shadow-sm "
-                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
-              }`}
-            >
-              <TrendingDown className="w-3 h-3 text-brand" />
-              <span>En Ucuz</span>
-            </button>
-
-            {/* Daha Pahalı (Fiyat Azalan) */}
-            <button
-              onClick={() => {
-                haptic.selection();
-                setSortMode("price_desc");
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-                sortMode === "price_desc"
-                  ? "bg-foreground/10 text-foreground border border-foreground/25 shadow-sm "
-                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
-              }`}
-            >
-              <TrendingUp className="w-3 h-3 text-foreground/90" />
-              <span>En Pahalı</span>
-            </button>
-
-            {/* Stoğa Göre */}
-            <button
-              onClick={() => {
-                haptic.selection();
-                setSortMode("stock");
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-                sortMode === "stock"
-                  ? "bg-foreground/10 text-foreground border border-foreground/25 shadow-sm "
-                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
-              }`}
-            >
-              <Package className="w-3 h-3 text-foreground/90" />
-              <span>Çok Stok</span>
-            </button>
-
-            {/* Kaliteye Göre */}
-            <button
-              onClick={() => {
-                haptic.selection();
-                setSortMode("quality");
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-                sortMode === "quality"
-                  ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 shadow-sm "
-                  : "bg-card text-muted-foreground border border-border hover:border-foreground/11"
-              }`}
-            >
-              <Sparkles className="w-3 h-3 text-yellow-400" />
-              <span>Yüksek Kalite</span>
-            </button>
-          </div>
+          <SortPills value={sortMode} onChange={setSortMode} />
 
           {/* Hızlı Filtre Toggle Butonları (Favorilerim & Sadece Stoktakiler) */}
           <div className="flex items-center gap-2 pt-1">
@@ -863,9 +892,20 @@ export function RentPanel({
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-md bg-background ring-1 ring-foreground/10 rounded-t-3xl sm:rounded-3xl p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] flex flex-col max-h-[85vh]">
             <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-brand" />
-                <h3 className="text-base font-semibold text-foreground">Ülke Seçin</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <Globe className="w-5 h-5 text-brand shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-foreground">Ülke Seçin</h3>
+                  {selectedServiceCode && (
+                    <p className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                      <ServiceIcon code={selectedServiceCode} name={countryOffers?.serviceName || selectedItem?.serviceName} size="xs" />
+                      <span className="truncate">
+                        {countryOffers?.serviceName || selectedItem?.serviceName || selectedServiceCode.toUpperCase()} için fiyat ve stoklar
+                      </span>
+                      {countryOffersLoading && <Loader2 className="w-3 h-3 animate-spin text-brand shrink-0" />}
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setCountryModalOpen(false)}
@@ -915,6 +955,26 @@ export function RentPanel({
               />
             </div>
 
+            {/* Anlık sıralama: seçili servisin ülkelerdeki fiyat / stok / kalitesine göre */}
+            <div className="mb-3 space-y-2">
+              <SortPills value={countrySortMode} onChange={setCountrySortMode} />
+              <button
+                type="button"
+                onClick={() => {
+                  haptic.selection();
+                  setCountryInStockOnly((v) => !v);
+                }}
+                className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-full text-xs font-medium transition-all ${
+                  countryInStockOnly
+                    ? "bg-brand/20 border border-brand/60 text-brand shadow-sm "
+                    : "bg-card/80 border border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <CheckCircle2 className={`w-3.5 h-3.5 ${countryInStockOnly ? "text-brand" : "text-muted-foreground"}`} />
+                <span>Yalnızca Stokta Olan Ülkeler</span>
+              </button>
+            </div>
+
             <div className="overflow-y-auto space-y-1 pr-1 flex-1">
               {filteredCountries.length === 0 ? (
                 <div className="p-6 text-center text-xs text-muted-foreground space-y-2">
@@ -937,6 +997,7 @@ export function RentPanel({
                 filteredCountries.map((c) => {
                   const isFav = favoriteCountries.includes(c.id);
                   const isSelected = selectedCountry?.id === c.id;
+                  const offer = offersById?.[c.id];
 
                   return (
                     <div
@@ -948,12 +1009,23 @@ export function RentPanel({
                           : "hover:bg-muted text-foreground"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <CountryFlag country={c} size="md" />
-                        <span className="text-xs font-medium">{c.nameTr || c.eng}</span>
+                        <span className="text-xs font-medium truncate">{c.nameTr || c.eng}</span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
+                        {offersById &&
+                          (offer && offer.stock > 0 ? (
+                            <div className="text-right leading-tight">
+                              <div className="text-xs font-mono font-semibold text-brand">₺{offer.priceTry.toFixed(2)}</div>
+                              <div className="text-[10px] font-mono text-muted-foreground">
+                                {formatStockShort(offer.stock)} stok · %{offer.qualityScore}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{offer ? "Stok yok" : "Satışta yok"}</span>
+                          ))}
                         {/* Favori Yıldız Butonu */}
                         <button
                           onClick={(e) => toggleFavoriteCountry(c.id, e)}
